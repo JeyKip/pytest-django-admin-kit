@@ -1,21 +1,28 @@
 # Django Admin Testing Package — v0.1 Specification
 
-## 1. Purpose
+# 1. Purpose
 
 The package provides a pytest-oriented API for testing Django Admin behavior.
 
 It should allow developers to verify:
 
 * authentication and access with different users;
-* model-level admin permissions;
+* effective admin permissions, including constraints imposed by the admin configuration itself;
 * availability and basic operation of admin pages;
-* create and edit form validation;
-* changelist columns and row contents;
-* create/edit form fields and requiredness;
+* the set of models the admin exposes;
+* changelist columns, record counts, and row contents;
+* create and edit form fields, including their labels, initial values, and choices;
+* editable and rendered-only field values;
+* requiredness of create and edit form fields;
 * automatic population of form fields;
-* validation errors displayed by Django Admin.
+* submit actions and where the admin navigates after an operation;
+* validation errors displayed by Django Admin;
+* what a form renders back after an invalid submission;
+* messages displayed after an operation;
+* the contents of a deletion confirmation.
 
-The package should emphasize readable tests using normal Python `assert` statements rather than custom assertion methods wherever practical.
+The package should emphasize readable tests using normal Python `assert` statements rather than
+custom assertion methods wherever practical.
 
 The minimum supported Django version is **Django 3.2**.
 
@@ -23,21 +30,36 @@ The minimum supported Django version is **Django 3.2**.
 
 # 2. Scope of v0.1
 
+## 2.1 Covered in v0.1
+
 v0.1 covers standard Django Admin functionality for simple models.
 
-Supported relationships and field behavior should be limited to fields that can be represented as ordinary scalar form values.
+Supported relationships and field behavior should be limited to fields that can be represented
+as ordinary scalar form values.
 
-The following are explicitly deferred to a later version:
+Foreign keys may be supported where they behave as a normal single-value form field, but
+automatic traversal or creation of related object graphs is not required for v0.1.
 
-* many-to-many form fields;
-* one-to-many/inlines;
-* inline formsets;
-* complex custom admin widgets;
-* advanced admin actions;
-* advanced changelist filters;
-* JavaScript-specific behavior.
+---
 
-Foreign keys may be supported where they behave as a normal single-value form field, but automatic traversal or creation of related object graphs is not required for v0.1.
+## 2.2 Driving model
+
+The specification describes admin **pages**, not the mechanism used to obtain them.
+
+More than one strategy can produce an admin page for a test. The public API must be satisfiable
+by any of them, and the same test text must remain valid when the strategy changes.
+
+Anything that only exists under one strategy is an escape hatch, never part of the contract.
+See section 3.6.
+
+---
+
+## 2.3 Deferred
+
+Relational and compound admin forms, changelist interaction, and advanced field representations
+are deferred.
+
+The ordered roadmap is defined in section 33.
 
 ---
 
@@ -63,7 +85,8 @@ page.assertFieldExists(...)
 page.assertPageWorks(...)
 ```
 
-Where failure diagnostics require more context, objects returned by the library should implement useful comparison behavior and pytest assertion introspection where possible.
+Where failure diagnostics require more context, objects returned by the library should implement
+useful comparison behavior and pytest assertion introspection where possible.
 
 ---
 
@@ -83,21 +106,115 @@ Automatic behavior should remain predictable and inspectable.
 
 ## 3.3 Stable public abstraction
 
-Tests should interact with package-level abstractions rather than depending directly on Django Admin internals.
+Tests should interact with package-level abstractions rather than depending directly on Django
+Admin internals.
 
 Typical concepts exposed by the package:
 
 ```python
-admin
-admin.login(...)
-admin.permissions(...)
-admin.list(...)
-admin.create(...)
-admin.edit(...)
-admin.delete(...)
+admin_ui
+admin_ui.login(...)
+admin_ui.permissions(...)
+admin_ui.index()
+admin_ui.list(...)
+admin_ui.create(...)
+admin_ui.edit(...)
+admin_ui.delete(...)
 ```
 
-Page objects should expose normalized information such as fields, errors, headers, rows, and status.
+Page objects should expose normalized information such as fields, errors, headers, rows,
+messages, and status.
+
+---
+
+## 3.4 Normalized values
+
+The package compares **meaning**, not markup.
+
+A value read from an admin page is normalized before a test ever sees it:
+
+* a boolean cell normalizes to a boolean, however the admin chooses to draw it;
+* an absent or blank value normalizes to the empty value;
+* a value the admin renders as a link normalizes to its text, with the target available
+  separately;
+* dates, times, and numbers normalize through the formats and time zone the project has
+  configured.
+
+A test must never need to know how a value was rendered:
+
+```python
+assert page.row(1)["Active"] is True
+assert page.row(1)["Middle name"] == ""
+```
+
+Tests must not hardcode a rendering format. Where a project renders values in a way the package
+does not recognize, normalization is extended through the hooks in section 28.
+
+---
+
+## 3.5 Addressing by name
+
+The package uses one coordinate vocabulary everywhere it applies:
+
+* rows are addressed by 1-based position;
+* cells are addressed by column;
+* fields are addressed by name.
+
+```python
+page.row(1)
+page.row(1)["Email"]
+page.field("email")
+```
+
+Positional cell access remains available where a tuple comparison is the clearer expression.
+
+---
+
+## 3.6 Driver-neutral abstraction
+
+The public API describes admin pages, not how they are obtained.
+
+The following must hold regardless of the driving strategy:
+
+```python
+page = admin_ui.list(Product)
+
+assert page.works
+assert page.headers == [...]
+assert page.contains([...])
+```
+
+Lower-level access is an escape hatch and may be unavailable:
+
+```python
+page.response
+page.status_code
+```
+
+A test that uses the escape hatch accepts that it is tied to one strategy. Nothing in the
+package's own contract may require it.
+
+---
+
+## 3.7 Reusable page contracts
+
+Projects test many admin pages that differ only in their model and their expected shape.
+
+Expressing a page's expected shape once and applying it to many models must be natural.
+
+The package must not prescribe a class hierarchy, and must not require a project to subclass a
+package-provided test case in order to reuse expectations.
+
+---
+
+## 3.8 Project-level adjustability
+
+The package ships nothing project-specific.
+
+Every project-specific behavior enters through a documented extension point rather than through
+a fork, a subclass requirement, or a special case inside the package.
+
+See section 28.
 
 ---
 
@@ -108,9 +225,9 @@ The package must support using any Django user object.
 At minimum:
 
 ```python
-admin.login(admin_user)
-admin.login(staff_user)
-admin.login(arbitrary_user)
+admin_ui.login(admin_user)
+admin_ui.login(staff_user)
+admin_ui.login(arbitrary_user)
 ```
 
 The package must not assume that:
@@ -119,14 +236,15 @@ The package must not assume that:
 * the default Django `User` model is installed;
 * only superusers can access Admin.
 
-An arbitrary custom user model must therefore be usable as long as the Django project itself supports it.
+An arbitrary custom user model must therefore be usable as long as the Django project itself
+supports it.
 
 Example:
 
 ```python
-admin.login(user)
+admin_ui.login(user)
 
-page = admin.index()
+page = admin_ui.index()
 
 assert page.works
 ```
@@ -134,21 +252,23 @@ assert page.works
 The test author must also be able to switch users during a test:
 
 ```python
-admin.login(user_a)
+admin_ui.login(user_a)
 ...
-admin.login(user_b)
+admin_ui.login(user_b)
 ...
 ```
 
 Logout should also be available:
 
 ```python
-admin.logout()
+admin_ui.logout()
 ```
 
 ---
 
 # 5. Permission Testing
+
+## 5.1 Model permissions
 
 The package must expose the effective Django Admin permissions of a user for a model.
 
@@ -162,7 +282,7 @@ Supported permissions:
 Example API:
 
 ```python
-permissions = admin.permissions(Product)
+permissions = admin_ui.permissions(Product)
 
 assert permissions.view
 assert permissions.add
@@ -173,7 +293,7 @@ assert not permissions.delete
 A compact form should also be possible:
 
 ```python
-assert admin.permissions(Product) == {
+assert admin_ui.permissions(Product) == {
     "view": True,
     "add": True,
     "change": True,
@@ -183,19 +303,61 @@ assert admin.permissions(Product) == {
 
 Permission checks must represent the permissions applicable to the currently logged-in user.
 
-The API should also support permission testing without requiring the corresponding page to be opened.
+The API should also support permission testing without requiring the corresponding page to be
+opened.
+
+---
+
+## 5.2 Effective permissions
+
+Reported permissions must be **effective** permissions.
+
+A user's assigned permissions are not the whole answer: an admin registration may impose further
+constraints of its own, and may grant or withhold an operation independently of the permission
+system.
+
+The package must report what the admin will actually allow.
+
+---
+
+## 5.3 Per-object permissions
+
+Permissions must also be inspectable for a specific object:
+
+```python
+assert admin_ui.permissions(product).change
+assert not admin_ui.permissions(product).delete
+```
+
+The model form and the object form must share one public representation.
+
+---
+
+## 5.4 Observable consequences
+
+A page the current user may not open must not report itself as working, and must say why:
+
+```python
+page = admin_ui.edit(product)
+
+assert not page.works
+assert page.denied
+```
 
 ---
 
 # 6. Admin Page Availability
 
-The package must provide abstractions for these four standard model admin operations:
+The package must provide abstractions for the admin index and for these four standard model
+admin operations:
 
 ```python
-admin.list(Model)
-admin.create(Model)
-admin.edit(instance)
-admin.delete(instance)
+admin_ui.index()
+
+admin_ui.list(Model)
+admin_ui.create(Model)
+admin_ui.edit(instance)
+admin_ui.delete(instance)
 ```
 
 Each returned page must make it easy to determine whether the page works.
@@ -203,24 +365,93 @@ Each returned page must make it easy to determine whether the page works.
 Example:
 
 ```python
-page = admin.list(Product)
+page = admin_ui.list(Product)
 
 assert page.works
 ```
 
-The definition of `works` should represent successful handling of the requested admin page according to its normal expected behavior.
+The definition of `works` should represent successful handling of the requested admin page
+according to its normal expected behavior.
 
-Tests must also be able to inspect lower-level information when necessary, for example:
+---
+
+## 6.1 Access outcome
+
+The outcome of requesting a page is a first-class value.
+
+A page either worked, was refused, or sent the user somewhere else:
+
+```python
+assert page.works
+assert page.denied
+assert page.redirected
+assert page.destination
+```
+
+---
+
+## 6.2 Page identity
+
+Pages expose the title and subtitle the admin renders for them:
+
+```python
+page = admin_ui.edit(product)
+
+assert page.title == "Change product"
+assert page.subtitle == "Widget"
+```
+
+---
+
+## 6.3 Admin URLs
+
+Every admin page is addressable without being opened.
+
+The package exposes a URL for each operation of this section:
+
+```python
+admin_ui.url.index()
+
+admin_ui.url.list(Model)
+admin_ui.url.create(Model)
+admin_ui.url.edit(instance)
+admin_ui.url.delete(instance)
+```
+
+These are the values a test compares a link target against:
+
+```python
+assert page.row(1).cell("Customer").link == admin_ui.url.edit(customer)
+```
+
+URLs resolve through the admin site under test and its URL prefix. The package never assumes a
+location, so a project that mounts its admin elsewhere gets correct URLs without changing its
+tests. See section 28.2.
+
+Link targets read from a page are normalized so that they compare equal to the URL the package
+produces for the same page, whether the page rendered that target in relative or absolute form.
+A test must never need to know which form was rendered.
+
+Resolution does not require the page to exist or to be reachable. Asking for the URL of a page
+the current user may not open still returns that URL; whether the page works is the separate
+question of section 6.1.
+
+A model the admin site does not register has no URLs. The package must report that rather than
+produce a value that cannot work.
+
+---
+
+## 6.4 Underlying access
+
+Tests may inspect lower-level information where their driving strategy provides it:
 
 ```python
 assert page.status_code == 200
-```
 
-The original underlying response should remain accessible:
-
-```python
 page.response
 ```
+
+This is the escape hatch described in section 3.6.
 
 ---
 
@@ -233,7 +464,7 @@ The package must expose normalized changelist column headers.
 Example:
 
 ```python
-page = admin.list(Customer)
+page = admin_ui.list(Customer)
 
 assert page.headers == [
     "ID",
@@ -256,11 +487,66 @@ And:
 assert {"First name", "Last name"} <= set(page.headers)
 ```
 
-Header matching should use the human-readable labels rendered by the admin page unless an explicitly different API is provided for field/configuration names.
+Header matching uses the human-readable labels rendered by the admin page.
 
 ---
 
-# 8. Changelist Row Matching
+## 7.2 Column identity
+
+Columns are also addressable by the names the admin is configured with:
+
+```python
+assert page.columns == [
+    "id",
+    "first_name",
+    "last_name",
+    "email",
+]
+```
+
+A test chooses the vocabulary it prefers. Both must address the same columns in the same order.
+
+---
+
+# 8. Changelist Result Set
+
+## 8.1 Record count
+
+The number of records the changelist reports must be available as a number:
+
+```python
+page = admin_ui.list(Product)
+
+assert page.count == 3
+```
+
+Where the admin renders a count summary, its normalized text is also available:
+
+```python
+assert page.summary == "3 products"
+```
+
+Tests that only care about the number should assert `page.count`, because summary wording
+varies with singular and plural forms and between Django versions.
+
+---
+
+## 8.2 Empty changelist
+
+An empty changelist is an explicit, assertable state:
+
+```python
+page = admin_ui.list(Product)
+
+assert page.works
+assert page.empty
+assert page.count == 0
+assert page.rows == []
+```
+
+---
+
+# 9. Changelist Row Matching
 
 One of the main v0.1 features is concise verification of rows shown on a changelist.
 
@@ -273,9 +559,19 @@ assert page.contains([
 ])
 ```
 
-The row matcher must support several value types.
+## 9.1 Matcher vocabulary
 
-## 8.1 Literal values
+Expected values are matched using three things, and nothing else:
+
+* literal values, compared for equality;
+* the sentinels `ANY` and `ANY_ROW`;
+* callables.
+
+No string value carries matcher meaning. A string in an expected row is always a literal value.
+
+---
+
+## 9.2 Literal values
 
 Literal values require equality.
 
@@ -287,7 +583,7 @@ means that the corresponding cells must contain exactly those expected normalize
 
 ---
 
-## 8.2 Empty value
+## 9.3 Empty value
 
 An explicitly provided empty value:
 
@@ -301,13 +597,13 @@ It is distinct from `ANY`.
 
 ---
 
-## 8.3 Any-value matcher
+## 9.4 Any-value matcher
 
 The package must expose a sentinel representing:
 
 > A cell must exist, but its contents are irrelevant.
 
-Recommended public name:
+Public name:
 
 ```python
 ANY
@@ -319,11 +615,14 @@ Example:
 (1, "Jeff", "Bezos", ANY)
 ```
 
-The equivalent textual representation may be `"*"`, but a dedicated Python sentinel is preferred so that literal `*` values remain testable.
+`ANY` is the only spelling for this matcher.
+
+A literal `"*"` appearing in an expected row is an ordinary literal value and carries no matcher
+meaning.
 
 ---
 
-## 8.4 Callable matcher
+## 9.5 Callable matcher
 
 A callable may be supplied for a cell.
 
@@ -365,11 +664,11 @@ where available.
 
 ---
 
-## 8.5 Ignore entire row contents
+## 9.6 Ignore entire row contents
 
 The package must support asserting that a row exists while deliberately ignoring its values.
 
-Recommended sentinel:
+Sentinel:
 
 ```python
 ANY_ROW
@@ -389,17 +688,72 @@ This means:
 * one row must match `(1, "Jeff", "Bezos")`;
 * at least one additional row may contain arbitrary values.
 
-If a sequence representation such as:
-
-```python
-["*"]
-```
-
-is supported for convenience, it should normalize internally to `ANY_ROW`.
+`ANY_ROW` is the only spelling for an ignored row.
 
 ---
 
-## 8.6 Row ordering
+## 9.7 Cell addressing by column
+
+Rows are also addressable by column, as described in section 3.5:
+
+```python
+assert page.row(1)["First name"] == "Jeff"
+assert page.row(1)["Email"] == ""
+```
+
+An expected row may be expressed the same way, in which case unlisted columns are not
+constrained:
+
+```python
+assert page.contains([
+    {
+        "First name": "Jeff",
+        "Last name": "Bezos",
+    },
+])
+```
+
+This makes it possible to assert a few meaningful columns without enumerating a wide changelist.
+The sentinels and callables of section 9.1 apply to values here exactly as they do in tuples.
+
+---
+
+## 9.8 Normalized cell values
+
+Cell values follow section 3.4.
+
+Booleans normalize to booleans:
+
+```python
+assert page.row(1)["Active"] is True
+```
+
+A cell the admin renders as a link exposes both its text and its target:
+
+```python
+cell = page.row(1).cell("Customer")
+
+assert cell.value == "Jeff Bezos"
+assert cell.link == admin_ui.url.edit(customer)
+```
+
+Link targets are compared against the admin URLs of section 6.3.
+
+A cell may contain several links:
+
+```python
+assert page.row(1).cell("Attachments").links == [
+    ("first.pdf", "/media/first.pdf"),
+    ("second.pdf", "/media/second.pdf"),
+]
+```
+
+Comparing a link cell against a plain literal compares its text, so tests that do not care about
+targets stay short.
+
+---
+
+## 9.9 Row ordering
 
 The API should support both ordered and unordered comparisons.
 
@@ -409,9 +763,9 @@ Default behavior for:
 page.contains(...)
 ```
 
-should verify existence without requiring that the expected rows describe the complete changelist.
+verifies existence without requiring that the expected rows describe the complete changelist.
 
-A separate API may verify the complete ordered set:
+A separate API verifies the complete ordered set:
 
 ```python
 assert page.rows == [...]
@@ -427,14 +781,14 @@ Exact naming can be finalized during API design.
 
 ---
 
-# 9. Create Page Fields
+# 10. Create Page Fields
 
 The package must expose the fields present on the create page.
 
 Example:
 
 ```python
-page = admin.create(Product)
+page = admin_ui.create(Product)
 
 assert page.fields == {
     "name",
@@ -463,18 +817,18 @@ A missing field should produce useful pytest failure output.
 
 ---
 
-# 10. Edit Page Fields
+# 11. Edit Page Fields
 
 The edit page must expose the same field-inspection API:
 
 ```python
-page = admin.edit(product)
+page = admin_ui.edit(product)
 
 assert "name" in page.fields
 assert page.field("name").required
 ```
 
-Where appropriate, fields should additionally expose their currently rendered value:
+Fields expose their currently rendered value:
 
 ```python
 assert page.field("name").value == "Widget"
@@ -482,14 +836,14 @@ assert page.field("name").value == "Widget"
 
 ---
 
-# 11. Required and Optional Fields
+# 12. Required and Optional Fields
 
 The package must distinguish required and non-required admin form fields.
 
 Example:
 
 ```python
-page = admin.create(Product)
+page = admin_ui.create(Product)
 
 assert page.field("name").required
 assert not page.field("description").required
@@ -509,11 +863,103 @@ assert page.optional_fields == {
 }
 ```
 
-The result must reflect the actual admin form, including custom `ModelForm` behavior, rather than only the model field definition.
+The result must reflect the actual admin form, including custom `ModelForm` behavior, rather
+than only the model field definition.
 
 ---
 
-# 12. Form Population
+# 13. Field Metadata
+
+Beyond existence and requiredness, a field exposes what the admin says about it.
+
+## 13.1 Labels
+
+```python
+assert page.field("first_name").label == "First name"
+```
+
+Fields are addressed by name; the label is data, not an address.
+
+---
+
+## 13.2 Initial values
+
+The create page exposes the values the admin starts with:
+
+```python
+page = admin_ui.create(Product)
+
+assert page.field("enabled").value is True
+assert page.field("quantity").value == 1
+```
+
+---
+
+## 13.3 Choices
+
+A field with a fixed set of options exposes them as value and label pairs, including the blank
+option where the admin renders one:
+
+```python
+field = page.field("category")
+
+assert field.choices == [
+    ("", "---------"),
+    ("1", "Tools"),
+    ("2", "Toys"),
+]
+```
+
+Subset checks should be natural:
+
+```python
+assert ("2", "Toys") in field.choices
+```
+
+---
+
+## 13.4 Rendered-only fields
+
+A field is either editable or rendered only.
+
+A rendered-only field has no input to fill, but still has a value:
+
+```python
+field = page.field("created_at")
+
+assert not field.editable
+assert field.value == "1 January 2026"
+```
+
+Where the admin renders such a field as a link, its target is available:
+
+```python
+assert page.field("owner").link == admin_ui.url.edit(owner)
+```
+
+Rendered-only fields are never populated by section 14 and never appear in
+`page.required_fields`.
+
+---
+
+## 13.5 Field order
+
+Fields are exposed in the order the admin presents them:
+
+```python
+assert page.field_order == [
+    "name",
+    "price",
+    "description",
+    "enabled",
+]
+```
+
+Named field groups are deferred; see section 33.
+
+---
+
+# 14. Form Population
 
 The package must support automatic form population.
 
@@ -524,7 +970,7 @@ The caller may provide values from either:
 
 ---
 
-## 12.1 Dictionary source
+## 14.1 Dictionary source
 
 Example:
 
@@ -540,11 +986,12 @@ page.populate(data)
 
 Only fields represented on the current admin form should be considered.
 
-Unrelated dictionary keys should not automatically cause a failure unless strict behavior is explicitly requested.
+Unrelated dictionary keys should not automatically cause a failure unless strict behavior is
+explicitly requested.
 
 ---
 
-# 13. Object source
+## 14.2 Object source
 
 An arbitrary object may be used as a value source.
 
@@ -560,7 +1007,8 @@ source = SimpleNamespace(
 page.populate(source)
 ```
 
-For each relevant form field, the package resolves an attribute with the corresponding field name.
+For each relevant form field, the package resolves an attribute with the corresponding field
+name.
 
 Django model instances should naturally be usable:
 
@@ -568,11 +1016,12 @@ Django model instances should naturally be usable:
 page.populate(product)
 ```
 
-This does not imply that related objects or object graphs must automatically be serialized in v0.1.
+This does not imply that related objects or object graphs must automatically be serialized in
+v0.1.
 
 ---
 
-# 14. Population Modes
+# 15. Population Modes
 
 Three population modes are required.
 
@@ -629,14 +1078,14 @@ page.populate(data, fields=REQUIRED)
 
 ---
 
-# 15. Form Submission
+# 16. Form Submission
 
 Create and edit pages must support submitting explicitly supplied or populated data.
 
 Example:
 
 ```python
-page = admin.create(Product)
+page = admin_ui.create(Product)
 
 page.populate(data, fields="required")
 
@@ -648,7 +1097,7 @@ assert result.success
 A compact API may also be available:
 
 ```python
-result = admin.create(Product, data)
+result = admin_ui.create(Product, data)
 
 assert result.success
 ```
@@ -656,7 +1105,7 @@ assert result.success
 Editing:
 
 ```python
-result = admin.edit(product, {
+result = admin_ui.edit(product, {
     "name": "New name",
 })
 
@@ -665,14 +1114,94 @@ assert result.success
 
 ---
 
-# 16. Create Validation Testing
+## 16.1 Submit actions
+
+A form offers a set of actions, not a single submit.
+
+The package exposes the standard admin actions and any further actions the admin adds:
+
+```python
+page = admin_ui.edit(product)
+
+assert page.actions == {
+    "save",
+    "save_and_continue",
+    "save_and_add_another",
+    "delete",
+}
+```
+
+Presence of a single action:
+
+```python
+assert page.has_action("save_and_continue")
+assert not page.has_action("delete")
+```
+
+Any action may be invoked:
+
+```python
+result = page.submit(action="save_and_continue")
+```
+
+Actions the admin defines itself are addressed the same way:
+
+```python
+assert page.has_action("approve")
+
+result = page.submit(action="approve")
+```
+
+Omitting `action` performs the ordinary save.
+
+---
+
+## 16.2 Post-submission navigation
+
+The result reports where the admin sent the user:
+
+```python
+result = admin_ui.create(Product, data)
+
+assert result.success
+assert result.redirected_to_list
+```
+
+```python
+result = page.submit(action="save_and_continue")
+
+assert result.redirected_to_edit(product)
+```
+
+Any other destination remains inspectable:
+
+```python
+assert result.destination
+```
+
+---
+
+## 16.3 Forms with no submit actions
+
+A form on which the admin offers no actions at all is a supported, assertable state:
+
+```python
+page = admin_ui.edit(report)
+
+assert page.works
+assert page.actions == set()
+```
+
+---
+
+# 17. Create Validation Testing
 
 The package must make it easy to intentionally submit invalid create forms.
 
 Example:
 
 ```python
-page = admin.create(Product)
+page = admin_ui.create(Product)
 
 result = page.submit({
     "name": "",
@@ -685,14 +1214,14 @@ The result must expose validation errors independently of HTML markup.
 
 ---
 
-# 17. Edit Validation Testing
+# 18. Edit Validation Testing
 
 The same validation interface must apply to edit forms.
 
 Example:
 
 ```python
-page = admin.edit(product)
+page = admin_ui.edit(product)
 
 result = page.submit({
     "name": "",
@@ -705,11 +1234,50 @@ Create and edit validation should use the same public error representation.
 
 ---
 
-# 18. Validation Error Model
+# 19. Re-render After Invalid Submission
 
-Validation errors must be divided into:
+An invalid submission has two consequences a test must be able to state directly.
 
-* page/form-level errors;
+Nothing was written:
+
+```python
+page = admin_ui.create(Product)
+
+result = page.submit({
+    "name": "",
+    "price": "19.99",
+})
+
+assert not result.success
+assert not result.created
+```
+
+```python
+result = admin_ui.edit(product, {
+    "name": "",
+})
+
+assert not result.success
+assert not result.changed
+```
+
+And the form comes back carrying what was submitted:
+
+```python
+assert result.field("price").value == "19.99"
+```
+
+The re-rendered form exposes the full field API of sections 10 to 13, so requiredness, choices,
+and rendered-only state remain inspectable after a failed submission.
+
+---
+
+# 20. Validation Error Model
+
+Validation errors are divided into three levels:
+
+* the summary notice the admin displays;
+* form-level errors that belong to no single field;
 * field-level errors.
 
 Example:
@@ -722,21 +1290,41 @@ assert result.errors
 
 ---
 
-## 18.1 Header / form-level validation messages
+## 20.1 Summary notice
 
-Messages displayed globally by the form should be exposed as a normalized collection.
-
-Example:
+The admin displays a notice when a submission fails.
 
 ```python
-assert "Please correct the errors below." in result.errors.header
+assert result.errors.banner
 ```
 
-The package should distinguish rendered summary/header messages from individual field validation messages.
+Its exact wording varies with the number of errors and between Django versions. A test that
+only cares that the submission was rejected should assert truthiness.
+
+Where a test does assert the text, the normalized message is available:
+
+```python
+assert result.errors.banner == "Please correct the error below."
+```
 
 ---
 
-## 18.2 Field errors
+## 20.2 Form-level errors
+
+Validation messages that belong to the form rather than to any single field are exposed
+separately from the summary notice:
+
+```python
+assert result.errors.non_field == [
+    "At least one plan must be default.",
+]
+```
+
+The summary notice and form-level errors are distinct concepts and must not be conflated.
+
+---
+
+## 20.3 Field errors
 
 Errors for an individual field should be accessible by field name.
 
@@ -764,7 +1352,7 @@ assert result.field("email").errors == [
 
 ---
 
-# 19. Validation Error Matching
+# 21. Validation Error Matching
 
 Tests should be able to perform both exact and partial validation checks.
 
@@ -793,14 +1381,40 @@ assert result.errors.fields == {
 
 ---
 
-# 20. CRUD Success Checks
+# 22. Operation Messages
+
+The admin reports the outcome of an operation to the user.
+
+Messages are exposed with their level and their normalized text, independently of markup:
+
+```python
+result = admin_ui.create(Product, data)
+
+assert result.messages == [
+    ("success", "The product “Widget” was added successfully."),
+]
+```
+
+Level-based access should also be natural:
+
+```python
+assert result.messages.success
+assert not result.messages.error
+```
+
+Messages are distinct from validation errors. A successful operation produces messages and no
+errors; a rejected operation produces errors and may produce no messages at all.
+
+---
+
+# 23. CRUD Success Checks
 
 The package must support basic create, edit, and delete workflows.
 
-Create:
+## 23.1 Create
 
 ```python
-result = admin.create(Product, {
+result = admin_ui.create(Product, {
     "name": "Widget",
     "price": "10.00",
 })
@@ -808,31 +1422,7 @@ result = admin.create(Product, {
 assert result.success
 ```
 
-Edit:
-
-```python
-result = admin.edit(product, {
-    "name": "Updated widget",
-})
-
-assert result.success
-```
-
-Delete:
-
-```python
-result = admin.delete(product)
-
-assert result.success
-```
-
-Where practical, operation results should expose the affected object:
-
-```python
-result.object
-```
-
-For create operations this enables:
+Operation results expose the affected object:
 
 ```python
 product = result.object
@@ -842,12 +1432,112 @@ assert product.name == "Widget"
 
 ---
 
-# 21. Page Object Model
+## 23.2 Edit
+
+```python
+result = admin_ui.edit(product, {
+    "name": "Updated widget",
+})
+
+assert result.success
+assert result.object.name == "Updated widget"
+```
+
+The object exposed by an edit result reflects the stored state after the operation.
+
+---
+
+## 23.3 Delete
+
+```python
+result = admin_ui.delete(product)
+
+assert result.success
+```
+
+---
+
+## 23.4 Delete confirmation contents
+
+The confirmation page exposes the objects the admin says will be removed, including related
+ones:
+
+```python
+page = admin_ui.delete(customer)
+
+assert page.works
+
+assert customer in page.objects
+assert len(page.objects) == 3
+```
+
+---
+
+## 23.5 Deletion refused
+
+An admin may decline to offer or to perform a deletion.
+
+The absence of the action is assertable:
+
+```python
+page = admin_ui.edit(product)
+
+assert not page.has_action("delete")
+```
+
+So is a refused operation:
+
+```python
+result = admin_ui.delete(product)
+
+assert not result.success
+```
+
+---
+
+# 24. Admin Index and Model Exposure
+
+The package must expose what the admin presents to the current user.
+
+```python
+page = admin_ui.index()
+
+assert page.works
+```
+
+Which models are exposed:
+
+```python
+assert Product in page.models
+assert Category in page.models
+```
+
+How they are grouped, in the order presented:
+
+```python
+assert page.apps == [
+    "Shop",
+    "Authentication and Authorization",
+]
+
+assert page.models_for("Shop") == [
+    Product,
+    Category,
+]
+```
+
+Model exposure reflects the current user. A model the user may not see is not listed.
+
+---
+
+# 25. Page Object Model
 
 The public API should conceptually expose these page/result types.
 
 ```text
 AdminSession
+│
+├── AdminUrls
 │
 ├── AdminIndexPage
 ├── ChangelistPage
@@ -856,27 +1546,31 @@ AdminSession
 ├── DeletePage
 │
 ├── FormField
+│   └── FieldChoice
+├── SubmitActions
 ├── Row
 ├── Cell
 ├── Permissions
 │
 └── SubmissionResult
-    └── ValidationErrors
+    ├── ValidationErrors
+    └── Messages
 ```
 
-The exact Python class names are implementation details, but the public concepts should remain recognizable and stable.
+The exact Python class names are implementation details, but the public concepts should remain
+recognizable and stable.
 
 ---
 
-# 22. Example v0.1 Tests
+# 26. Example v0.1 Tests
 
 ## Authentication and permissions
 
 ```python
-def test_staff_access(admin, staff_user):
-    admin.login(staff_user)
+def test_staff_access(admin_ui, staff_user):
+    admin_ui.login(staff_user)
 
-    permissions = admin.permissions(Product)
+    permissions = admin_ui.permissions(Product)
 
     assert permissions.view
     assert permissions.change
@@ -888,13 +1582,29 @@ def test_staff_access(admin, staff_user):
 ## Basic page health
 
 ```python
-def test_product_admin_pages(admin, admin_user, product):
-    admin.login(admin_user)
+def test_product_admin_pages(admin_ui, admin_user, product):
+    admin_ui.login(admin_user)
 
-    assert admin.list(Product).works
-    assert admin.create(Product).works
-    assert admin.edit(product).works
-    assert admin.delete(product).works
+    assert admin_ui.list(Product).works
+    assert admin_ui.create(Product).works
+    assert admin_ui.edit(product).works
+    assert admin_ui.delete(product).works
+```
+
+---
+
+## Model exposure
+
+```python
+def test_shop_models_are_exposed(admin_ui, admin_user):
+    admin_ui.login(admin_user)
+
+    page = admin_ui.index()
+
+    assert page.models_for("Shop") == [
+        Product,
+        Category,
+    ]
 ```
 
 ---
@@ -902,10 +1612,12 @@ def test_product_admin_pages(admin, admin_user, product):
 ## Changelist
 
 ```python
-def test_customer_list(admin, admin_user):
-    admin.login(admin_user)
+def test_customer_list(admin_ui, admin_user):
+    admin_ui.login(admin_user)
 
-    page = admin.list(Customer)
+    page = admin_ui.list(Customer)
+
+    assert page.count == 3
 
     assert page.headers == [
         "ID",
@@ -936,13 +1648,46 @@ def test_customer_list(admin, admin_user):
 
 ---
 
+## Changelist by column
+
+```python
+def test_customer_status(admin_ui, admin_user):
+    admin_ui.login(admin_user)
+
+    page = admin_ui.list(Customer)
+
+    assert page.contains([
+        {
+            "First name": "Jeff",
+            "Active": True,
+        },
+    ])
+```
+
+---
+
+## Empty changelist
+
+```python
+def test_empty_customer_list(admin_ui, admin_user):
+    admin_ui.login(admin_user)
+
+    page = admin_ui.list(Customer)
+
+    assert page.works
+    assert page.empty
+    assert page.count == 0
+```
+
+---
+
 ## Form structure
 
 ```python
-def test_product_create_fields(admin, admin_user):
-    admin.login(admin_user)
+def test_product_create_fields(admin_ui, admin_user):
+    admin_ui.login(admin_user)
 
-    page = admin.create(Product)
+    page = admin_ui.create(Product)
 
     assert page.fields == {
         "name",
@@ -954,6 +1699,29 @@ def test_product_create_fields(admin, admin_user):
     assert page.field("name").required
     assert page.field("price").required
     assert not page.field("description").required
+
+    assert page.field("name").label == "Name"
+    assert page.field("enabled").value is True
+
+    assert page.field("category").choices == [
+        ("", "---------"),
+        ("1", "Tools"),
+        ("2", "Toys"),
+    ]
+```
+
+---
+
+## Rendered-only fields
+
+```python
+def test_report_is_read_only(admin_ui, admin_user, report):
+    admin_ui.login(admin_user)
+
+    page = admin_ui.edit(report)
+
+    assert not page.field("created_at").editable
+    assert page.actions == set()
 ```
 
 ---
@@ -961,10 +1729,10 @@ def test_product_create_fields(admin, admin_user):
 ## Required-field population
 
 ```python
-def test_create_product(admin, admin_user):
-    admin.login(admin_user)
+def test_create_product(admin_ui, admin_user):
+    admin_ui.login(admin_user)
 
-    page = admin.create(Product)
+    page = admin_ui.create(Product)
 
     page.populate({
         "name": "Widget",
@@ -975,6 +1743,8 @@ def test_create_product(admin, admin_user):
     result = page.submit()
 
     assert result.success
+    assert result.redirected_to_list
+    assert result.messages.success
 ```
 
 ---
@@ -982,10 +1752,10 @@ def test_create_product(admin, admin_user):
 ## Validation
 
 ```python
-def test_product_validation(admin, admin_user):
-    admin.login(admin_user)
+def test_product_validation(admin_ui, admin_user):
+    admin_ui.login(admin_user)
 
-    page = admin.create(Product)
+    page = admin_ui.create(Product)
 
     result = page.submit({
         "name": "",
@@ -993,8 +1763,9 @@ def test_product_validation(admin, admin_user):
     })
 
     assert not result.success
+    assert not result.created
 
-    assert "Please correct the errors below." in result.errors.header
+    assert result.errors.banner
 
     assert result.errors["name"] == [
         "This field is required.",
@@ -1007,50 +1778,132 @@ def test_product_validation(admin, admin_user):
 
 ---
 
-# 23. Public Fixtures
-
-The package should expose a primary pytest fixture.
-
-Working name:
+## Re-render after an invalid submission
 
 ```python
-admin
+def test_product_form_is_rendered_back(admin_ui, admin_user):
+    admin_ui.login(admin_user)
+
+    page = admin_ui.create(Product)
+
+    result = page.submit({
+        "name": "",
+        "price": "12.00",
+    })
+
+    assert not result.success
+    assert not result.created
+
+    assert result.field("price").value == "12.00"
+```
+
+---
+
+# 27. Public Fixtures
+
+The package exposes a primary pytest fixture:
+
+```python
+admin_ui
 ```
 
 Example:
 
 ```python
-def test_something(admin, admin_user):
-    admin.login(admin_user)
+def test_something(admin_ui, admin_user):
+    admin_ui.login(admin_user)
 ```
 
-If `admin` proves too likely to conflict with project fixtures, a more explicit public name should be chosen before the first stable release, for example:
+The name is deliberately explicit. It names what is under test rather than how it is driven, and
+it does not collide with project fixtures named `admin` or with the `admin` module imported in
+most Django test modules.
 
-```python
-django_admin
-```
-
-Fixture naming should be finalized before v0.1 to avoid later backwards-incompatible renaming.
+The fixture is parameterizable for the admin site and URL prefix described in sections 28 and 29.
 
 ---
 
-# 24. Custom Django Admin Sites
+# 28. Configuration and Extensibility
+
+The package must be generic and adjustable to every project's needs.
+
+Nothing project-specific ships in the package. Every project-specific behavior enters through a
+documented extension point.
+
+## 28.1 Configuration surface
+
+Project-wide defaults are set in one place, so individual tests stay free of setup noise.
+
+Configurable at minimum:
+
+* the admin site under test;
+* the admin URL prefix;
+* value normalization;
+* field handling.
+
+---
+
+## 28.2 Admin location
+
+The admin URL prefix is **not** assumed to be `/admin/`.
+
+URLs are resolved from the admin site under test. An explicit override must also be available
+for projects that mount the admin somewhere the package cannot infer.
+
+---
+
+## 28.3 Value normalization hooks
+
+A project must be able to teach the package how its own rendering normalizes, so that section
+3.4 continues to hold for values the package does not recognize on its own.
+
+Registering a normalization must not require modifying or subclassing package internals.
+
+---
+
+## 28.4 Field handling hooks
+
+A project must be able to teach the package how to read and how to fill a field representation
+the package does not know.
+
+Once registered, such a field participates in field inspection, population, and submission like
+any other.
+
+---
+
+## 28.5 Page extension
+
+A project must be able to attach its own accessors to a page without forking the package.
+
+---
+
+## 28.6 No required base class
+
+No assertion, matcher, or page object may require a project to subclass a package-provided test
+case in order to be used.
+
+This preserves the reuse principle of section 3.7: a project composes its own reusable
+expectations however it prefers.
+
+---
+
+# 29. Custom Django Admin Sites
 
 The architecture must allow tests to target a non-default `AdminSite`.
 
 Example target API:
 
 ```python
-admin.use_site(custom_admin_site)
+admin_ui.use_site(custom_admin_site)
 ```
 
-or through configuration/fixture construction.
+or through configuration or fixture construction, as described in section 28.
 
-Support for custom AdminSite instances is part of the v0.1 architectural requirement even if the default site is the common path.
+Support for custom AdminSite instances, including sites mounted under a non-default URL prefix,
+is part of the v0.1 architectural requirement even if the default site is the common path.
 
 ---
 
-# 25. Error Reporting
+# 30. Error Reporting
 
 Failure output is an important part of the library.
 
@@ -1082,11 +1935,12 @@ Actual:
     required=False
 ```
 
-The library should make normal pytest assertion rewriting useful rather than hiding failures behind opaque helper exceptions.
+The library should make normal pytest assertion rewriting useful rather than hiding failures
+behind opaque helper exceptions.
 
 ---
 
-# 26. Compatibility Requirement
+# 31. Compatibility Requirement
 
 The minimum supported Django version is:
 
@@ -1094,12 +1948,13 @@ The minimum supported Django version is:
 Django 3.2
 ```
 
-The package architecture must support testing multiple later Django releases without exposing version-specific behavior through the public API.
+The package architecture must support testing multiple later Django releases without exposing
+version-specific behavior through the public API.
 
 A user test such as:
 
 ```python
-assert admin.list(Product).works
+assert admin_ui.list(Product).works
 ```
 
 or:
@@ -1110,71 +1965,116 @@ assert page.contains([...])
 
 should remain unchanged across supported Django versions.
 
-Version-specific normalization belongs inside the package.
+Version-specific normalization belongs inside the package. This includes differences in how
+values are rendered and, where practical, differences in the wording of the admin's own
+built-in messages.
+
+Values render through the formats and time zone the project has configured. Tests must never
+hardcode a rendering format in order to pass.
 
 ---
 
-# 27. v0.1 Acceptance Criteria
+# 32. v0.1 Acceptance Criteria
 
-v0.1 is considered complete when a test project can demonstrate all of the following against supported Django versions:
+v0.1 is considered complete when a test project can demonstrate all of the following against
+supported Django versions:
 
 1. Log in with a superuser.
 2. Log in with a staff user.
 3. Log in with an arbitrary user object.
 4. Determine view/add/change/delete permissions for a model.
-5. Verify that model changelist, create, edit, and delete pages work.
-6. Read changelist headers.
-7. Verify changelist rows using:
+5. Determine effective permissions where the admin imposes constraints of its own.
+6. Determine permissions for an individual object.
+7. Verify that a page the user may not open is reported as refused.
+8. Verify that model changelist, create, edit, and delete pages work.
+9. Read a page's title and subtitle.
+10. Read changelist headers, by label and by configured column name.
+11. Read the changelist record count and assert an empty changelist.
+12. Verify changelist rows using:
 
-   * exact values;
-   * empty values;
-   * `ANY`;
-   * callable cell matchers;
-   * `ANY_ROW`.
-8. Inspect fields on create and edit pages.
-9. Determine required and optional fields.
-10. Populate required fields only.
-11. Populate optional fields only.
-12. Populate all supported fields.
-13. Populate from a dictionary.
-14. Populate from an object.
-15. Submit valid create forms.
-16. Submit valid edit forms.
-17. Submit invalid create forms.
-18. Submit invalid edit forms.
-19. Inspect form/header validation messages.
-20. Inspect validation errors associated with individual fields.
-21. Perform and verify a basic delete operation.
-22. Run the same public test syntax starting with Django 3.2.
+    * exact values;
+    * empty values;
+    * `ANY`;
+    * callable cell matchers;
+    * `ANY_ROW`;
+    * column-addressed expected rows.
+13. Read normalized boolean cells, empty cells, and link cells including their targets.
+14. Inspect fields on create and edit pages.
+15. Determine required and optional fields.
+16. Read field labels, initial values, choices, and presentation order.
+17. Distinguish editable from rendered-only fields and read a rendered-only value.
+18. Populate required fields only.
+19. Populate optional fields only.
+20. Populate all supported fields.
+21. Populate from a dictionary.
+22. Populate from an object.
+23. Submit valid create forms.
+24. Submit valid edit forms.
+25. Invoke a submit action other than the ordinary save, including one the admin defines.
+26. Determine where the admin navigated after a successful operation.
+27. Submit invalid create forms.
+28. Submit invalid edit forms.
+29. Verify that an invalid submission wrote nothing and that the form rendered the submitted
+    values back.
+30. Inspect the admin's summary notice, form-level errors, and field-level errors as three
+    distinct levels.
+31. Read the messages displayed after an operation.
+32. Perform and verify a basic delete operation.
+33. Read the contents of a deletion confirmation.
+34. Verify that a refused deletion is not offered or not performed.
+35. Read the models the admin exposes to the current user, their grouping, and their order.
+36. Run against a non-default admin site mounted under a non-default URL prefix.
+37. Extend value normalization and field handling from a project, without subclassing package
+    internals.
+38. Run the same public test syntax starting with Django 3.2.
 
 ---
 
-# 28. Deferred to v0.2+
+# 33. Roadmap Beyond v0.1
 
-The first planned expansion should cover relational and compound admin forms, particularly:
+## v0.2 — Relational and compound forms
 
 * many-to-many fields;
 * one-to-many relationships;
 * Django Admin inlines;
 * stacked inlines;
 * tabular inlines;
+* inline shape, including the row counts and the initial, minimum, and maximum the admin
+  declares;
+* inline creation, editing, and deletion;
+* inline validation errors at cell, row, and formset granularity;
+* rendered-only inlines;
 * related-object automatic population;
-* inline validation errors;
-* inline creation and editing.
+* named field groups.
 
-Other potential later features include:
+---
+
+## v0.3 — Changelist interaction
 
 * changelist search;
 * filters;
-* pagination;
-* ordering;
+* ordering and sortable columns;
+* pagination and page traversal;
 * actions;
-* `list_editable`;
-* readonly fields;
-* fieldsets;
-* custom admin views;
+* `list_editable`.
+
+---
+
+## v0.4 — Advanced form surfaces
+
 * autocomplete fields;
 * raw-ID fields;
+* horizontal and vertical selectors;
 * date hierarchy;
-* richer row and cell matchers.
+* file and image upload fields;
+* custom and rich field representations;
+* conditionally displayed fields;
+* dependent choice sets.
 
+---
+
+## Later
+
+* custom admin views and endpoints beyond the standard operations;
+* richer row and cell matchers;
+* verifying side effects triggered by an admin operation.
