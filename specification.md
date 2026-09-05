@@ -1,4 +1,4 @@
-# Django Admin Testing Package — v0.1 Specification
+# Django Admin Testing Package — 1.0.0 Specification
 
 # 1. Purpose
 
@@ -28,17 +28,17 @@ The minimum supported Django version is **Django 3.2**.
 
 ---
 
-# 2. Scope of v0.1
+# 2. Scope of 1.0.0
 
-## 2.1 Covered in v0.1
+## 2.1 Covered in 1.0.0
 
-v0.1 covers standard Django Admin functionality for simple models.
+1.0.0 covers standard Django Admin functionality for simple models.
 
 Supported relationships and field behavior should be limited to fields that can be represented
 as ordinary scalar form values.
 
 Foreign keys may be supported where they behave as a normal single-value form field, but
-automatic traversal or creation of related object graphs is not required for v0.1.
+automatic traversal or creation of related object graphs is not required for 1.0.0.
 
 ---
 
@@ -147,8 +147,11 @@ assert page.row(1)["Active"] is True
 assert page.row(1)["Middle name"] == ""
 ```
 
-Tests must not hardcode a rendering format. Where a project renders values in a way the package
-does not recognize, normalization is extended through the hooks in section 28.
+Tests must not hardcode a rendering format.
+
+Every normalization rule is a package setting with a documented default, and every one of them
+can be replaced by the project. Nothing about normalization is fixed inside the package. See
+section 28.3.
 
 ---
 
@@ -272,12 +275,15 @@ admin_ui.logout()
 
 The package must expose the effective Django Admin permissions of a user for a model.
 
-Supported permissions:
+The four standard permissions are:
 
 * view;
 * add;
 * change;
 * delete.
+
+A model may declare permissions beyond these, and may narrow or remove the standard ones; see
+section 5.2.
 
 Example API:
 
@@ -308,7 +314,48 @@ opened.
 
 ---
 
-## 5.2 Effective permissions
+## 5.2 Custom permissions
+
+The four standard permissions are not a closed set.
+
+A model may declare permissions of its own, and may narrow or remove the standard ones. An admin
+may additionally gate one of its own operations behind a permission that is neither standard nor
+declared by the model.
+
+The package must therefore address permissions by name, not only by the four fixed attributes:
+
+```python
+permissions = admin_ui.permissions(Product)
+
+assert permissions["publish"]
+assert not permissions["archive"]
+```
+
+Presence of a permission is distinct from its value:
+
+```python
+assert permissions.has("publish")
+```
+
+The complete effective set must be readable:
+
+```python
+assert permissions.all == {
+    "view": True,
+    "add": True,
+    "change": True,
+    "delete": False,
+    "publish": True,
+}
+```
+
+Equality compares the complete effective set. A model that declares no custom permissions and
+narrows none of the standard ones therefore reports exactly the four of section 5.1, and the
+compact comparison there stays correct.
+
+---
+
+## 5.3 Effective permissions
 
 Reported permissions must be **effective** permissions.
 
@@ -320,20 +367,30 @@ The package must report what the admin will actually allow.
 
 ---
 
-## 5.3 Per-object permissions
+## 5.4 Per-object permissions
 
 Permissions must also be inspectable for a specific object:
 
 ```python
 assert admin_ui.permissions(product).change
 assert not admin_ui.permissions(product).delete
+assert admin_ui.permissions(product)["publish"]
 ```
 
-The model form and the object form must share one public representation.
+The model form and the object form share one public representation, custom permissions included.
+
+Two independent sources can make an object's permissions differ from its model's: the admin can
+decide per object, and an authentication backend can answer per object. The package reports the
+combined effective result, and never requires a test to say which source produced it.
+
+Django's default authentication backend does not answer per-object questions. A project whose
+per-object rules live in its admin needs nothing further; a project that expects the permission
+system itself to answer per object must be running a backend that supports it. The package must
+behave the same way in both cases.
 
 ---
 
-## 5.4 Observable consequences
+## 5.5 Observable consequences
 
 A page the current user may not open must not report itself as working, and must say why:
 
@@ -548,13 +605,13 @@ assert page.rows == []
 
 # 9. Changelist Row Matching
 
-One of the main v0.1 features is concise verification of rows shown on a changelist.
+One of the main 1.0.0 features is concise verification of rows shown on a changelist.
 
 Example:
 
 ```python
 assert page.contains([
-    (1, "Jeff", "Bezos", "", ANY, some_callable),
+    (1, "Jane", "Doe", "", ANY, some_callable),
     ANY_ROW,
 ])
 ```
@@ -576,7 +633,7 @@ No string value carries matcher meaning. A string in an expected row is always a
 Literal values require equality.
 
 ```python
-("Jeff", "Bezos")
+("Jane", "Doe")
 ```
 
 means that the corresponding cells must contain exactly those expected normalized values.
@@ -612,7 +669,7 @@ ANY
 Example:
 
 ```python
-(1, "Jeff", "Bezos", ANY)
+(1, "Jane", "Doe", ANY)
 ```
 
 `ANY` is the only spelling for this matcher.
@@ -634,7 +691,7 @@ def valid_email(row, column):
 
 
 assert page.contains([
-    (1, "Jeff", "Bezos", valid_email),
+    (1, "Jane", "Doe", valid_email),
 ])
 ```
 
@@ -678,14 +735,14 @@ Example:
 
 ```python
 assert page.contains([
-    (1, "Jeff", "Bezos"),
+    (1, "Jane", "Doe"),
     ANY_ROW,
 ])
 ```
 
 This means:
 
-* one row must match `(1, "Jeff", "Bezos")`;
+* one row must match `(1, "Jane", "Doe")`;
 * at least one additional row may contain arbitrary values.
 
 `ANY_ROW` is the only spelling for an ignored row.
@@ -697,7 +754,7 @@ This means:
 Rows are also addressable by column, as described in section 3.5:
 
 ```python
-assert page.row(1)["First name"] == "Jeff"
+assert page.row(1)["First name"] == "Jane"
 assert page.row(1)["Email"] == ""
 ```
 
@@ -707,8 +764,8 @@ constrained:
 ```python
 assert page.contains([
     {
-        "First name": "Jeff",
-        "Last name": "Bezos",
+        "First name": "Jane",
+        "Last name": "Doe",
     },
 ])
 ```
@@ -733,7 +790,7 @@ A cell the admin renders as a link exposes both its text and its target:
 ```python
 cell = page.row(1).cell("Customer")
 
-assert cell.value == "Jeff Bezos"
+assert cell.value == "Jane Doe"
 assert cell.link == admin_ui.url.edit(customer)
 ```
 
@@ -1017,7 +1074,7 @@ page.populate(product)
 ```
 
 This does not imply that related objects or object graphs must automatically be serialized in
-v0.1.
+1.0.0.
 
 ---
 
@@ -1158,22 +1215,35 @@ Omitting `action` performs the ordinary save.
 
 ## 16.2 Post-submission navigation
 
-The result reports where the admin sent the user:
+The result reports where the admin sent the user.
+
+Any destination can be checked directly:
 
 ```python
 result = admin_ui.create(Product, data)
 
 assert result.success
-assert result.redirected_to_list
+assert result.redirected_to(admin_ui.url.list(Product))
 ```
 
 ```python
 result = page.submit(action="save_and_continue")
 
+assert result.redirected_to(admin_ui.url.edit(product))
+```
+
+`redirected_to` accepts any admin URL of section 6.3 and compares under that section's
+normalization, so a test never depends on whether the admin redirected in relative or absolute
+form.
+
+Shorthands are provided for the common destinations:
+
+```python
+assert result.redirected_to_list
 assert result.redirected_to_edit(product)
 ```
 
-Any other destination remains inspectable:
+The destination remains inspectable for anything the shorthands do not cover:
 
 ```python
 assert result.destination
@@ -1562,7 +1632,7 @@ recognizable and stable.
 
 ---
 
-# 26. Example v0.1 Tests
+# 26. Example 1.0.0 Tests
 
 ## Authentication and permissions
 
@@ -1630,8 +1700,8 @@ def test_customer_list(admin_ui, admin_user):
     assert page.contains([
         (
             1,
-            "Jeff",
-            "Bezos",
+            "Jane",
+            "Doe",
             "",
             ANY,
         ),
@@ -1658,7 +1728,7 @@ def test_customer_status(admin_ui, admin_user):
 
     assert page.contains([
         {
-            "First name": "Jeff",
+            "First name": "Jane",
             "Active": True,
         },
     ])
@@ -1851,12 +1921,51 @@ for projects that mount the admin somewhere the package cannot infer.
 
 ---
 
-## 28.3 Value normalization hooks
+## 28.3 Normalization rules
 
-A project must be able to teach the package how its own rendering normalizes, so that section
-3.4 continues to hold for values the package does not recognize on its own.
+All normalization described in section 3.4 is defined by settings, not by package internals.
 
-Registering a normalization must not require modifying or subclassing package internals.
+The package ships a complete default rule set. At minimum it covers:
+
+* booleans;
+* empty and absent values;
+* links, and their targets;
+* dates and times;
+* numbers;
+* the display value of a choice;
+* surrounding text and whitespace.
+
+Every rule in that set has a documented default and is individually addressable:
+
+```python
+ADMIN_UI = {
+    "normalizers": {
+        "boolean": ...,
+        "empty": ...,
+        "link": ...,
+        "datetime": ...,
+        "number": ...,
+        "choice": ...,
+        "text": ...,
+    },
+}
+```
+
+Three things must hold:
+
+* **Any rule can be overridden.** A project replaces a single rule without restating the rest.
+  The defaults it does not mention stay in force.
+* **New rules can be added.** A project registers normalization for a representation the package
+  does not know, and that representation then behaves like any other.
+* **No rule is privileged.** Nothing is hardcoded, and no override requires modifying or
+  subclassing package internals.
+
+Overrides apply project-wide by default. It must also be possible to override a rule for a
+single test, so that a test covering unusual rendering does not force a project-wide change:
+
+```python
+admin_ui.normalizer("boolean", my_boolean_rule)
+```
 
 ---
 
@@ -1899,7 +2008,7 @@ admin_ui.use_site(custom_admin_site)
 or through configuration or fixture construction, as described in section 28.
 
 Support for custom AdminSite instances, including sites mounted under a non-default URL prefix,
-is part of the v0.1 architectural requirement even if the default site is the common path.
+is part of a 1.0.0 architectural requirement even if the default site is the common path.
 
 ---
 
@@ -1917,12 +2026,12 @@ a changelist mismatch should expose information such as:
 
 ```text
 Expected row:
-    [1, "Jeff", "Bezos", ANY]
+    [1, "Jane", "Doe", ANY]
 
 No matching row found.
 
 Actual rows:
-    [1, "Jeffrey", "Bezos", "Active"]
+    [1, "Janet", "Doe", "Active"]
     [2, "John", "Doe", "Inactive"]
 ```
 
@@ -1974,23 +2083,25 @@ hardcode a rendering format in order to pass.
 
 ---
 
-# 32. v0.1 Acceptance Criteria
+# 32. 1.0.0 Acceptance Criteria
 
-v0.1 is considered complete when a test project can demonstrate all of the following against
+1.0.0 is considered complete when a test project can demonstrate all of the following against
 supported Django versions:
 
 1. Log in with a superuser.
 2. Log in with a staff user.
 3. Log in with an arbitrary user object.
 4. Determine view/add/change/delete permissions for a model.
-5. Determine effective permissions where the admin imposes constraints of its own.
-6. Determine permissions for an individual object.
-7. Verify that a page the user may not open is reported as refused.
-8. Verify that model changelist, create, edit, and delete pages work.
-9. Read a page's title and subtitle.
-10. Read changelist headers, by label and by configured column name.
-11. Read the changelist record count and assert an empty changelist.
-12. Verify changelist rows using:
+5. Determine a permission a model declares beyond the standard four, and read the
+   complete effective permission set.
+6. Determine effective permissions where the admin imposes constraints of its own.
+7. Determine permissions for an individual object.
+8. Verify that a page the user may not open is reported as refused.
+9. Verify that model changelist, create, edit, and delete pages work.
+10. Read a page's title and subtitle.
+11. Read changelist headers, by label and by configured column name.
+12. Read the changelist record count and assert an empty changelist.
+13. Verify changelist rows using:
 
     * exact values;
     * empty values;
@@ -1998,41 +2109,41 @@ supported Django versions:
     * callable cell matchers;
     * `ANY_ROW`;
     * column-addressed expected rows.
-13. Read normalized boolean cells, empty cells, and link cells including their targets.
-14. Inspect fields on create and edit pages.
-15. Determine required and optional fields.
-16. Read field labels, initial values, choices, and presentation order.
-17. Distinguish editable from rendered-only fields and read a rendered-only value.
-18. Populate required fields only.
-19. Populate optional fields only.
-20. Populate all supported fields.
-21. Populate from a dictionary.
-22. Populate from an object.
-23. Submit valid create forms.
-24. Submit valid edit forms.
-25. Invoke a submit action other than the ordinary save, including one the admin defines.
-26. Determine where the admin navigated after a successful operation.
-27. Submit invalid create forms.
-28. Submit invalid edit forms.
-29. Verify that an invalid submission wrote nothing and that the form rendered the submitted
+14. Read normalized boolean cells, empty cells, and link cells including their targets.
+15. Inspect fields on create and edit pages.
+16. Determine required and optional fields.
+17. Read field labels, initial values, choices, and presentation order.
+18. Distinguish editable from rendered-only fields and read a rendered-only value.
+19. Populate required fields only.
+20. Populate optional fields only.
+21. Populate all supported fields.
+22. Populate from a dictionary.
+23. Populate from an object.
+24. Submit valid create forms.
+25. Submit valid edit forms.
+26. Invoke a submit action other than the ordinary save, including one the admin defines.
+27. Determine where the admin navigated after a successful operation.
+28. Submit invalid create forms.
+29. Submit invalid edit forms.
+30. Verify that an invalid submission wrote nothing and that the form rendered the submitted
     values back.
-30. Inspect the admin's summary notice, form-level errors, and field-level errors as three
+31. Inspect the admin's summary notice, form-level errors, and field-level errors as three
     distinct levels.
-31. Read the messages displayed after an operation.
-32. Perform and verify a basic delete operation.
-33. Read the contents of a deletion confirmation.
-34. Verify that a refused deletion is not offered or not performed.
-35. Read the models the admin exposes to the current user, their grouping, and their order.
-36. Run against a non-default admin site mounted under a non-default URL prefix.
-37. Extend value normalization and field handling from a project, without subclassing package
-    internals.
-38. Run the same public test syntax starting with Django 3.2.
+32. Read the messages displayed after an operation.
+33. Perform and verify a basic delete operation.
+34. Read the contents of a deletion confirmation.
+35. Verify that a refused deletion is not offered or not performed.
+36. Read the models the admin exposes to the current user, their grouping, and their order.
+37. Run against a non-default admin site mounted under a non-default URL prefix.
+38. Override a default normalization rule, add a new one, and extend field handling from a
+    project, without subclassing package internals.
+39. Run the same public test syntax starting with Django 3.2.
 
 ---
 
-# 33. Roadmap Beyond v0.1
+# 33. Roadmap Beyond 1.0.0
 
-## v0.2 — Relational and compound forms
+## 1.1.0 — Relational and compound forms
 
 * many-to-many fields;
 * one-to-many relationships;
@@ -2049,7 +2160,7 @@ supported Django versions:
 
 ---
 
-## v0.3 — Changelist interaction
+## 1.2.0 — Changelist interaction
 
 * changelist search;
 * filters;
@@ -2060,7 +2171,7 @@ supported Django versions:
 
 ---
 
-## v0.4 — Advanced form surfaces
+## 1.3.0 — Advanced form surfaces
 
 * autocomplete fields;
 * raw-ID fields;
