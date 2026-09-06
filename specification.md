@@ -24,7 +24,8 @@ It should allow developers to verify:
 The package should emphasize readable tests using normal Python `assert` statements rather than
 custom assertion methods wherever practical.
 
-The minimum supported Django version is **Django 3.2**.
+The minimum supported Django version is **Django 3.2**, and the minimum supported Python
+version is **Python 3.8**.
 
 ---
 
@@ -138,7 +139,9 @@ A value read from an admin page is normalized before a test ever sees it:
 * a value the admin renders as a link normalizes to its text, with the target available
   separately;
 * dates, times, and numbers normalize through the formats and time zone the project has
-  configured.
+  configured;
+* text normalizes from the document's own content, never from its rendered presentation, so
+  styling such as letter-casing never changes a value.
 
 A test must never need to know how a value was rendered:
 
@@ -237,10 +240,23 @@ The package must not assume that:
 
 * the user model uses `username`;
 * the default Django `User` model is installed;
-* only superusers can access Admin.
+* only superusers can access Admin;
+* the caller knows the user's password.
 
 An arbitrary custom user model must therefore be usable as long as the Django project itself
 supports it.
+
+Passwords are stored irreversibly, so `login(user)` must never require one. A user with no
+usable password at all must still be able to log in.
+
+Where a test's own subject is the login page, an explicit password may be supplied:
+
+```python
+admin_ui.login(user, password="secret")
+```
+
+This drives the rendered login form, filling whichever field the user model identifies users by.
+It is an opt-in for testing the login page, never a requirement for logging in.
 
 Example:
 
@@ -444,6 +460,21 @@ assert page.denied
 assert page.redirected
 assert page.destination
 ```
+
+The admin refuses access in more than one way, and not every refusal changes the destination:
+
+* an unauthenticated or non-staff user is sent to the login page;
+* a user who may not act on a particular model is refused in place, with the destination
+  unchanged;
+* a missing object is reported as absent.
+
+`denied` must be true for all of these, not only for the ones that move the user.
+
+Recognizing the refusals that leave the destination unchanged requires the response status,
+which section 6.4 notes is not available under every driving strategy. A strategy that cannot
+observe it therefore offers a narrower guarantee: it reports the refusals that redirect and
+cannot report the others. This does not change what a test is written to say — only how much a
+given strategy can detect.
 
 ---
 
@@ -1890,6 +1921,19 @@ most Django test modules.
 
 The fixture is parameterizable for the admin site and URL prefix described in sections 28 and 29.
 
+Public names are importable from one module:
+
+```python
+from django_admin_kit import ANY, ANY_ROW
+```
+
+Two guarantees hold for every test that uses the fixture:
+
+* **Each test begins unauthenticated.** No session, cookie, or page state established by one
+  test is visible to another, whatever order tests run in.
+* **Tests are safe to run in parallel.** Nothing the fixture provides is shared between
+  concurrently running tests.
+
 ---
 
 # 28. Configuration and Extensibility
@@ -1903,12 +1947,22 @@ documented extension point.
 
 Project-wide defaults are set in one place, so individual tests stay free of setup noise.
 
+All settings live under a single key:
+
+```python
+DJANGO_ADMIN_KIT = {
+    ...
+}
+```
+
 Configurable at minimum:
 
 * the admin site under test;
 * the admin URL prefix;
+* the driving strategy of section 2.2;
 * value normalization;
-* field handling.
+* field handling;
+* options belonging to the driving strategy itself, as described in section 28.4.
 
 ---
 
@@ -1938,7 +1992,7 @@ The package ships a complete default rule set. At minimum it covers:
 Every rule in that set has a documented default and is individually addressable:
 
 ```python
-ADMIN_UI = {
+DJANGO_ADMIN_KIT = {
     "normalizers": {
         "boolean": ...,
         "empty": ...,
@@ -1969,7 +2023,38 @@ admin_ui.normalizer("boolean", my_boolean_rule)
 
 ---
 
-## 28.4 Field handling hooks
+## 28.4 Strategy-specific settings
+
+Section 3.6 requires the configuration surface to presuppose no driving strategy. A setting only
+one strategy understands must therefore not sit among the settings every strategy understands.
+
+Such settings are namespaced, and belong to the strategy rather than to the package:
+
+```python
+DJANGO_ADMIN_KIT = {
+    "driver": ...,
+    "driver_options": {
+        ...
+    },
+}
+```
+
+The package passes `driver_options` through without inspecting it. The active strategy defines
+which keys it accepts, and validates them itself.
+
+Configuration errors must be loud, because a silently accepted typo disables a setting
+invisibly:
+
+* an unrecognized top-level setting is rejected by the package;
+* an unrecognized strategy option is rejected by the strategy, naming the strategy as well as
+  the key, so an option intended for a different strategy fails visibly rather than being
+  ignored.
+
+Validation happens when the strategy is prepared, not when it is first used.
+
+---
+
+## 28.5 Field handling hooks
 
 A project must be able to teach the package how to read and how to fill a field representation
 the package does not know.
@@ -1979,13 +2064,13 @@ any other.
 
 ---
 
-## 28.5 Page extension
+## 28.6 Page extension
 
 A project must be able to attach its own accessors to a page without forking the package.
 
 ---
 
-## 28.6 No required base class
+## 28.7 No required base class
 
 No assertion, matcher, or page object may require a project to subclass a package-provided test
 case in order to be used.
@@ -2051,10 +2136,11 @@ behind opaque helper exceptions.
 
 # 31. Compatibility Requirement
 
-The minimum supported Django version is:
+The minimum supported versions are:
 
 ```text
 Django 3.2
+Python 3.8
 ```
 
 The package architecture must support testing multiple later Django releases without exposing
@@ -2081,6 +2167,10 @@ built-in messages.
 Values render through the formats and time zone the project has configured. Tests must never
 hardcode a rendering format in order to pass.
 
+Results must not depend on the machine a test runs on. Where a driving strategy carries its own
+notion of locale, time zone, or formatting, the package pins it to what the project has
+configured, so the same test yields the same values everywhere.
+
 ---
 
 # 32. 1.0.0 Acceptance Criteria
@@ -2090,7 +2180,7 @@ supported Django versions:
 
 1. Log in with a superuser.
 2. Log in with a staff user.
-3. Log in with an arbitrary user object.
+3. Log in with an arbitrary user object, including one that has no usable password.
 4. Determine view/add/change/delete permissions for a model.
 5. Determine a permission a model declares beyond the standard four, and read the
    complete effective permission set.
@@ -2137,7 +2227,8 @@ supported Django versions:
 37. Run against a non-default admin site mounted under a non-default URL prefix.
 38. Override a default normalization rule, add a new one, and extend field handling from a
     project, without subclassing package internals.
-39. Run the same public test syntax starting with Django 3.2.
+39. Run the test suite in parallel.
+40. Run the same public test syntax starting with Django 3.2.
 
 ---
 
