@@ -1,0 +1,66 @@
+name: CI
+
+on:
+  pull_request:
+    paths-ignore: ["**.md"]
+  push:
+    branches: [main]
+    paths-ignore: ["**.md"]
+
+# Without this, three pushes to a branch queue 3x jobs.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    name: lint and types
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10
+        with:
+          enable-cache: true
+      - name: Fail if uv.lock is out of date with pyproject.toml
+        run: uv lock --check
+      - run: uv run --frozen ruff check .
+      - run: uv run --frozen ruff format --check .
+      - run: uv run --frozen mypy
+
+  cells:
+    name: enumerate cells
+    runs-on: ubuntu-latest
+    outputs:
+      cells: ${{ steps.list.outputs.cells }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10
+        with:
+          enable-cache: true
+      # Read from tox.toml rather than repeated here, so CI cannot drift from
+      # what `tox` runs locally.
+      - id: list
+        run: |
+          cells=$(uvx --from 'tox>=4.61' --with tox-uv tox list -d --no-desc -q \
+            | jq -R -s -c 'split("\n") | map(select(. != ""))')
+          echo "cells=$cells" >> "$GITHUB_OUTPUT"
+          echo "$cells"
+
+  matrix:
+    name: ${{ matrix.cell }}
+    needs: cells
+    runs-on: ubuntu-latest
+    strategy:
+      # One Django version breaking must not hide the state of the other eight.
+      fail-fast: false
+      matrix:
+        cell: ${{ fromJSON(needs.cells.outputs.cells) }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10
+        with:
+          enable-cache: true
+      - run: uv run --frozen tox -e ${{ matrix.cell }}

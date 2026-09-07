@@ -107,8 +107,9 @@ uv run pre-commit run --all-files
 
 ## The test project
 
-The suite runs against a small Django project in `tests/project/`, wired up by `pytest.ini`.
-You don't have to do anything to use it — no environment variables, no `manage.py`.
+The suite runs against a small Django project in `tests/project/`, wired up by the
+`[tool.pytest.ini_options]` table in `pyproject.toml`. You don't have to do anything to use it —
+no environment variables, no `manage.py`.
 
 It is deliberately awkward in two ways, because both are assumptions the package must never
 make:
@@ -145,22 +146,22 @@ Commit `pyproject.toml` and `uv.lock` together.
 
 ## The version matrix
 
-`tox.ini` defines 18 cells: nine Django minors, each on its oldest supported Python at or above
+`tox.toml` defines 18 cells: nine Django minors, each on its oldest supported Python at or above
 the 3.8 floor and on its newest.
 
 ```bash
 uv run tox                        # every cell
 uv run tox -p 6                   # every cell, six at a time
-uv run tox -e py38-dj32           # one cell
-uv run tox list                   # what the cells are called
+uv run tox -e 3.8-dj32            # one cell
+uv run tox list -d                # what the cells are called
 ```
 
 Anything after a bare `--` is passed straight through to pytest, so a failing cell can be
-picked apart without touching `tox.ini`:
+picked apart without touching `tox.toml`:
 
 ```bash
-uv run tox -e py310-dj52 -- -x -vv                     # stop at the first failure, verbosely
-uv run tox -e py310-dj52 -- tests/test_project.py      # just one file
+uv run tox -e 3.10-dj52 -- -x -vv                     # stop at the first failure, verbosely
+uv run tox -e 3.10-dj52 -- tests/test_project.py      # just one file
 ```
 
 The whole sweep takes well under a minute on a warm cache, so there's no reason to leave it to
@@ -174,6 +175,38 @@ Only `pytest-django` is pinned per cell, because no single release spans Django 
 Everything else is left to the resolver, which caps itself per interpreter — 3.8 cells end up on
 pytest 8.3.5 and playwright 1.48.0, newer cells on current. That cap is the constraint to design
 against: code has to work on playwright 1.48.
+
+There is a second, larger matrix behind the `full` label: the whole cartesian, every Django minor
+against every interpreter it supports, 33 cells. It's too slow to sit in front of every pull
+request, so it gates releases instead. Run it before tagging one:
+
+```bash
+uv run tox -m full -p 8
+uv run tox list -m full          # the 33 cell names
+```
+
+## CI
+
+Two workflows, both in `.github/workflows/`.
+
+`ci.yml` runs on pull requests and pushes to `main`. It lints, type-checks, and runs the 18
+cells. `release.yml` runs on a `v*` tag: it runs all 33 cells, then builds, then publishes to
+PyPI, each job gated on the one before it, so a matrix failure stops the release rather than
+merely being recorded next to it.
+
+Neither workflow lists its cells. Both ask tox for them:
+
+```bash
+uvx --from 'tox>=4.61' --with tox-uv tox list -d --no-desc -q      # what ci.yml runs
+uvx --from 'tox>=4.61' --with tox-uv tox list -m full --no-desc -q # what release.yml runs
+```
+
+So editing `tox.toml` changes CI, and the two cannot disagree.
+
+Two things to know before the first release. Publishing uses PyPI's trusted publishing, which
+needs the project configured on PyPI to trust this repository and its `pypi` environment — there
+is no API token to add. And the build job refuses to run if the tag doesn't match the `version`
+in `pyproject.toml`, so bump the version in the same commit you tag.
 
 ## Building
 
@@ -191,7 +224,7 @@ Recent PyCharm versions support uv directly: point the interpreter at the projec
 select the existing `.venv` uv created.
 
 Mark `tests` as a test source root (right-click it, *Mark Directory as* → *Test Sources Root*).
-PyCharm doesn't read `pythonpath` from `pytest.ini`, so without this it reports `No module named
+PyCharm doesn't read pytest's `pythonpath` setting, so without this it reports `No module named
 project` on the test project's own imports even though everything runs.
 
 One thing to leave alone: `pyproject.toml` carries a static `version`, and `__version__` reads it

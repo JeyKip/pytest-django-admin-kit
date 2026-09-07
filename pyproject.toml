@@ -57,9 +57,10 @@ dev = [
     "ruff>=0.14",
     "mypy>=1.11",
     "pre-commit>=3.5",
-    "tox>=4.0",
-    # tox-uv itself needs 3.10+, and the development environment is 3.10 or newer
-    # anyway. The marker keeps `uv lock` resolvable across the full >=3.8 range.
+    # tox 4.61 for TOML configuration, and tox-uv to provision the matrix. Both
+    # need Python 3.10+, which the development environment is anyway. The markers
+    # keep `uv lock` resolvable across the full >=3.8 range.
+    "tox>=4.61; python_version >= '3.10'",
     "tox-uv>=1.16; python_version >= '3.10'",
 ]
 
@@ -72,6 +73,7 @@ packages = ["src/django_admin_kit"]
 # Ship what is needed to build and test from source, plus the design document the
 # README links to. Internal working notes and editor state stay out.
 exclude = [
+    "/.github",
     "/.gitignore",
     "/.idea",
     "/.pre-commit-config.yaml",
@@ -104,6 +106,14 @@ select = [
     "SIM",  # simplify
     "RUF",
 ]
+
+[tool.pytest.ini_options]
+# `pythonpath` puts `tests/` on sys.path so the test project imports as `project`,
+# the way it would in a real repository. Requires pytest 7.0, which is the floor.
+pythonpath = ["tests"]
+DJANGO_SETTINGS_MODULE = "project.settings"
+testpaths = ["tests"]
+addopts = "-ra"
 
 [tool.mypy]
 # The package floor is 3.8, but current mypy refuses to target anything below 3.10
