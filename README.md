@@ -105,6 +105,33 @@ two mostly buy you faster feedback. To run every hook over the whole tree:
 uv run pre-commit run --all-files
 ```
 
+## The test project
+
+The suite runs against a small Django project in `tests/project/`, wired up by `pytest.ini`.
+You don't have to do anything to use it — no environment variables, no `manage.py`.
+
+It is deliberately awkward in two ways, because both are assumptions the package must never
+make:
+
+- the admin is mounted at `/backoffice/`, not `/admin/`;
+- the user model has no `username` field and authenticates by email.
+
+Because they hold for the whole suite, every test proves them by just running, and no test has
+to be written specially to check them.
+
+The database is in-memory SQLite. That is worth knowing when a test feels slow later on: any
+test that uses `live_server` is forced onto `transactional_db` by pytest-django, whatever mark
+it carries, so the database is rebuilt rather than rolled back. SQLite keeps that cheap.
+
+If you change a model in `tests/project/`, regenerate its migration:
+
+```bash
+PYTHONPATH=tests DJANGO_SETTINGS_MODULE=project.settings uv run django-admin makemigrations
+```
+
+Those migration files are excluded from ruff so that what's committed stays byte-identical to
+what Django generates.
+
 ## Changing dependencies
 
 Edit `pyproject.toml`, then:
@@ -146,6 +173,10 @@ than shipping quietly.
 Recent PyCharm versions support uv directly: point the interpreter at the project and pick uv, or
 select the existing `.venv` uv created.
 
+Mark `tests` as a test source root (right-click it, *Mark Directory as* → *Test Sources Root*).
+PyCharm doesn't read `pythonpath` from `pytest.ini`, so without this it reports `No module named
+project` on the test project's own imports even though everything runs.
+
 One thing to leave alone: `pyproject.toml` carries a static `version`, and `__version__` reads it
 back from the installed distribution metadata. There's still only one place to change it, and
 some IDE integrations reject a dynamic version outright.
@@ -155,6 +186,7 @@ some IDE integrations reject a dynamic version outright.
 ```
 src/django_admin_kit/    the package
 tests/                   its own test suite
+tests/project/           the Django project those tests run against
 specification.md         the public API this is built against
 ```
 

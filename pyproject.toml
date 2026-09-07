@@ -53,6 +53,7 @@ Source = "https://github.com/JeyKip/pytest-django-admin-kit"
 [dependency-groups]
 dev = [
     "pytest>=7.0",
+    "pytest-django>=4.5",
     "ruff>=0.14",
     "mypy>=1.11",
     "pre-commit>=3.5",
@@ -82,9 +83,14 @@ exclude = [
 target-version = "py38"
 line-length = 100
 src = ["src", "tests"]
-# The design documents contain illustrative API sketches, not runnable code.
-# Formatting their fenced blocks would rewrite deliberate pseudo-code.
-extend-exclude = ["*.md"]
+extend-exclude = [
+    # The design documents contain illustrative API sketches, not runnable code.
+    # Formatting their fenced blocks would rewrite deliberate pseudo-code.
+    "*.md",
+    # Migrations are `makemigrations` output. Leaving them untouched keeps the
+    # committed files byte-identical to what Django regenerates.
+    "tests/project/*/migrations/*.py",
+]
 
 [tool.ruff.lint]
 select = [
