@@ -145,18 +145,35 @@ Commit `pyproject.toml` and `uv.lock` together.
 
 ## The version matrix
 
-This isn't wired up yet. `tox` and `tox-uv` come with the dev group, but there's no `tox.ini`, so
-there's nothing to run. It's the next piece of work: 18 cells covering all 9 Django minors, each
-on its oldest and newest supported Python.
-
-tox-uv means uv builds those environments, which matters most at the floor: `python3.8 -m venv`
-fails with `ensurepip` errors on a lot of systems, and uv sidesteps that by fetching its own 3.8.
-
-Once it exists, spot-check the two extremes locally and leave the full sweep to CI:
+`tox.ini` defines 18 cells: nine Django minors, each on its oldest supported Python at or above
+the 3.8 floor and on its newest.
 
 ```bash
-uv run tox -e py310-dj32,py312-dj61
+uv run tox                        # every cell
+uv run tox -p 6                   # every cell, six at a time
+uv run tox -e py38-dj32           # one cell
+uv run tox list                   # what the cells are called
 ```
+
+Anything after a bare `--` is passed straight through to pytest, so a failing cell can be
+picked apart without touching `tox.ini`:
+
+```bash
+uv run tox -e py310-dj52 -- -x -vv                     # stop at the first failure, verbosely
+uv run tox -e py310-dj52 -- tests/test_project.py      # just one file
+```
+
+The whole sweep takes well under a minute on a warm cache, so there's no reason to leave it to
+CI. On a cold one, budget for downloading five interpreters and a copy of Django and playwright
+per cell.
+
+tox-uv means uv builds those environments, which matters most at the floor: `python3.8 -m venv`
+fails with `ensurepip` errors on a lot of systems, and uv fetches its own 3.8 instead.
+
+Only `pytest-django` is pinned per cell, because no single release spans Django 3.2 to 6.1.
+Everything else is left to the resolver, which caps itself per interpreter — 3.8 cells end up on
+pytest 8.3.5 and playwright 1.48.0, newer cells on current. That cap is the constraint to design
+against: code has to work on playwright 1.48.
 
 ## Building
 
