@@ -24,6 +24,8 @@ It should allow developers to verify:
 The package should emphasize readable tests using normal Python `assert` statements rather than
 custom assertion methods wherever practical.
 
+Tests exercise the admin as a real browser renders it. See section 2.2.
+
 The minimum supported Django version is **Django 3.2**, and the minimum supported Python
 version is **Python 3.8**.
 
@@ -45,13 +47,21 @@ automatic traversal or creation of related object graphs is not required for 1.0
 
 ## 2.2 Driving model
 
-The specification describes admin **pages**, not the mechanism used to obtain them.
+The package drives the admin **as a real browser renders it**, against a live server.
 
-More than one strategy can produce an admin page for a test. The public API must be satisfiable
-by any of them, and the same test text must remain valid when the strategy changes.
+Consequences, all deliberate:
 
-Anything that only exists under one strategy is an escape hatch, never part of the contract.
-See section 3.6.
+* what a test observes is what a user would see, with the page's own scripts having run;
+* the response status of a page is part of the public contract, not an optional extra;
+* the package may use the full capability of the browser layer it is built on, rather than
+  restricting itself to a portable subset.
+
+This has a price, and adopters should price it in rather than discover it: tests need browser
+binaries and a live server, and are slower than tests that exercise the admin through the
+request cycle alone. The package offers no faster path and no way to opt out.
+
+The reach of this decision stops at what Django Admin itself renders. Everything a project
+renders on top of the admin is reached differently; see section 3.6.
 
 ---
 
@@ -176,29 +186,43 @@ Positional cell access remains available where a tuple comparison is the clearer
 
 ---
 
-## 3.6 Driver-neutral abstraction
+## 3.6 Native access
 
-The public API describes admin pages, not how they are obtained.
+A package can only generalize what Django Admin itself renders. Every real project adds custom
+admin views, overridden templates, custom widgets, and third-party admin applications, and a
+test must be able to reach those.
 
-The following must hold regardless of the driving strategy:
+The API therefore has two tiers, and one rule decides which applies:
 
-```python
-page = admin_ui.list(Product)
+> If Django Admin renders it, the package normalizes it.
+> If your project renders it, you take a native handle.
 
-assert page.works
-assert page.headers == [...]
-assert page.contains([...])
-```
-
-Lower-level access is an escape hatch and may be unavailable:
+Both tiers appear in the same test, without leaving the package:
 
 ```python
-page.response
-page.status_code
+page = admin_ui.edit(product)
+
+assert page.field("name").required            # standard field, package vocabulary
+page.field("colour_picker").native.click()    # the project's own widget, native handle
 ```
 
-A test that uses the escape hatch accepts that it is tied to one strategy. Nothing in the
-package's own contract may require it.
+Reaching for a native handle is **expected and supported**, not a failure or a last resort. A
+project keeps the package's login, navigation, URL resolution and normalization, and drops to
+the browser only for the part the package cannot know about.
+
+Native handles are available at every level of the object model:
+
+```python
+admin_ui.native
+page.native
+page.field("name").native
+page.row(1).native
+page.row(1).cell("Email").native
+```
+
+They are the underlying browser library's own objects. The package does not wrap, restrict, or
+re-export them, so their type is part of this package's public surface and changes to it are
+breaking changes.
 
 ---
 
@@ -471,10 +495,7 @@ The admin refuses access in more than one way, and not every refusal changes the
 `denied` must be true for all of these, not only for the ones that move the user.
 
 Recognizing the refusals that leave the destination unchanged requires the response status,
-which section 6.4 notes is not available under every driving strategy. A strategy that cannot
-observe it therefore offers a narrower guarantee: it reports the refusals that redirect and
-cannot report the others. This does not change what a test is written to say — only how much a
-given strategy can detect.
+which section 6.4 makes part of the contract for exactly this reason.
 
 ---
 
@@ -531,15 +552,46 @@ produce a value that cannot work.
 
 ## 6.4 Underlying access
 
-Tests may inspect lower-level information where their driving strategy provides it:
+The response status of a page is part of the public contract:
 
 ```python
 assert page.status_code == 200
-
-page.response
 ```
 
-This is the escape hatch described in section 3.6.
+Section 6.1 depends on it: some refusals are visible only in the status.
+
+The page's native handle is available for anything the package does not model, as described in
+section 3.6:
+
+```python
+page.native
+```
+
+---
+
+## 6.5 Arbitrary admin pages
+
+Any admin URL can be opened, including views the package knows nothing about:
+
+```python
+page = admin_ui.open(reverse("admin:shop_product_import"))
+
+assert page.works
+assert page.title == "Import products"
+```
+
+Everything beyond that is reached through `page.native`.
+
+Such a page guarantees what does not depend on knowing the page's shape:
+
+* the access outcome of section 6.1;
+* the page identity of section 6.2;
+* the response status of section 6.4;
+* the operation messages of section 22;
+* a native handle.
+
+It does not expose fields or rows. Their shape is unknowable for a page the package has never
+seen, and guessing would be worse than declining.
 
 ---
 
@@ -1640,6 +1692,7 @@ AdminSession
 │
 ├── AdminUrls
 │
+├── AdminPage            (any admin URL — section 6.5)
 ├── AdminIndexPage
 ├── ChangelistPage
 ├── CreatePage
@@ -1660,6 +1713,8 @@ AdminSession
 
 The exact Python class names are implementation details, but the public concepts should remain
 recognizable and stable.
+
+Every type listed above exposes a native handle, as described in section 3.6.
 
 ---
 
@@ -1959,10 +2014,9 @@ Configurable at minimum:
 
 * the admin site under test;
 * the admin URL prefix;
-* the driving strategy of section 2.2;
+* the browser settings of section 28.4;
 * value normalization;
-* field handling;
-* options belonging to the driving strategy itself, as described in section 28.4.
+* field handling.
 
 ---
 
@@ -2023,34 +2077,28 @@ admin_ui.normalizer("boolean", my_boolean_rule)
 
 ---
 
-## 28.4 Strategy-specific settings
+## 28.4 Browser settings
 
-Section 3.6 requires the configuration surface to presuppose no driving strategy. A setting only
-one strategy understands must therefore not sit among the settings every strategy understands.
-
-Such settings are namespaced, and belong to the strategy rather than to the package:
+Because section 2.2 settles on a single way of driving the admin, the settings that govern it
+sit alongside every other setting rather than in a namespace of their own:
 
 ```python
 DJANGO_ADMIN_KIT = {
-    "driver": ...,
-    "driver_options": {
-        ...
-    },
+    "site": ...,
+    "timeout": ...,
+    "browser": ...,
+    "headless": ...,
+    "timezone": ...,
 }
 ```
 
-The package passes `driver_options` through without inspecting it. The active strategy defines
-which keys it accepts, and validates them itself.
+At minimum a project can choose which browser is used, whether it runs visibly, how long any
+single operation may take, and which time zone the browser reports — the last so that results do
+not depend on the machine running the tests, per section 31.
 
-Configuration errors must be loud, because a silently accepted typo disables a setting
-invisibly:
-
-* an unrecognized top-level setting is rejected by the package;
-* an unrecognized strategy option is rejected by the strategy, naming the strategy as well as
-  the key, so an option intended for a different strategy fails visibly rather than being
-  ignored.
-
-Validation happens when the strategy is prepared, not when it is first used.
+Configuration errors must be loud. An unrecognized setting is rejected, naming the key and
+listing the valid ones, because a silently accepted typo disables a setting invisibly. Settings
+are validated once, before the first page is opened, not at the moment each is first read.
 
 ---
 
@@ -2064,9 +2112,26 @@ any other.
 
 ---
 
-## 28.6 Page extension
+## 28.6 Project-defined helpers
 
-A project must be able to attach its own accessors to a page without forking the package.
+The package provides **no mechanism** for registering project-specific page classes, and this is
+a decision rather than an omission.
+
+A project that wants named operations for its own admin views writes ordinary Python around the
+pages the package returns — a function, or a class of its own that takes a page:
+
+```python
+def import_products(page, path):
+    """Written by the project, in terms of the page's native handle."""
+    page.native.fill("#id_file", path)
+    page.native.click("#import-submit")
+
+
+import_products(admin_ui.open(import_url), "products.csv")
+```
+
+Nothing about this requires the package's cooperation, which is why the package does not offer
+any. Should a registration mechanism prove worth having, adding one would be purely additive.
 
 ---
 
@@ -2167,9 +2232,9 @@ built-in messages.
 Values render through the formats and time zone the project has configured. Tests must never
 hardcode a rendering format in order to pass.
 
-Results must not depend on the machine a test runs on. Where a driving strategy carries its own
-notion of locale, time zone, or formatting, the package pins it to what the project has
-configured, so the same test yields the same values everywhere.
+Results must not depend on the machine a test runs on. The browser carries its own notion of
+locale, time zone and formatting, and the package pins these to what the project has configured,
+so the same test yields the same values everywhere.
 
 ---
 
@@ -2227,8 +2292,11 @@ supported Django versions:
 37. Run against a non-default admin site mounted under a non-default URL prefix.
 38. Override a default normalization rule, add a new one, and extend field handling from a
     project, without subclassing package internals.
-39. Run the test suite in parallel.
-40. Run the same public test syntax starting with Django 3.2.
+39. Reach a native handle from a page and from a field, and drive a project-specific widget
+    with it.
+40. Open an arbitrary admin URL and read its access outcome and identity.
+41. Run the test suite in parallel.
+42. Run the same public test syntax starting with Django 3.2.
 
 ---
 

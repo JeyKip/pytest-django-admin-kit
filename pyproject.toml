@@ -1,0 +1,110 @@
+[build-system]
+requires = ["hatchling>=1.18"]
+build-backend = "hatchling.build"
+
+[project]
+name = "pytest-django-admin-kit"
+version = "1.0.0.dev0"
+description = "A pytest toolkit for writing conscious tests against the Django admin."
+readme = "README.md"
+requires-python = ">=3.8"
+license = { file = "LICENSE" }
+authors = [{ name = "Yevhen Nosolenko" }]
+keywords = ["pytest", "django", "admin", "testing"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Framework :: Django",
+    "Framework :: Django :: 3.2",
+    "Framework :: Django :: 4.0",
+    "Framework :: Django :: 4.1",
+    "Framework :: Django :: 4.2",
+    "Framework :: Django :: 5.0",
+    "Framework :: Django :: 5.1",
+    "Framework :: Django :: 5.2",
+    "Framework :: Django :: 6.0",
+    "Framework :: Django :: 6.1",
+    "Framework :: Pytest",
+    "Intended Audience :: Developers",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Software Development :: Testing",
+    "Typing :: Typed",
+]
+dependencies = [
+    "django>=3.2",
+    "playwright>=1.48",
+    "pytest>=7.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/JeyKip/pytest-django-admin-kit"
+Source = "https://github.com/JeyKip/pytest-django-admin-kit"
+
+# PEP 735 dependency groups. `uv sync` installs these by default; they are development
+# tooling and never reach anyone installing the package. Building is `uv build`, which
+# drives the hatchling backend declared above, so no build frontend is listed here.
+[dependency-groups]
+dev = [
+    "pytest>=7.0",
+    "ruff>=0.14",
+    "mypy>=1.11",
+    "pre-commit>=3.5",
+    "tox>=4.0",
+    # tox-uv itself needs 3.10+, and the development environment is 3.10 or newer
+    # anyway. The marker keeps `uv lock` resolvable across the full >=3.8 range.
+    "tox-uv>=1.16; python_version >= '3.10'",
+]
+
+[tool.hatch.build.targets.wheel]
+# Everything under the package directory ships, including the PEP 561 `py.typed`
+# marker that pairs with the "Typing :: Typed" classifier above.
+packages = ["src/django_admin_kit"]
+
+[tool.hatch.build.targets.sdist]
+# Ship what is needed to build and test from source, plus the design document the
+# README links to. Internal working notes and editor state stay out.
+exclude = [
+    "/.gitignore",
+    "/.idea",
+    "/.pre-commit-config.yaml",
+    "/setup-and-login-plan.md",
+    "/uv.lock",
+]
+
+[tool.ruff]
+target-version = "py38"
+line-length = 100
+src = ["src", "tests"]
+# The design documents contain illustrative API sketches, not runnable code.
+# Formatting their fenced blocks would rewrite deliberate pseudo-code.
+extend-exclude = ["*.md"]
+
+[tool.ruff.lint]
+select = [
+    "E",    # pycodestyle errors
+    "W",    # pycodestyle warnings
+    "F",    # pyflakes
+    "I",    # import sorting
+    "UP",   # pyupgrade — bounded by target-version, so it never suggests post-3.8 syntax
+    "B",    # bugbear
+    "C4",   # comprehensions
+    "SIM",  # simplify
+    "RUF",
+]
+
+[tool.mypy]
+# The package floor is 3.8, but current mypy refuses to target anything below 3.10
+# (support was dropped after 1.16.x). mypy's job here is type correctness, not floor
+# policing. The py38 tox cell is what actually proves the floor, and tox-uv makes that
+# cell cheap to run because uv provisions 3.8 without the ensurepip breakage that
+# `python3.8 -m venv` hits on many systems.
+python_version = "3.10"
+files = ["src"]
+strict = true
