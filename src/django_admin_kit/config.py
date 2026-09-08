@@ -23,7 +23,7 @@ BROWSERS = ("chromium", "firefox", "webkit")
 DEFAULT_TIMEOUT = 30_000
 DEFAULT_SLOW_MO = 0
 
-_KNOWN_KEYS = frozenset({"browser", "headless", "slow_mo", "timeout", "timezone"})
+_KNOWN_KEYS = frozenset({"browser", "headless", "site", "slow_mo", "timeout", "timezone"})
 
 
 @dataclass(frozen=True)
@@ -43,6 +43,11 @@ class CommandLine:
 
 @dataclass(frozen=True)
 class Config:
+    # A dotted path, resolved later by `urls.resolve_site`. It cannot be an
+    # AdminSite instance: settings are imported before the app registry is ready, so
+    # a project that wrote one here would fail with AppRegistryNotReady before this
+    # package saw the value.
+    site: str | None
     browser: str
     headless: bool
     slow_mo: int
@@ -121,7 +126,15 @@ def build_config(
             stacklevel=2,
         )
 
+    site = given.get("site")
+    if site is not None and not isinstance(site, str):
+        raise ImproperlyConfigured(
+            f"{SETTINGS_NAME}['site'] must be a dotted path to an AdminSite, "
+            f"not {type(site).__name__}."
+        )
+
     return Config(
+        site=site,
         browser=browser,
         headless=headless,
         slow_mo=slow_mo,

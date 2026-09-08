@@ -139,3 +139,18 @@ def test_django_settings_are_still_validated(settings):
 
     with pytest.raises(ImproperlyConfigured, match="browsr"):
         from_django_settings()
+
+
+def test_a_site_must_be_a_dotted_path_not_an_instance():
+    """Settings load before Django's app registry, so a project cannot import an
+    AdminSite there. Saying so beats letting AppRegistryNotReady be the message."""
+    from django.contrib.admin.sites import AdminSite
+
+    with pytest.raises(ImproperlyConfigured, match="must be a dotted path"):
+        build_config({"site": AdminSite(name="scratch")})
+
+
+def test_a_site_path_is_carried_through_unresolved():
+    """config holds the path; urls.resolve_site does the importing."""
+    assert build_config({"site": "project.ops.ops_site"}).site == "project.ops.ops_site"
+    assert build_config().site is None
