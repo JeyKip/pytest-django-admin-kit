@@ -1,60 +1,24 @@
-"""Settings resolution: defaults, precedence, and the errors a mistake produces."""
-
-import warnings
+"""Settings resolution: defaults, and the errors a mistake produces."""
 
 import pytest
 from django.core.exceptions import ImproperlyConfigured
 
-from django_admin_kit.config import (
-    BROWSERS,
-    CommandLine,
-    build_config,
-    from_django_settings,
-)
+from django_admin_kit.config import build_config, from_django_settings
 
 
 def test_the_defaults_need_no_settings_at_all():
     config = build_config()
 
-    assert config.browser == "chromium"
-    assert config.headless is True
-    assert config.slow_mo == 0
+    assert config.site is None
     assert config.timeout == 30_000
     assert config.timezone is None
 
 
 def test_settings_override_the_defaults():
-    config = build_config(
-        {"browser": "firefox", "headless": False, "slow_mo": 50, "timeout": 5_000}
-    )
+    config = build_config({"timeout": 5_000, "timezone": "Europe/Kyiv"})
 
-    assert config.browser == "firefox"
-    assert config.headless is False
-    assert config.slow_mo == 50
     assert config.timeout == 5_000
-
-
-def test_the_command_line_overrides_settings():
-    config = build_config(
-        {"browser": "firefox", "slow_mo": 50, "headless": False},
-        CommandLine(browser="webkit", slow_mo=10),
-    )
-
-    assert config.browser == "webkit"
-    assert config.slow_mo == 10
-
-
-def test_the_command_line_can_override_headless():
-    """What `--admin-ui-headed` does: turn a headless setting into a visible run."""
-    config = build_config({"headless": True}, CommandLine(headless=False))
-
-    assert config.headless is False
-
-
-def test_an_unset_headless_leaves_the_setting_alone():
-    config = build_config({"headless": False}, CommandLine())
-
-    assert config.headless is False
+    assert config.timezone == "Europe/Kyiv"
 
 
 def test_the_timezone_falls_back_to_the_projects():
@@ -72,21 +36,19 @@ def test_an_explicit_null_timezone_beats_the_projects():
 
 def test_an_unknown_setting_is_rejected_by_name():
     with pytest.raises(ImproperlyConfigured) as error:
-        build_config({"headles": True})
+        build_config({"timout": 1})
 
     message = str(error.value)
-    assert "'headles'" in message
-    assert "'headless'" in message
+    assert "'timout'" in message
+    assert "'timeout'" in message
 
 
-def test_an_unsupported_browser_is_rejected_with_the_valid_list():
-    with pytest.raises(ImproperlyConfigured) as error:
-        build_config({"browser": "internet-explorer"})
-
-    message = str(error.value)
-    assert "'internet-explorer'" in message
-    for browser in BROWSERS:
-        assert repr(browser) in message
+@pytest.mark.parametrize("setting", ["browser", "headless", "slow_mo"])
+def test_the_browser_settings_belong_to_the_plugin_now(setting):
+    """They were package settings once. A project upgrading is told they moved rather
+    than having them silently ignored."""
+    with pytest.raises(ImproperlyConfigured, match=f"'{setting}'"):
+        build_config({setting: "anything"})
 
 
 @pytest.mark.parametrize(
@@ -95,8 +57,6 @@ def test_an_unsupported_browser_is_rejected_with_the_valid_list():
         ({"timeout": 0}, "at least 1"),
         ({"timeout": "30000"}, "must be an integer"),
         ({"timeout": True}, "must be an integer"),
-        ({"slow_mo": -1}, "at least 0"),
-        ({"headless": "yes"}, "must be True or False"),
         ({"timezone": 3}, "must be an IANA zone name"),
     ],
 )
@@ -105,33 +65,17 @@ def test_a_malformed_value_is_rejected(settings, expected):
         build_config(settings)
 
 
-def test_slow_motion_without_a_visible_browser_warns():
-    with pytest.warns(UserWarning, match="headless"):
-        build_config({"slow_mo": 100})
-
-
-def test_slow_motion_with_a_visible_browser_is_silent():
-    with warnings.catch_warnings():
-        warnings.simplefilter("error")
-
-        build_config({"slow_mo": 100, "headless": False})
-
-
 def test_django_settings_supply_the_project_time_zone():
     """A date must read the same in the browser as it does in a template."""
     config = from_django_settings()
 
     assert config.timezone == "UTC"
-    assert config.browser == "chromium"
 
 
 def test_django_settings_supply_the_settings_dict(settings):
-    settings.DJANGO_ADMIN_KIT = {"browser": "firefox", "timeout": 1_000}
+    settings.DJANGO_ADMIN_KIT = {"timeout": 1_000}
 
-    config = from_django_settings()
-
-    assert config.browser == "firefox"
-    assert config.timeout == 1_000
+    assert from_django_settings().timeout == 1_000
 
 
 def test_django_settings_are_still_validated(settings):
@@ -153,4 +97,3 @@ def test_a_site_must_be_a_dotted_path_not_an_instance():
 def test_a_site_path_is_carried_through_unresolved():
     """config holds the path; urls.resolve_site does the importing."""
     assert build_config({"site": "project.ops.ops_site"}).site == "project.ops.ops_site"
-    assert build_config().site is None

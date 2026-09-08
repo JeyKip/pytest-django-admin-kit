@@ -213,3 +213,7 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Browser test artifacts (videos, traces, screenshots). The browser plugin writes
+# these under --output and deletes the directory at the start of every session.
+test-results/
