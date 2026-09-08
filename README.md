@@ -46,11 +46,18 @@ uv run pre-commit install
 from `uv.lock`. That lock file is committed, so everyone gets the same ruff and mypy and
 therefore the same results.
 
-Browser binaries aren't needed yet, because no code drives a browser so far. Once that changes:
+The tests drive real browsers, so you need the binaries too:
 
 ```bash
-uv run playwright install chromium
+uv run playwright install chromium              # enough for everyday work
+uv run playwright install firefox webkit        # the other two the package supports
+sudo uv run playwright install-deps webkit      # webkit also needs system libraries
 ```
+
+Only chromium is required. The tests for the other two skip themselves, by name, when the
+browser isn't downloaded or the host is missing libraries it links against — so a partial
+install costs you coverage, not a wall of red. CI installs all three and fails if anything
+skips.
 
 ## Which Python to develop on
 
@@ -189,10 +196,14 @@ uv run tox list -m full          # the 33 cell names
 
 Two workflows, both in `.github/workflows/`.
 
-`ci.yml` runs on pull requests and pushes to `main`. It lints, type-checks, and runs the 18
-cells. `release.yml` runs on a `v*` tag: it runs all 33 cells, then builds, then publishes to
-PyPI, each job gated on the one before it, so a matrix failure stops the release rather than
-merely being recorded next to it.
+`ci.yml` runs on pull requests and pushes to `main`. It lints, type-checks, runs the 18 cells,
+and runs one extra job that exercises firefox and webkit. `release.yml` runs on a `v*` tag: it
+runs all 33 cells, then builds, then publishes to PyPI, each job gated on the one before it, so
+a matrix failure stops the release rather than merely being recorded next to it.
+
+Browsers are not a Django-compatibility dimension, so they don't multiply the matrix. Each cell
+installs chromium — the binary is keyed to that cell's playwright version, which is why tox does
+it rather than the workflow — and the separate job covers the other two once.
 
 Neither workflow lists its cells. Both ask tox for them:
 

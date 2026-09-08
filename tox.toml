@@ -62,4 +62,8 @@ deps = [
 # pytest and playwright are deliberately unpinned. The resolver already caps them per
 # interpreter — 3.8 cells get pytest 8.3.5 and playwright 1.48.0, newer cells get
 # current — so pinning here would only freeze that ceiling in place.
+# The browser binary is keyed to the playwright version, and 3.8 cells run 1.48
+# while the rest run current, so the download has to happen inside each cell rather
+# than once outside. It is a no-op when the right build is already cached.
+commands_pre = [["playwright", "install", "chromium"]]
 commands = [["pytest", { replace = "posargs", extend = true }]]

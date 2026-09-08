@@ -43,6 +43,11 @@ dependencies = [
     "pytest>=7.0",
 ]
 
+# Registers the plugin with pytest on install, so a consuming project gets the
+# flags and fixtures without listing anything in its own configuration.
+[project.entry-points.pytest11]
+django_admin_kit = "django_admin_kit.plugin"
+
 [project.urls]
 Homepage = "https://github.com/JeyKip/pytest-django-admin-kit"
 Source = "https://github.com/JeyKip/pytest-django-admin-kit"
@@ -124,3 +129,10 @@ addopts = "-ra"
 python_version = "3.10"
 files = ["src"]
 strict = true
+
+# Django ships no type information and has no py.typed marker. django-stubs would
+# supply it but pins itself to narrow mypy and Django ranges, which is a poor trade
+# for a package that has to build against nine Django minors.
+[[tool.mypy.overrides]]
+module = ["django.*"]
+ignore_missing_imports = true
