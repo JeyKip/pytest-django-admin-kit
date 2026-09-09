@@ -10,6 +10,7 @@ What is still worth pinning is that the two sets of fixtures really do share tha
 browser, and that a session using both finishes instead of hanging.
 """
 
+import os
 import subprocess
 import sys
 
@@ -45,7 +46,14 @@ def test_the_database_survives_the_browser_being_torn_down_mid_session():
     dropping the test database then raises SynchronousOnlyOperation. It only shows
     when the browser is torn down before the session ends, which a second `--browser`
     causes, so one browser is not enough to catch it.
+
+    The child needs a clean environment. Once any admin test has run, this process has
+    DJANGO_ALLOW_ASYNC_UNSAFE set, and a child inheriting it would restore that value
+    instead of removing it, hiding the very fault this test looks for. Without the
+    strip the result depends on what ran before it.
     """
+    environment = {k: v for k, v in os.environ.items() if k != "DJANGO_ALLOW_ASYNC_UNSAFE"}
+
     result = subprocess.run(
         [
             sys.executable,
@@ -63,6 +71,7 @@ def test_the_database_survives_the_browser_being_torn_down_mid_session():
         capture_output=True,
         text=True,
         timeout=300,
+        env=environment,
     )
 
     if "Executable doesn't exist" in result.stdout:
