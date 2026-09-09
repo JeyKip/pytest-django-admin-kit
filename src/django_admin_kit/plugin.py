@@ -76,13 +76,18 @@ def admin_ui_urls(admin_ui_config: Config) -> AdminUrls:
 def admin_ui_driving() -> Iterator[None]:
     """Hold Django's async guard open around everything the admin session touches.
 
-    It depends on nothing on purpose. Requested first by ``admin_ui``, it is set up
-    before the test database is built and therefore torn down after the database is
-    destroyed, so both ends are covered: creating tables while a driver is running
-    raises ``SynchronousOnlyOperation``, and so does dropping them.
+    It depends on nothing, and in particular not on ``browser``. A guard that depends
+    on the browser is torn down when the browser is, while the driver behind it is
+    still running, and dropping the test database then fails with
+    ``SynchronousOnlyOperation``. That surfaces only when the browser is torn down
+    before the end of the session, which is what a second ``--browser`` does.
 
-    A project that installs the package and never asks for ``admin_ui`` never runs
-    this, and Django's guard stays where it was.
+    Depending on nothing also lets ``admin_ui`` request it first, so it is set up
+    before the database is built and torn down after the database is destroyed.
+
+    Being a fixture rather than a session hook is what keeps it honest. A project that
+    installs the package and never asks for ``admin_ui`` never runs this, and Django's
+    guard stays where it was.
     """
     with _orm_allowed_while_driving():
         yield
@@ -90,11 +95,11 @@ def admin_ui_driving() -> Iterator[None]:
 
 @pytest.fixture
 def admin_ui(
-    # The order of these three is load-bearing. The guard first, so it outlives the
-    # database at both ends. Then `live_server`, so the browser that `new_context`
-    # pulls in is set up after it and therefore torn down before it: a browser still
-    # holding a connection open stops the server thread joining, and the run hangs
-    # with no failure to read.
+    # The guard comes first so it outlives the database at both ends. `live_server`
+    # before `new_context` follows Django's own practice of closing the browser before
+    # joining the live-server thread, since a held-open connection can deadlock it.
+    # Inverting it here did not reproduce a hang, so treat that half as precaution
+    # rather than a demonstrated fix.
     admin_ui_driving: None,
     live_server: Any,
     new_context: Any,

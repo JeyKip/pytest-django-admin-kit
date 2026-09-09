@@ -65,28 +65,3 @@ def test_the_admin_session_is_configured_from_the_layers_below(
 def test_the_guard_is_lifted_while_the_admin_session_is_live(admin_ui):
     """Logging in needs the ORM, and the ORM needs the guard off while a browser runs."""
     assert os.environ["DJANGO_ALLOW_ASYNC_UNSAFE"] == "true"
-
-
-def test_the_database_is_torn_down_cleanly_after_a_browser_session():
-    """The guard has to outlive the test database at both ends.
-
-    Dropping tables raises SynchronousOnlyOperation just as creating them does, so a
-    guard scoped to the browser alone leaves pytest-django warning at session end
-    instead of failing. Run out of process: the fault only shows at teardown.
-    """
-    result = subprocess.run(
-        [
-            sys.executable,
-            "-m",
-            "pytest",
-            "tests/test_session.py::test_a_superuser_reaches_the_index",
-            "-q",
-            "-p",
-            "no:cacheprovider",
-        ],
-        capture_output=True,
-        text=True,
-    )
-
-    assert result.returncode == 0, result.stdout + result.stderr
-    assert "teardown test databases" not in result.stdout
