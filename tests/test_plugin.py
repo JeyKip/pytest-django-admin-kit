@@ -1,8 +1,8 @@
 """The plugin's fixtures, and what installing the package does to a session.
 
-The browser flags belong to pytest-playwright now, so there is nothing of ours to
-test there. What is still ours is the promise that a project which never opens an
-admin page is left exactly as it was.
+The browser flags belong to pytest-playwright, so there is nothing of ours to test
+there. What is still ours is the promise that a project which never opens an admin
+page is left exactly as it was.
 """
 
 import os
@@ -11,16 +11,18 @@ import sys
 
 
 def test_a_session_that_never_opens_the_admin_leaves_the_guard_alone(tmp_path):
-    """Installing the package must not change one existing test.
+    """Installing the package must not change how an existing test behaves.
 
-    Run out of process, because this session does drive browsers and would otherwise
-    be asserting about its own leftovers. The child starts from an environment with
-    the variable stripped, so anything found there was put there by the package.
+    Runs in a subprocess. This session lifts the guard itself, so checking in process
+    would only read our own state back. The child starts with the variable stripped
+    from its environment, so if it reappears, the package put it there.
     """
     (tmp_path / "test_no_browser.py").write_text(
         "import os\n\n\ndef test_guard_intact():\n"
         "    assert 'DJANGO_ALLOW_ASYNC_UNSAFE' not in os.environ\n"
     )
+    # DJANGO_SETTINGS_MODULE goes too: pytest-django exports it into the environment,
+    # and the child runs from tmp_path where `project` is not importable.
     stripped = {"DJANGO_ALLOW_ASYNC_UNSAFE", "DJANGO_SETTINGS_MODULE"}
     environment = {k: v for k, v in os.environ.items() if k not in stripped}
 

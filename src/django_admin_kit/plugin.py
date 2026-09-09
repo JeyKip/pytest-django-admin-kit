@@ -17,6 +17,8 @@ settings, and ``admin_ui`` follows.
 
 from __future__ import annotations
 
+import os
+from contextlib import contextmanager
 from typing import TYPE_CHECKING, Any, Iterator
 
 import pytest
@@ -29,6 +31,28 @@ from .config import Config, from_django_settings
 if TYPE_CHECKING:
     from .session import AdminSession
     from .urls import AdminUrls
+
+
+_ASYNC_UNSAFE = "DJANGO_ALLOW_ASYNC_UNSAFE"
+
+
+@contextmanager
+def _orm_allowed_while_driving() -> Iterator[None]:
+    """Let the ORM run while a browser is live, and put the guard back afterwards.
+
+    The driver's synchronous API leaves an asyncio event loop on the test thread, and
+    Django then refuses every ORM call with ``SynchronousOnlyOperation``. Logging a
+    user in needs the ORM, so the guard has to come off.
+    """
+    previous = os.environ.get(_ASYNC_UNSAFE)
+    os.environ[_ASYNC_UNSAFE] = "true"
+    try:
+        yield
+    finally:
+        if previous is None:
+            os.environ.pop(_ASYNC_UNSAFE, None)
+        else:
+            os.environ[_ASYNC_UNSAFE] = previous
 
 
 @pytest.fixture(scope="session")
@@ -57,13 +81,10 @@ def admin_ui_driving() -> Iterator[None]:
     destroyed, so both ends are covered: creating tables while a driver is running
     raises ``SynchronousOnlyOperation``, and so does dropping them.
 
-    Being a fixture rather than a session hook is what keeps it honest. A project that
-    installs the package and never asks for ``admin_ui`` never runs this, and Django's
-    guard stays where it was.
+    A project that installs the package and never asks for ``admin_ui`` never runs
+    this, and Django's guard stays where it was.
     """
-    from .browser import orm_allowed_while_driving
-
-    with orm_allowed_while_driving():
+    with _orm_allowed_while_driving():
         yield
 
 

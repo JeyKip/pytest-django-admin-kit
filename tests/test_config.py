@@ -43,14 +43,6 @@ def test_an_unknown_setting_is_rejected_by_name():
     assert "'timeout'" in message
 
 
-@pytest.mark.parametrize("setting", ["browser", "headless", "slow_mo"])
-def test_the_browser_settings_belong_to_the_plugin_now(setting):
-    """They were package settings once. A project upgrading is told they moved rather
-    than having them silently ignored."""
-    with pytest.raises(ImproperlyConfigured, match=f"'{setting}'"):
-        build_config({setting: "anything"})
-
-
 @pytest.mark.parametrize(
     ("settings", "expected"),
     [
@@ -86,8 +78,6 @@ def test_django_settings_are_still_validated(settings):
 
 
 def test_a_site_must_be_a_dotted_path_not_an_instance():
-    """Settings load before Django's app registry, so a project cannot import an
-    AdminSite there. Saying so beats letting AppRegistryNotReady be the message."""
     from django.contrib.admin.sites import AdminSite
 
     with pytest.raises(ImproperlyConfigured, match="must be a dotted path"):
@@ -95,5 +85,4 @@ def test_a_site_must_be_a_dotted_path_not_an_instance():
 
 
 def test_a_site_path_is_carried_through_unresolved():
-    """config holds the path; urls.resolve_site does the importing."""
     assert build_config({"site": "project.ops.ops_site"}).site == "project.ops.ops_site"

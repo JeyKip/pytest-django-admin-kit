@@ -43,12 +43,7 @@ dependencies = [
     # The `admin_ui` fixture is built on `live_server`, so a project installing this
     # package needs pytest-django whether or not it already had it.
     "pytest-django>=4.5",
-    # The browser comes from pytest-playwright rather than from playwright directly:
-    # its sync API allows one driver per thread, so a package that started its own
-    # would collide with any project already using the plugin. `playwright` arrives
-    # transitively and is imported directly, so it stays declared below.
     "pytest-playwright>=0.5.2",
-    "playwright>=1.48",
 ]
 
 # Registers the plugin with pytest on install, so a consuming project gets the

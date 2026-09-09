@@ -14,7 +14,6 @@ from urllib.parse import urljoin
 from django.conf import settings
 from django.test import Client
 
-from .browser import SessionCookie
 from .urls import AdminUrls
 
 
@@ -54,12 +53,13 @@ class AdminSession:
         """
         client = Client()
         client.force_login(user)
-        cookie = SessionCookie(
-            name=settings.SESSION_COOKIE_NAME,
-            value=client.cookies[settings.SESSION_COOKIE_NAME].value,
-        )
+
         self.logout()
-        self._context.add_cookies([cookie.as_playwright(self._base_url)])
+
+        name = settings.SESSION_COOKIE_NAME
+        self._context.add_cookies(
+            [{"name": name, "value": client.cookies[name].value, "url": self._base_url}]
+        )
 
     def logout(self) -> None:
         """Return the browser to anonymous by dropping its cookies."""
