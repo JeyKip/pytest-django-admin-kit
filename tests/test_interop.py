@@ -39,7 +39,7 @@ def test_the_admin_session_still_reaches_the_live_server(admin_ui, page, live_se
     assert page.url == admin_page.url
 
 
-def test_the_database_survives_the_browser_being_torn_down_mid_session():
+def test_the_database_survives_the_browser_being_torn_down_mid_session(tmp_path):
     """The guard has to outlive the driver, not the browser.
 
     A guard that depends on `browser` dies with it while the driver is still up, and
@@ -51,6 +51,12 @@ def test_the_database_survives_the_browser_being_torn_down_mid_session():
     DJANGO_ALLOW_ASYNC_UNSAFE set, and a child inheriting it would restore that value
     instead of removing it, hiding the very fault this test looks for. Without the
     strip the result depends on what ran before it.
+
+    It also needs its own --output. The child runs in the repository root so it can
+    import the project, and pytest-playwright deletes the output directory at the
+    start of every session, so a child sharing ours would wipe any artifacts this run
+    had already written. Nothing is ever written to the child's, because it is not
+    asked to record anything.
     """
     environment = {k: v for k, v in os.environ.items() if k != "DJANGO_ALLOW_ASYNC_UNSAFE"}
 
@@ -67,6 +73,8 @@ def test_the_database_survives_the_browser_being_torn_down_mid_session():
             "chromium",
             "--browser",
             "firefox",
+            "--output",
+            str(tmp_path / "child-artifacts"),
         ],
         capture_output=True,
         text=True,

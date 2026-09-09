@@ -54,10 +54,9 @@ uv run playwright install firefox webkit        # the other two the package supp
 sudo uv run playwright install-deps webkit      # webkit also needs system libraries
 ```
 
-Only chromium is required. The tests for the other two skip themselves, by name, when the
-browser isn't downloaded or the host is missing libraries it links against — so a partial
-install costs you coverage, not a wall of red. CI installs all three and fails if anything
-skips.
+Only chromium is required. A test that needs another browser skips itself by name when that
+browser isn't downloaded, so a partial install costs you coverage rather than a wall of red. CI
+installs all three and fails if anything skips.
 
 ## Which Python to develop on
 
@@ -111,6 +110,29 @@ two mostly buy you faster feedback. To run every hook over the whole tree:
 ```bash
 uv run pre-commit run --all-files
 ```
+
+## Driving the browser
+
+The browser comes from `pytest-playwright`, so its flags work here and mean what they mean
+anywhere else:
+
+```bash
+uv run pytest --headed                          # watch it happen
+uv run pytest --slowmo 200                      # and slow it down enough to follow
+uv run pytest --browser firefox                 # one browser
+uv run pytest --browser chromium --browser firefox   # the suite, twice
+uv run pytest --video on --tracing on           # artifacts under test-results/
+```
+
+Because the browser is theirs, a test's id carries the browser it ran on:
+`test_a_superuser_reaches_the_index[chromium]`. Asking for two browsers runs every admin test
+twice.
+
+**One thing to know before you install this package anywhere.** `pytest-playwright` registers an
+autouse fixture that deletes the `--output` directory, `test-results/` by default, at the start
+of **every** pytest session, whether or not the session opens a browser. If your project keeps
+JUnit XML or coverage output there, move it or pass `--output` somewhere else. We inherit that
+behaviour by depending on the plugin, and there's no way to switch it off.
 
 ## The test project
 

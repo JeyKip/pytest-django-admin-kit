@@ -74,10 +74,10 @@ jobs:
       - run: uv run --frozen tox -e ${{ matrix.cell }}
 
   browsers:
-    # Cells install chromium only, so firefox and webkit skip themselves there. This
-    # job is where they actually run, once, on current everything. Browsers are not a
-    # Django-compatibility dimension; sweeping three across eighteen cells would cost
-    # fifty-four jobs for no added signal.
+    # Cells install chromium only, so anything needing another browser skips there.
+    # This job is where all three actually run, once, on current everything. Browsers
+    # are not a Django-compatibility dimension; sweeping three across eighteen cells
+    # would cost fifty-four jobs for no added signal.
     name: firefox and webkit
     runs-on: ubuntu-latest
     steps:
@@ -98,7 +98,8 @@ jobs:
       - name: Run the browser tests, failing on any skip
         run: |
           set -o pipefail
-          uv run --frozen pytest tests/test_browser.py -ra | tee browser-tests.log
+          uv run --frozen pytest tests/test_session.py tests/test_interop.py -ra \
+            --browser chromium --browser firefox --browser webkit | tee browser-tests.log
           if grep -q '^SKIPPED' browser-tests.log; then
             echo '::error::A browser skipped itself; the playwright install did not take.' >&2
             exit 1

@@ -1989,6 +1989,11 @@ Two guarantees hold for every test that uses the fixture:
 * **Tests are safe to run in parallel.** Nothing the fixture provides is shared between
   concurrently running tests.
 
+A test that uses the fixture is identified by the browser it ran on as well as by its name, so
+asking for two browsers runs it twice. That follows from taking the browser from the established
+plugin rather than owning one (section 28.4), and it means test identifiers change for a project
+adopting this package.
+
 ---
 
 # 28. Configuration and Extensibility
@@ -2014,9 +2019,11 @@ Configurable at minimum:
 
 * the admin site under test;
 * the admin URL prefix;
-* the browser settings of section 28.4;
+* how long any single browser operation may take, and the time zone the browser reports;
 * value normalization;
 * field handling.
+
+How the browser itself is chosen and shown is **not** configured here. See section 28.4.
 
 ---
 
@@ -2079,26 +2086,37 @@ admin_ui.normalizer("boolean", my_boolean_rule)
 
 ## 28.4 Browser settings
 
-Because section 2.2 settles on a single way of driving the admin, the settings that govern it
-sit alongside every other setting rather than in a namespace of their own:
+The package does not own the browser. It takes one from the established pytest plugin for
+browser testing, and that plugin's own options decide which browser runs, whether it is visible,
+how far it is slowed down, and what is recorded while it runs.
+
+This is deliberate. A project that already tests through a browser has those options set and its
+authors know them; a second vocabulary meaning the same thing would give every such project two
+places to say one thing, and a test suite converted to this package would have to be reconfigured
+to get behaviour it already had.
+
+What remains under `DJANGO_ADMIN_KIT` is what the package itself decides:
 
 ```python
 DJANGO_ADMIN_KIT = {
     "site": ...,
     "timeout": ...,
-    "browser": ...,
-    "headless": ...,
     "timezone": ...,
 }
 ```
 
-At minimum a project can choose which browser is used, whether it runs visibly, how long any
-single operation may take, and which time zone the browser reports — the last so that results do
-not depend on the machine running the tests, per section 31.
+`timeout` bounds any single browser operation. `timezone` pins the zone the browser reports, so
+results do not depend on the machine running the tests, per section 31.
+
+Two consequences follow from not owning the browser. The package inherits whatever that plugin
+does to a test session, including behaviour a project did not ask for, and adopting the package
+means adopting it. And a test's identity carries the browser it ran on, per section 27.
 
 Configuration errors must be loud. An unrecognized setting is rejected, naming the key and
-listing the valid ones, because a silently accepted typo disables a setting invisibly. Settings
-are validated once, before the first page is opened, not at the moment each is first read.
+listing the valid ones, because a silently accepted typo disables a setting invisibly. A setting
+that used to be part of this package and has since moved is therefore reported as unknown rather
+than ignored. Settings are validated once, before the first page is opened, not at the moment
+each is first read.
 
 ---
 
@@ -2235,6 +2253,10 @@ hardcode a rendering format in order to pass.
 Results must not depend on the machine a test runs on. The browser carries its own notion of
 locale, time zone and formatting, and the package pins these to what the project has configured,
 so the same test yields the same values everywhere.
+
+Where a project has already pinned one of them for its own browser tests, that setting stands.
+The package fills in what is unset rather than overriding a deliberate choice, so a project
+cannot end up with admin tests running in a different zone from the rest of its suite.
 
 ---
 
