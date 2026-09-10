@@ -1,10 +1,10 @@
 import pytest
 from django.contrib import admin
+from django.contrib.auth.models import User
 from django.contrib.contenttypes.models import ContentType
 from django.core.exceptions import ImproperlyConfigured
 
 from django_admin_kit.urls import AdminUrls, resolve_site
-from project.accounts.models import User
 from project.ops import ops_site
 from project.shop.models import Product
 
@@ -19,17 +19,16 @@ def product():
     return Product(pk=7, name="Widget", sku="W-1", price="9.99")
 
 
-def test_urls_carry_the_projects_own_prefix(urls):
-    """The admin here is at /backoffice/, so nothing may hardcode /admin/."""
-    assert urls.index() == "/backoffice/"
-    assert urls.login() == "/backoffice/login/"
-    assert urls.list(Product) == "/backoffice/shop/product/"
-    assert urls.create(Product) == "/backoffice/shop/product/add/"
+def test_urls_come_from_the_resolver(urls):
+    assert urls.index() == "/admin/"
+    assert urls.login() == "/admin/login/"
+    assert urls.list(Product) == "/admin/shop/product/"
+    assert urls.create(Product) == "/admin/shop/product/add/"
 
 
 def test_instance_urls_carry_the_primary_key(urls, product):
-    assert urls.edit(product) == f"/backoffice/shop/product/{product.pk}/change/"
-    assert urls.delete(product) == f"/backoffice/shop/product/{product.pk}/delete/"
+    assert urls.edit(product) == f"/admin/shop/product/{product.pk}/change/"
+    assert urls.delete(product) == f"/admin/shop/product/{product.pk}/delete/"
 
 
 @pytest.mark.urls("project.urls_with_ops")
@@ -38,7 +37,7 @@ def test_a_second_site_resolves_to_its_own_prefix():
     default = AdminUrls(admin.site)
     ops = AdminUrls(ops_site)
 
-    assert default.index() == "/backoffice/"
+    assert default.index() == "/admin/"
     assert ops.index() == "/ops/"
     assert ops.list(Product) == "/ops/shop/product/"
 
@@ -46,9 +45,9 @@ def test_a_second_site_resolves_to_its_own_prefix():
 @pytest.mark.urls("project.urls_with_ops")
 def test_a_site_only_knows_the_models_it_registers():
     """The default site has User; the ops site does not. Same model, different answer."""
-    assert AdminUrls(admin.site).list(User) == "/backoffice/accounts/user/"
+    assert AdminUrls(admin.site).list(User) == "/admin/auth/user/"
 
-    with pytest.raises(LookupError, match=r"accounts\.User is not registered"):
+    with pytest.raises(LookupError, match=r"auth\.User is not registered"):
         AdminUrls(ops_site).list(User)
 
 

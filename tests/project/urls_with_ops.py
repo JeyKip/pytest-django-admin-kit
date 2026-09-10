@@ -6,6 +6,6 @@ from django.urls import path
 from .ops import ops_site
 
 urlpatterns = [
-    path("backoffice/", admin.site.urls),
+    path("admin/", admin.site.urls),
     path("ops/", ops_site.urls),
 ]

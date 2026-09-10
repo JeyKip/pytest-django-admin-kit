@@ -7,28 +7,27 @@ whatever feature is being worked on.
 """
 
 from django.apps import apps
+from django.contrib import admin
 from django.contrib.auth import get_user_model
+from django.contrib.auth.models import User
 from django.urls import reverse
 
 
-def test_the_active_user_model_is_the_projects_own():
-    """The package must never assume `auth.User`."""
-    user_model = get_user_model()
-
-    assert user_model is apps.get_model("accounts", "User")
-    assert user_model.USERNAME_FIELD == "email"
+def test_the_active_user_model_is_djangos_default():
+    """The custom model is swapped in per test, never by the project."""
+    assert get_user_model() is User
 
 
-def test_the_user_model_has_no_username_field():
-    """A `username` field is the assumption most likely to be baked in by accident."""
-    field_names = {field.name for field in get_user_model()._meta.get_fields()}
+def test_the_custom_user_model_is_installed_but_not_registered():
+    """Installed so its table exists; unregistered so the admin does not list two Users."""
+    custom = apps.get_model("accounts", "User")
 
-    assert "username" not in field_names
+    assert custom.USERNAME_FIELD == "email"
+    assert custom not in admin.site._registry
 
 
-def test_the_admin_is_not_mounted_at_admin():
-    """The admin prefix must be resolved, never assumed."""
-    assert reverse("admin:index") == "/backoffice/"
+def test_the_admin_is_mounted_at_admin():
+    assert reverse("admin:index") == "/admin/"
 
 
 def test_the_admin_index_is_reachable(admin_client):
@@ -37,4 +36,4 @@ def test_the_admin_index_is_reachable(admin_client):
 
 def test_both_registered_models_have_a_changelist(admin_client):
     assert admin_client.get(reverse("admin:shop_product_changelist")).status_code == 200
-    assert admin_client.get(reverse("admin:accounts_user_changelist")).status_code == 200
+    assert admin_client.get(reverse("admin:auth_user_changelist")).status_code == 200

@@ -140,14 +140,17 @@ The suite runs against a small Django project in `tests/project/`, wired up by t
 `[tool.pytest.ini_options]` table in `pyproject.toml`. You don't have to do anything to use it —
 no environment variables, no `manage.py`.
 
-It is deliberately awkward in two ways, because both are assumptions the package must never
-make:
+It uses Django's defaults: the admin is at `/admin/` and the user model is `auth.User`. The
+things a project can customise are each proved by their own tests, which swap the custom
+setup in per test:
 
-- the admin is mounted at `/backoffice/`, not `/admin/`;
-- the user model has no `username` field and authenticates by email.
+- `tests/test_custom_user.py` sets `AUTH_USER_MODEL` to `accounts.User`, a model with no
+  `username` field that authenticates by email;
+- `tests/test_custom_prefix.py` uses `@pytest.mark.urls("project.urls_backoffice")`, which
+  serves the admin at `/backoffice/`.
 
-Because they hold for the whole suite, every test proves them by just running, and no test has
-to be written specially to check them.
+The swap only works in this direction. `auth.User` is swappable, so a project whose default is
+a custom model never creates the `auth_user` table, and no test could swap the default back in.
 
 The database is in-memory SQLite. That is worth knowing when a test feels slow later on: any
 test that uses `live_server` is forced onto `transactional_db` by pytest-django, whatever mark

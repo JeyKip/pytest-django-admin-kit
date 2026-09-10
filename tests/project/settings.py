@@ -63,8 +63,6 @@ DATABASES = {
     },
 }
 
-AUTH_USER_MODEL = "accounts.User"
-
 # The suite never tests hashing, and MD5 saves real time on every user it creates.
 PASSWORD_HASHERS = ["django.contrib.auth.hashers.MD5PasswordHasher"]
 

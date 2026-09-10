@@ -1,26 +1,22 @@
 """Login, logout and user switching, driven through a real browser.
 
-Every user here belongs to a model with no `username` field, so nothing in the
-package may assume one. Two of them have no usable password at all.
+Every user here belongs to Django's default `auth.User`. A user model with no
+`username` field is covered in `test_custom_user.py`.
 """
 
 import pytest
-from django.contrib.auth import get_user_model
+from django.contrib.auth.models import User
 
 
 @pytest.fixture
 def superuser(db):
-    return get_user_model().objects.create_superuser(
-        email="root@example.com", password="pw", full_name="Root"
-    )
+    return User.objects.create_superuser(username="alice", password="pw")
 
 
 @pytest.fixture
 def passwordless_staff(db):
     """The case a password-based login cannot serve: single sign-on users."""
-    user = get_user_model().objects.create_user(
-        email="sso@example.com", is_staff=True, is_superuser=True
-    )
+    user = User.objects.create_user(username="bruno", is_staff=True)
     user.set_unusable_password()
     user.save()
     return user
@@ -29,7 +25,7 @@ def passwordless_staff(db):
 @pytest.fixture
 def customer(db):
     """Not staff, so the admin must refuse them."""
-    return get_user_model().objects.create_user(email="shopper@example.com", password="pw")
+    return User.objects.create_user(username="carol", password="pw")
 
 
 def visit(admin_ui, path):
@@ -43,7 +39,7 @@ def test_a_superuser_reaches_the_index(admin_ui, superuser):
 
     page = visit(admin_ui, admin_ui.url.index())
 
-    assert page.url.endswith("/backoffice/")
+    assert page.url.endswith("/admin/")
     assert "Site administration" in page.text_content("body")
 
 
@@ -54,7 +50,7 @@ def test_a_user_with_no_usable_password_still_logs_in(admin_ui, passwordless_sta
     admin_ui.login(passwordless_staff)
     page = visit(admin_ui, admin_ui.url.index())
 
-    assert page.url.endswith("/backoffice/")
+    assert page.url.endswith("/admin/")
 
 
 def test_a_non_staff_user_is_sent_to_the_login_page(admin_ui, customer):
@@ -80,14 +76,14 @@ def test_switching_users_changes_who_the_admin_reports(admin_ui, superuser, pass
     admin_ui.login(passwordless_staff)
     second = visit(admin_ui, admin_ui.url.index()).text_content("body")
 
-    assert "root@example.com" in first
-    assert "sso@example.com" in second
-    assert "root@example.com" not in second
+    assert "alice" in first
+    assert "bruno" in second
+    assert "alice" not in second
 
 
 def test_logout_returns_the_browser_to_anonymous(admin_ui, superuser):
     admin_ui.login(superuser)
-    assert visit(admin_ui, admin_ui.url.index()).url.endswith("/backoffice/")
+    assert visit(admin_ui, admin_ui.url.index()).url.endswith("/admin/")
 
     admin_ui.logout()
 
