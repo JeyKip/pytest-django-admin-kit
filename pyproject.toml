@@ -1,0 +1,145 @@
+[build-system]
+requires = ["hatchling>=1.18"]
+build-backend = "hatchling.build"
+
+[project]
+name = "pytest-django-admin-kit"
+version = "1.0.0.dev0"
+description = "A pytest toolkit for writing conscious tests against the Django admin."
+readme = "README.md"
+requires-python = ">=3.8"
+license = { file = "LICENSE" }
+authors = [{ name = "Yevhen Nosolenko" }]
+keywords = ["pytest", "django", "admin", "testing"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Framework :: Django",
+    "Framework :: Django :: 3.2",
+    "Framework :: Django :: 4.0",
+    "Framework :: Django :: 4.1",
+    "Framework :: Django :: 4.2",
+    "Framework :: Django :: 5.0",
+    "Framework :: Django :: 5.1",
+    "Framework :: Django :: 5.2",
+    "Framework :: Django :: 6.0",
+    "Framework :: Django :: 6.1",
+    "Framework :: Pytest",
+    "Intended Audience :: Developers",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Software Development :: Testing",
+    "Typing :: Typed",
+]
+dependencies = [
+    "django>=3.2",
+    "pytest>=7.0",
+    # The `admin_ui` fixture is built on `live_server`, so a project installing this
+    # package needs pytest-django whether or not it already had it.
+    "pytest-django>=4.5",
+    "pytest-playwright>=0.5.2",
+    # Imported for the types of the native handles the package hands out, so a
+    # major version of Playwright is a major version of this package.
+    "playwright>=1.48",
+]
+
+# Registers the plugin with pytest on install, so a consuming project gets the
+# flags and fixtures without listing anything in its own configuration.
+[project.entry-points.pytest11]
+django_admin_kit = "django_admin_kit.plugin"
+
+[project.urls]
+Homepage = "https://github.com/JeyKip/pytest-django-admin-kit"
+Source = "https://github.com/JeyKip/pytest-django-admin-kit"
+
+# PEP 735 dependency groups. `uv sync` installs these by default; they are development
+# tooling and never reach anyone installing the package. Building is `uv build`, which
+# drives the hatchling backend declared above, so no build frontend is listed here.
+[dependency-groups]
+dev = [
+    "pytest>=7.0",
+    # Parallel runs are a promise the package makes, so the suite runs under -n in CI.
+    "pytest-xdist>=3.0",
+    "ruff>=0.14",
+    "mypy>=1.11",
+    "pre-commit>=3.5",
+    # tox 4.61 for TOML configuration, and tox-uv to provision the matrix. Both
+    # need Python 3.10+, which the development environment is anyway. The markers
+    # keep `uv lock` resolvable across the full >=3.8 range.
+    "tox>=4.61; python_version >= '3.10'",
+    "tox-uv>=1.16; python_version >= '3.10'",
+]
+
+[tool.hatch.build.targets.wheel]
+# Everything under the package directory ships, including the PEP 561 `py.typed`
+# marker that pairs with the "Typing :: Typed" classifier above.
+packages = ["src/django_admin_kit"]
+
+[tool.hatch.build.targets.sdist]
+# Ship what is needed to build and test from source, plus the design document the
+# README links to. Internal working notes and editor state stay out.
+exclude = [
+    "/.github",
+    "/.gitignore",
+    "/.idea",
+    "/.pre-commit-config.yaml",
+    "/setup-and-login-plan.md",
+    "/uv.lock",
+]
+
+[tool.ruff]
+target-version = "py38"
+line-length = 100
+src = ["src", "tests"]
+extend-exclude = [
+    # The design documents contain illustrative API sketches, not runnable code.
+    # Formatting their fenced blocks would rewrite deliberate pseudo-code.
+    "*.md",
+    # Migrations are `makemigrations` output. Leaving them untouched keeps the
+    # committed files byte-identical to what Django regenerates.
+    "tests/project/*/migrations/*.py",
+]
+
+[tool.ruff.lint]
+select = [
+    "E",    # pycodestyle errors
+    "W",    # pycodestyle warnings
+    "F",    # pyflakes
+    "I",    # import sorting
+    "UP",   # pyupgrade — bounded by target-version, so it never suggests post-3.8 syntax
+    "B",    # bugbear
+    "C4",   # comprehensions
+    "SIM",  # simplify
+    "RUF",
+]
+
+[tool.pytest.ini_options]
+# `pythonpath` puts `tests/` on sys.path so the test project imports as `project`,
+# the way it would in a real repository. Requires pytest 7.0, which is the floor.
+pythonpath = ["tests"]
+DJANGO_SETTINGS_MODULE = "project.settings"
+testpaths = ["tests"]
+addopts = "-ra"
+
+[tool.mypy]
+# The package floor is 3.8, but current mypy refuses to target anything below 3.10
+# (support was dropped after 1.16.x). mypy's job here is type correctness, not floor
+# policing. The py38 tox cell is what actually proves the floor, and tox-uv makes that
+# cell cheap to run because uv provisions 3.8 without the ensurepip breakage that
+# `python3.8 -m venv` hits on many systems.
+python_version = "3.10"
+files = ["src"]
+strict = true
+
+# Django ships no type information and has no py.typed marker. django-stubs would
+# supply it but pins itself to narrow mypy and Django ranges, which is a poor trade
+# for a package that has to build against nine Django minors.
+[[tool.mypy.overrides]]
+module = ["django.*"]
+ignore_missing_imports = true

@@ -1,0 +1,69 @@
+requires = ["tox>=4.61", "tox-uv>=1.16"]
+
+# Nine Django minors, each on its oldest supported interpreter at or above the 3.8
+# floor and on its newest. Eighteen cells. The interpreters in the middle of a range
+# are left out: a break that shows on 3.11 but on neither 3.10 nor 3.14 is rare enough
+# not to be worth doubling the matrix for.
+env_list = [
+    { product = [["3.8", "3.10"], ["dj32", "dj40"]] },
+    { product = [["3.8", "3.11"], ["dj41"]] },
+    { product = [["3.8", "3.12"], ["dj42"]] },
+    { product = [["3.10", "3.12"], ["dj50"]] },
+    { product = [["3.10", "3.13"], ["dj51"]] },
+    { product = [["3.10", "3.14"], ["dj52"]] },
+    { product = [["3.12", "3.14"], ["dj60", "dj61"]] },
+]
+
+# uv provisions every interpreter, so a missing one is a real failure rather than a
+# reason to skip a cell quietly.
+skip_missing_interpreters = false
+
+# The full cartesian: every Django minor against every interpreter it supports at or
+# above the floor. Thirty-three cells, too slow to sit in front of every pull request,
+# so it gates releases instead. Run it with `tox -m full`.
+[labels]
+full = [
+    "3.8-dj32", "3.9-dj32", "3.10-dj32",
+    "3.8-dj40", "3.9-dj40", "3.10-dj40",
+    "3.8-dj41", "3.9-dj41", "3.10-dj41", "3.11-dj41",
+    "3.8-dj42", "3.9-dj42", "3.10-dj42", "3.11-dj42", "3.12-dj42",
+    "3.10-dj50", "3.11-dj50", "3.12-dj50",
+    "3.10-dj51", "3.11-dj51", "3.12-dj51", "3.13-dj51",
+    "3.10-dj52", "3.11-dj52", "3.12-dj52", "3.13-dj52", "3.14-dj52",
+    "3.12-dj60", "3.13-dj60", "3.14-dj60",
+    "3.12-dj61", "3.13-dj61", "3.14-dj61"
+]
+
+[env_run_base]
+description = "Run the test suite on one Python and Django pair"
+package = "wheel"
+# The wheel is py3-none-any, so one build serves every cell. Were a compiled component
+# ever added, this would have to go: the tag would become interpreter-specific.
+wheel_build_env = ".pkg"
+deps = [
+    { replace = "if", condition = "factor.dj32", then = ["django>=3.2,<4.0"], extend = true },
+    { replace = "if", condition = "factor.dj40", then = ["django>=4.0,<4.1"], extend = true },
+    { replace = "if", condition = "factor.dj41", then = ["django>=4.1,<4.2"], extend = true },
+    { replace = "if", condition = "factor.dj42", then = ["django>=4.2,<5.0"], extend = true },
+    { replace = "if", condition = "factor.dj50", then = ["django>=5.0,<5.1"], extend = true },
+    { replace = "if", condition = "factor.dj51", then = ["django>=5.1,<5.2"], extend = true },
+    { replace = "if", condition = "factor.dj52", then = ["django>=5.2,<6.0"], extend = true },
+    { replace = "if", condition = "factor.dj60", then = ["django>=6.0,<6.1"], extend = true },
+    { replace = "if", condition = "factor.dj61", then = ["django>=6.1,<6.2"], extend = true },
+    # pytest-django is pinned per Django version because no single release spans 3.2
+    # to 6.1. 4.8.0 is the last that claims 3.2; 4.14.0 claims only 5.2 and 6.0.
+    # Django 4.0 is claimed by nothing after 4.5.2, so its cells run on 4.8.0 and are
+    # expected to pass on behaviour rather than on a support claim.
+    { replace = "if", condition = "factor.dj32 or factor.dj40 or factor.dj41", then = ["pytest-django==4.8.0"], extend = true },
+    { replace = "if", condition = "factor.dj42", then = ["pytest-django==4.11.1"], extend = true },
+    { replace = "if", condition = "factor.dj50 or factor.dj51", then = ["pytest-django==4.12.0"], extend = true },
+    { replace = "if", condition = "factor.dj52 or factor.dj60 or factor.dj61", then = ["pytest-django==4.14.0"], extend = true },
+]
+# pytest and playwright are deliberately unpinned. The resolver already caps them per
+# interpreter — 3.8 cells get pytest 8.3.5 and playwright 1.48.0, newer cells get
+# current — so pinning here would only freeze that ceiling in place.
+# The browser binary is keyed to the playwright version, and 3.8 cells run 1.48
+# while the rest run current, so the download has to happen inside each cell rather
+# than once outside. It is a no-op when the right build is already cached.
+commands_pre = [["playwright", "install", "chromium"]]
+commands = [["pytest", { replace = "posargs", extend = true }]]

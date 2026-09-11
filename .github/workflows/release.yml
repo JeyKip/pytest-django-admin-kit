@@ -1,0 +1,91 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+jobs:
+  cells:
+    name: enumerate cells
+    runs-on: ubuntu-latest
+    outputs:
+      cells: ${{ steps.list.outputs.cells }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10.1.0
+        with:
+          enable-cache: true
+      # The `full` label in tox.toml: the whole cartesian, not the eighteen that
+      # front every pull request.
+      - id: list
+        run: |
+          cells=$(uvx --from 'tox>=4.61' --with tox-uv tox list -m full --no-desc -q \
+            | jq -R -s -c 'split("\n") | map(select(. != ""))')
+          echo "cells=$cells" >> "$GITHUB_OUTPUT"
+          echo "$cells"
+
+  matrix:
+    name: ${{ matrix.cell }}
+    needs: cells
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        cell: ${{ fromJSON(needs.cells.outputs.cells) }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10.1.0
+        with:
+          enable-cache: true
+      - uses: actions/cache@v6
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('uv.lock', 'tox.toml') }}
+          restore-keys: playwright-${{ runner.os }}-
+      - run: uv run --frozen tox -e ${{ matrix.cell }}
+
+  build:
+    name: build the distributions
+    # The matrix gates the build, which gates the publish. A matrix that merely
+    # ran alongside a release would buy nothing.
+    needs: matrix
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10.1.0
+        with:
+          enable-cache: true
+      - name: Fail if the tag disagrees with the declared version
+        run: |
+          declared=$(uv version --short)
+          tagged="${GITHUB_REF_NAME#v}"
+          if [ "$declared" != "$tagged" ]; then
+            echo "tag $GITHUB_REF_NAME does not match version $declared in pyproject.toml" >&2
+            exit 1
+          fi
+      # Builds the wheel from the sdist, so a broken sdist fails here rather than
+      # shipping quietly.
+      - run: uv build
+      - uses: actions/upload-artifact@v7
+        with:
+          name: distributions
+          path: dist/
+
+  publish:
+    name: publish to PyPI
+    needs: build
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      # Trusted publishing: PyPI verifies this workflow's OIDC identity, so there
+      # is no API token to store or rotate.
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: distributions
+          path: dist/
+      - uses: pypa/gh-action-pypi-publish@v1.14.2

@@ -1,0 +1,125 @@
+name: CI
+
+on:
+  pull_request:
+    paths-ignore: ["**.md"]
+  push:
+    branches: [main]
+    paths-ignore: ["**.md"]
+
+# Without this, three pushes to a branch queue 3x jobs.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    name: lint and types
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10.1.0
+        with:
+          enable-cache: true
+      - name: Fail if uv.lock is out of date with pyproject.toml
+        run: uv lock --check
+      - run: uv run --frozen ruff check .
+      - run: uv run --frozen ruff format --check .
+      - run: uv run --frozen mypy
+
+  cells:
+    name: enumerate cells
+    runs-on: ubuntu-latest
+    outputs:
+      cells: ${{ steps.list.outputs.cells }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10.1.0
+        with:
+          enable-cache: true
+      # Read from tox.toml rather than repeated here, so CI cannot drift from
+      # what `tox` runs locally.
+      - id: list
+        run: |
+          cells=$(uvx --from 'tox>=4.61' --with tox-uv tox list -d --no-desc -q \
+            | jq -R -s -c 'split("\n") | map(select(. != ""))')
+          echo "cells=$cells" >> "$GITHUB_OUTPUT"
+          echo "$cells"
+
+  matrix:
+    name: ${{ matrix.cell }}
+    needs: cells
+    runs-on: ubuntu-latest
+    strategy:
+      # One Django version breaking must not hide the state of the other eight.
+      fail-fast: false
+      matrix:
+        cell: ${{ fromJSON(needs.cells.outputs.cells) }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10.1.0
+        with:
+          enable-cache: true
+      # tox downloads the browser inside each cell, because the binary is keyed to
+      # that cell's playwright version. Caching it keeps that download off the
+      # critical path of every job.
+      - uses: actions/cache@v6
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('uv.lock', 'tox.toml') }}
+          restore-keys: playwright-${{ runner.os }}-
+      - run: uv run --frozen tox -e ${{ matrix.cell }}
+
+  browsers:
+    # Cells install chromium only, so anything needing another browser skips there.
+    # This job is where all three actually run, once, on current everything. Browsers
+    # are not a Django-compatibility dimension; sweeping three across eighteen cells
+    # would cost fifty-four jobs for no added signal.
+    name: firefox and webkit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10.1.0
+        with:
+          enable-cache: true
+      - uses: actions/cache@v6
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-all-${{ runner.os }}-${{ hashFiles('uv.lock') }}
+          restore-keys: playwright-all-${{ runner.os }}-
+      # --with-deps installs the shared libraries webkit links against, which a bare
+      # runner does not have.
+      - run: uv run --frozen playwright install --with-deps chromium firefox webkit
+      # A skip here means the install above silently failed. This job exists so
+      # firefox and webkit actually run, so treat any skip as a failure.
+      - name: Run the browser tests, failing on any skip
+        run: |
+          set -o pipefail
+          uv run --frozen pytest tests/test_session.py tests/test_interop.py -ra \
+            --browser chromium --browser firefox --browser webkit | tee browser-tests.log
+          if grep -q '^SKIPPED' browser-tests.log; then
+            echo '::error::A browser skipped itself; the playwright install did not take.' >&2
+            exit 1
+          fi
+
+  parallel:
+    # The package promises tests are safe to run in parallel: a live server per
+    # worker, a browser context per test, nothing shared. This is where that promise
+    # is checked, on the whole suite, with more workers than tests need.
+    name: parallel
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10.1.0
+        with:
+          enable-cache: true
+      - uses: actions/cache@v6
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-chromium-${{ runner.os }}-${{ hashFiles('uv.lock') }}
+          restore-keys: playwright-chromium-${{ runner.os }}-
+      - run: uv run --frozen playwright install --with-deps chromium
+      - run: uv run --frozen pytest -n 4
