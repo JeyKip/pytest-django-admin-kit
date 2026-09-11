@@ -154,7 +154,9 @@ setup in per test:
 - `tests/test_custom_user.py` sets `AUTH_USER_MODEL` to `accounts.User`, a model with no
   `username` field that authenticates by email;
 - `tests/test_custom_prefix.py` uses `@pytest.mark.urls("project.urls_backoffice")`, which
-  serves the admin at `/backoffice/`.
+  serves the admin at `/backoffice/`;
+- `tests/test_custom_site.py` overrides the `admin_ui_urls` fixture to point at `ops_site`, a
+  second `AdminSite` mounted at `/ops/` that registers only `Product`.
 
 The swap only works in this direction. `auth.User` is swappable, so a project whose default is
 a custom model never creates the `auth_user` table, and no test could swap the default back in.

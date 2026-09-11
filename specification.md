@@ -2183,16 +2183,28 @@ expectations however it prefers.
 
 The architecture must allow tests to target a non-default `AdminSite`.
 
-Example target API:
+A project with one admin names it once, in the configuration of section 28:
 
 ```python
-admin_ui.use_site(custom_admin_site)
+DJANGO_ADMIN_KIT = {
+    "site": "project.ops.ops_site",
+}
 ```
 
-or through configuration or fixture construction, as described in section 28.
+A project with several admins overrides the fixture that resolves the site's URLs, at whatever
+scope pytest allows a fixture to be overridden, so a module or class of tests targets one site
+while the rest of the suite keeps the default:
+
+```python
+@pytest.fixture
+def admin_ui_urls():
+    return AdminUrls(ops_site)
+```
+
+The site is fixed for the life of a test. Nothing switches sites inside one. (done)
 
 Support for custom AdminSite instances, including sites mounted under a non-default URL prefix,
-is part of a 1.0.0 architectural requirement even if the default site is the common path.
+is part of a 1.0.0 architectural requirement even if the default site is the common path. (done)
 
 ---
 
@@ -2327,7 +2339,7 @@ supported Django versions:
 34. Read the contents of a deletion confirmation.
 35. Verify that a refused deletion is not offered or not performed.
 36. Read the models the admin exposes to the current user, their grouping, and their order.
-37. Run against a non-default admin site mounted under a non-default URL prefix.
+37. Run against a non-default admin site mounted under a non-default URL prefix. (done)
 38. Override a default normalization rule, add a new one, and extend field handling from a
     project, without subclassing package internals.
 39. Reach a native handle from a page and from a field, and drive a project-specific widget
