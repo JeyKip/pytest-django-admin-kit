@@ -23,7 +23,7 @@ DEFAULT_TIMEOUT = 30_000
 
 # Settings this package owns. Anything the browser plugin already governs is absent
 # on purpose; see the module docstring.
-_KNOWN_KEYS = frozenset({"site", "timeout", "timezone"})
+_KNOWN_KEYS = frozenset({"locale", "site", "timeout", "timezone"})
 
 
 @dataclass(frozen=True)
@@ -35,6 +35,7 @@ class Config:
     site: str | None
     timeout: int
     timezone: str | None
+    locale: str | None
 
 
 def _quote(values: Iterable[str]) -> str:
@@ -57,6 +58,7 @@ def _positive_int(value: Any, key: str, minimum: int) -> int:
 def build_config(
     settings: Mapping[str, Any] | None = None,
     default_timezone: str | None = None,
+    default_locale: str | None = None,
 ) -> Config:
     """Resolve the settings dict into one frozen Config."""
     given = dict(settings or {})
@@ -77,6 +79,13 @@ def build_config(
             f"not {type(timezone).__name__}."
         )
 
+    locale = given.get("locale", default_locale)
+    if locale is not None and not isinstance(locale, str):
+        raise ImproperlyConfigured(
+            f"{SETTINGS_NAME}['locale'] must be a language tag such as 'en-us' or None, "
+            f"not {type(locale).__name__}."
+        )
+
     site = given.get("site")
     if site is not None and not isinstance(site, str):
         raise ImproperlyConfigured(
@@ -84,16 +93,19 @@ def build_config(
             f"not {type(site).__name__}."
         )
 
-    return Config(site=site, timeout=timeout, timezone=timezone)
+    return Config(site=site, timeout=timeout, timezone=timezone, locale=locale)
 
 
 def from_django_settings() -> Config:
     """Build the configuration from the project's own Django settings.
 
     The time zone defaults to the project's ``TIME_ZONE`` so that a rendered date
-    reads the same in the browser as it does in a Django template.
+    reads the same in the browser as it does in a Django template. The locale
+    defaults to ``LANGUAGE_CODE``, so a project whose admin follows the browser's
+    ``Accept-Language`` renders the same language and formats on every machine.
     """
     return build_config(
         getattr(django_settings, SETTINGS_NAME, None),
         default_timezone=getattr(django_settings, "TIME_ZONE", None),
+        default_locale=getattr(django_settings, "LANGUAGE_CODE", None),
     )

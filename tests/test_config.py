@@ -12,26 +12,32 @@ def test_the_defaults_need_no_settings_at_all():
     assert config.site is None
     assert config.timeout == 30_000
     assert config.timezone is None
+    assert config.locale is None
 
 
 def test_settings_override_the_defaults():
-    config = build_config({"timeout": 5_000, "timezone": "Europe/Kyiv"})
+    config = build_config({"timeout": 5_000, "timezone": "Europe/Kyiv", "locale": "uk"})
 
     assert config.timeout == 5_000
     assert config.timezone == "Europe/Kyiv"
+    assert config.locale == "uk"
 
 
-def test_the_timezone_falls_back_to_the_projects():
-    config = build_config(default_timezone="Europe/Kyiv")
+def test_the_timezone_and_locale_fall_back_to_the_projects():
+    config = build_config(default_timezone="Europe/Kyiv", default_locale="uk")
 
     assert config.timezone == "Europe/Kyiv"
+    assert config.locale == "uk"
 
 
-def test_an_explicit_null_timezone_beats_the_projects():
-    """None means "inherit the machine's zone", which is not the same as unset."""
-    config = build_config({"timezone": None}, default_timezone="Europe/Kyiv")
+def test_an_explicit_null_beats_the_projects():
+    """None means "inherit the machine's", which is not the same as unset."""
+    config = build_config(
+        {"timezone": None, "locale": None}, default_timezone="Europe/Kyiv", default_locale="uk"
+    )
 
     assert config.timezone is None
+    assert config.locale is None
 
 
 def test_an_unknown_setting_is_rejected_by_name():
@@ -50,6 +56,7 @@ def test_an_unknown_setting_is_rejected_by_name():
         ({"timeout": "30000"}, "must be an integer"),
         ({"timeout": True}, "must be an integer"),
         ({"timezone": 3}, "must be an IANA zone name"),
+        ({"locale": 3}, "must be a language tag"),
     ],
 )
 def test_a_malformed_value_is_rejected(settings, expected):
@@ -57,11 +64,12 @@ def test_a_malformed_value_is_rejected(settings, expected):
         build_config(settings)
 
 
-def test_django_settings_supply_the_project_time_zone():
+def test_django_settings_supply_the_project_time_zone_and_language():
     """A date must read the same in the browser as it does in a template."""
     config = from_django_settings()
 
     assert config.timezone == "UTC"
+    assert config.locale == "en-us"
 
 
 def test_django_settings_supply_the_settings_dict(settings):

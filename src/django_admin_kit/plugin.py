@@ -19,7 +19,7 @@ from __future__ import annotations
 
 import os
 from contextlib import contextmanager
-from typing import TYPE_CHECKING, Any, Iterator
+from typing import TYPE_CHECKING, Any, Iterator, TypedDict
 
 import pytest
 
@@ -37,6 +37,13 @@ if TYPE_CHECKING:
 
 
 _ASYNC_UNSAFE = "DJANGO_ALLOW_ASYNC_UNSAFE"
+
+
+class _MachineIndependentContextArgs(TypedDict, total=False):
+    """The context arguments the package sets so results do not depend on the machine."""
+
+    timezone_id: str
+    locale: str
 
 
 @contextmanager
@@ -124,11 +131,13 @@ def admin_ui(
     # Only pass what the project has not set itself: the factory merges its own
     # arguments with these, and a duplicate key raises TypeError. `base_url` is
     # deliberately absent, since AdminSession navigates absolutely.
-    timezone = admin_ui_config.timezone
-    if timezone is None or "timezone_id" in browser_context_args:
-        context = new_context()
-    else:
-        context = new_context(timezone_id=timezone)
+    context_args: _MachineIndependentContextArgs = {}
+    if admin_ui_config.timezone is not None and "timezone_id" not in browser_context_args:
+        context_args["timezone_id"] = admin_ui_config.timezone
+    if admin_ui_config.locale is not None and "locale" not in browser_context_args:
+        context_args["locale"] = admin_ui_config.locale
+
+    context = new_context(**context_args)
     context.set_default_timeout(admin_ui_config.timeout)
 
     # No close here: the factory closes the contexts it made when the test ends.

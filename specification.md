@@ -2032,7 +2032,8 @@ Configurable at minimum:
 
 * the admin site under test;
 * the admin URL prefix;
-* how long any single browser operation may take, and the time zone the browser reports;
+* how long any single browser operation may take, and the time zone and locale the browser
+  reports;
 * value normalization;
 * field handling.
 
@@ -2115,11 +2116,13 @@ DJANGO_ADMIN_KIT = {
     "site": ...,
     "timeout": ...,
     "timezone": ...,
+    "locale": ...,
 }
 ```
 
-`timeout` bounds any single browser operation. `timezone` pins the zone the browser reports, so
-results do not depend on the machine running the tests, per section 31.
+`timeout` bounds any single browser operation. `timezone` and `locale` pin the zone and the
+language the browser reports, so results do not depend on the machine running the tests, per
+section 31. They default to the project's own `TIME_ZONE` and `LANGUAGE_CODE`.
 
 Two consequences follow from not owning the browser. The package inherits whatever that plugin
 does to a test session, including behaviour a project did not ask for, and adopting the package
@@ -2264,8 +2267,8 @@ Values render through the formats and time zone the project has configured. Test
 hardcode a rendering format in order to pass.
 
 Results must not depend on the machine a test runs on. The browser carries its own notion of
-locale, time zone and formatting, and the package pins these to what the project has configured,
-so the same test yields the same values everywhere.
+locale and time zone, and the package pins both to what the project has configured, so the same
+test yields the same values everywhere.
 
 Where a project has already pinned one of them for its own browser tests, that setting stands.
 The package fills in what is unset rather than overriding a deliberate choice, so a project

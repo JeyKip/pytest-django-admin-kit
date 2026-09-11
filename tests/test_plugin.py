@@ -9,6 +9,8 @@ import os
 import subprocess
 import sys
 
+import pytest
+
 
 def test_a_session_that_never_opens_the_admin_leaves_the_guard_alone(tmp_path):
     """Installing the package must not change how an existing test behaves.
@@ -60,8 +62,33 @@ def test_the_admin_session_is_configured_from_the_layers_below(
     """The chain is overridable: a project can replace one fixture and keep the rest."""
     assert admin_ui.url is admin_ui_urls
     assert admin_ui_config.timezone == "UTC"
+    assert admin_ui_config.locale == "en-us"
 
 
 def test_the_guard_is_lifted_while_the_admin_session_is_live(admin_ui):
     """Logging in needs the ORM, and the ORM needs the guard off while a browser runs."""
     assert os.environ["DJANGO_ALLOW_ASYNC_UNSAFE"] == "true"
+
+
+def test_the_browser_is_pinned_to_the_projects_zone_and_language(admin_ui):
+    """What the page's own scripts see must not depend on the machine running them."""
+    page = admin_ui.native.new_page()
+    page.goto("about:blank")
+
+    assert page.evaluate("Intl.DateTimeFormat().resolvedOptions().timeZone") == "UTC"
+    assert page.evaluate("navigator.language").lower() == "en-us"
+
+
+class TestAProjectWithItsOwnPin:
+    """The package fills in what is unset, never overrides a deliberate choice."""
+
+    @pytest.fixture
+    def browser_context_args(self, browser_context_args):
+        """A project pinning its own locale, the way the plugin documents."""
+        return {**browser_context_args, "locale": "de-DE"}
+
+    def test_the_projects_locale_stands(self, admin_ui):
+        page = admin_ui.native.new_page()
+        page.goto("about:blank")
+
+        assert page.evaluate("navigator.language") == "de-DE"
