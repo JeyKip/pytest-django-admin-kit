@@ -15,7 +15,7 @@ jobs:
       cells: ${{ steps.list.outputs.cells }}
     steps:
       - uses: actions/checkout@v7
-      - uses: astral-sh/setup-uv@v10
+      - uses: astral-sh/setup-uv@v10.1.0
         with:
           enable-cache: true
       # The `full` label in tox.toml: the whole cartesian, not the eighteen that
@@ -37,7 +37,7 @@ jobs:
         cell: ${{ fromJSON(needs.cells.outputs.cells) }}
     steps:
       - uses: actions/checkout@v7
-      - uses: astral-sh/setup-uv@v10
+      - uses: astral-sh/setup-uv@v10.1.0
         with:
           enable-cache: true
       - uses: actions/cache@v6
@@ -55,7 +55,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: astral-sh/setup-uv@v10
+      - uses: astral-sh/setup-uv@v10.1.0
         with:
           enable-cache: true
       - name: Fail if the tag disagrees with the declared version
