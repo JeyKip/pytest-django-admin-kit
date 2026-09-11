@@ -1,4 +1,10 @@
-from django.contrib.auth.models import AbstractBaseUser, BaseUserManager, PermissionsMixin
+from django.contrib.auth.models import (
+    AbstractBaseUser,
+    BaseUserManager,
+    Group,
+    Permission,
+    PermissionsMixin,
+)
 from django.db import models
 from django.utils import timezone
 
@@ -30,6 +36,17 @@ class User(AbstractBaseUser, PermissionsMixin):
     is_active = models.BooleanField(default=True)
     is_staff = models.BooleanField(default=False)
     date_joined = models.DateTimeField(default=timezone.now)
+
+    # PermissionsMixin names its reverse accessors `user_set` and `user`, and so does
+    # `auth.User`, which is installed alongside this model. Two models claiming the
+    # same names on Group and Permission is a system check error (fields.E304), and
+    # permission lookups then resolve to whichever model won.
+    groups = models.ManyToManyField(
+        Group, blank=True, related_name="accounts_users", related_query_name="accounts_user"
+    )
+    user_permissions = models.ManyToManyField(
+        Permission, blank=True, related_name="accounts_users", related_query_name="accounts_user"
+    )
 
     objects = UserManager()
 

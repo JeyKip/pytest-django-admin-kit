@@ -10,7 +10,14 @@ from django.apps import apps
 from django.contrib import admin
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import User
+from django.core.management import call_command
 from django.urls import reverse
+
+
+def test_the_project_passes_system_checks():
+    """Two installed user models can clash on Group and Permission, and only Django's
+    checks report it; the query that goes wrong depends on the Django version."""
+    call_command("check")
 
 
 def test_the_active_user_model_is_djangos_default():
