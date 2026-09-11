@@ -562,6 +562,15 @@ question of section 6.1. (done)
 A model the admin site does not register has no URLs. The package must report that rather than
 produce a value that cannot work. (done)
 
+Every URL above is a path. For the rare test that must hand a full URL to something outside the
+package, the session turns a path into one against the server under test:
+
+```python
+admin_ui.absolute(admin_ui.url.login())
+```
+
+Opening a page never needs this; see section 6.5. (done)
+
 ---
 
 ## 6.4 Underlying access (done)
@@ -588,9 +597,9 @@ page.native
 Any admin URL can be opened, including views the package knows nothing about:
 
 ```python
-page = admin_ui.open(reverse("admin:shop_product_import"))
+page = admin_ui.open(reverse("admin:shop_product_import"))    # done
 
-assert page.works
+assert page.works                                             # done
 assert page.title == "Import products"
 ```
 
@@ -598,11 +607,11 @@ Everything beyond that is reached through `page.native`.
 
 Such a page guarantees what does not depend on knowing the page's shape:
 
-* the access outcome of section 6.1;
+* the access outcome of section 6.1 (done);
 * the page identity of section 6.2;
-* the response status of section 6.4;
+* the response status of section 6.4 (done);
 * the operation messages of section 22;
-* a native handle.
+* a native handle (done).
 
 It does not expose fields or rows. Their shape is unknowable for a page the package has never
 seen, and guessing would be worse than declining.
@@ -1667,9 +1676,9 @@ assert not result.success
 The package must expose what the admin presents to the current user.
 
 ```python
-page = admin_ui.index()
+page = admin_ui.index()    # done
 
-assert page.works
+assert page.works          # done
 ```
 
 Which models are exposed:

@@ -60,6 +60,12 @@ def test_an_object_that_does_not_exist_is_missing_not_denied(urls):
     assert outcome(page) == {"missing", "redirected"}
 
 
+def test_the_login_page_sending_a_logged_in_user_to_the_index_is_only_a_redirect(urls):
+    page = page_at("/admin/", 200, urls, requested="/admin/login/")
+
+    assert outcome(page) == {"redirected"}
+
+
 def test_a_url_the_admin_does_not_serve_is_missing(urls):
     page = page_at("/admin/shop/nothing/", 404, urls)
 

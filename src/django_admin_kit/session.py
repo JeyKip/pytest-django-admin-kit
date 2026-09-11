@@ -38,7 +38,7 @@ class AdminSession:
         return self._urls
 
     def absolute(self, path: str) -> str:
-        """A path against the live server.
+        """Turn an admin path into a full URL on the live server.
 
         The package navigates absolutely rather than setting the context's
         ``base_url``, which belongs to the project: a test suite already using
@@ -91,11 +91,15 @@ class AdminSession:
         """Return the browser to anonymous by dropping its cookies."""
         self._context.clear_cookies()
 
-    def index(self) -> AdminPage:
-        """Open the admin index in a new page."""
-        requested = self._urls.index()
+    def open(self, path: str) -> AdminPage:
+        """Open any admin path in a new page, including views the package does not
+        model, and report how it went."""
         page = self._context.new_page()
-        response = page.goto(self.absolute(requested))
+        response = page.goto(self.absolute(path))
         # `goto` returns None only for same-document navigations, never for a URL.
         assert response is not None
-        return AdminPage(page, response.status, requested, self._urls)
+        return AdminPage(page, response.status, path, self._urls)
+
+    def index(self) -> AdminPage:
+        """Open the admin index."""
+        return self.open(self._urls.index())

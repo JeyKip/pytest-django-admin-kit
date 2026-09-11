@@ -21,6 +21,26 @@ Early development. The public API is written up in [specification.md](specificat
 implemented yet, so there's nothing here you can point at a real project. What you can do today is
 help build it.
 
+## What works today
+
+Enough to log in and open pages. `admin_ui` gives each test its own browser context on a live
+server; `admin_ui.url` resolves admin paths through the site under test; `index()` and `open()`
+return a page that says how the request went:
+
+```python
+def test_reports_page(admin_ui, admin_user):
+    admin_ui.login(admin_user)
+
+    page = admin_ui.open(reverse("admin:shop_product_report"))
+
+    assert page.works                  # or .denied, .missing, .redirected
+    assert page.status_code == 200
+    page.native.click("#download")     # the Playwright page, for anything else
+```
+
+`admin_ui.native` is the Playwright context, and `admin_ui.absolute(path)` turns a path into a
+full URL against the live server for the rare case something outside the package needs one.
+
 ## Requirements
 
 Python 3.8 or newer, Django 3.2 or newer.

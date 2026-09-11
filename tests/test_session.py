@@ -6,6 +6,7 @@ Every user here belongs to Django's default `auth.User`. A user model with no
 
 import pytest
 from django.contrib.auth.models import User
+from django.urls import reverse
 
 
 @pytest.fixture
@@ -109,3 +110,36 @@ def test_the_context_and_the_page_are_reachable_natively(admin_ui):
 
     assert page.native.context is admin_ui.native
     assert page.native.title()
+
+
+def test_the_login_page_sends_a_logged_in_user_to_the_index(admin_ui, superuser):
+    """Django's own behaviour, and not a missing page."""
+    admin_ui.login(superuser)
+
+    page = admin_ui.open(admin_ui.url.login())
+
+    assert page.redirected
+    assert not page.missing
+    assert page.destination == admin_ui.url.index()
+
+
+def test_any_admin_path_can_be_opened(admin_ui, superuser):
+    """A view the package knows nothing about still gets an outcome and a handle."""
+    admin_ui.login(superuser)
+
+    page = admin_ui.open(reverse("admin:password_change"))
+
+    assert page.works
+    assert page.destination == "/admin/password_change/"
+    assert page.native.title().startswith("Password change")
+
+
+def test_a_path_the_admin_does_not_serve_is_missing(admin_ui, superuser):
+    admin_ui.login(superuser)
+
+    assert admin_ui.open("/admin/no/such/page/").missing
+
+
+def test_absolute_builds_a_url_against_the_live_server(admin_ui, live_server):
+    """For a test that needs a URL the package does not produce."""
+    assert admin_ui.absolute("/admin/") == live_server.url + "/admin/"

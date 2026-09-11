@@ -33,8 +33,7 @@ def test_a_plain_page_test_runs_in_the_same_session_as_admin_tests(page):
 def test_the_admin_session_still_reaches_the_live_server(admin_ui, page, live_server):
     """Both fixtures in one test, driving the same server."""
     page.goto(live_server.url + "/admin/login/")
-    admin_page = admin_ui.native.new_page()
-    admin_page.goto(admin_ui.absolute(admin_ui.url.login()))
+    admin_page = admin_ui.open(admin_ui.url.login()).native
 
     assert page.url == admin_page.url
 

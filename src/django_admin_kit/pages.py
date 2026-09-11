@@ -67,8 +67,15 @@ class AdminPage:
         """Not there: a URL the admin does not serve, or an object that does not exist.
 
         The admin reports a missing object to a user with permission by redirecting
-        to the index with a message, so a redirect there from anywhere else is read as
-        missing. A user without permission is refused before the object is looked up.
+        to the index with a message, so a redirect there is read as missing. A user
+        without permission is refused before the object is looked up. The one other
+        page that redirects to the index is the login page, when the user is already
+        logged in; that is a plain redirect.
         """
-        redirected_to_index = self.redirected and self.destination == self._urls.index()
-        return self._status_code == 404 or redirected_to_index
+        if self._status_code == 404:
+            return True
+        return (
+            self.redirected
+            and self.destination == self._urls.index()
+            and self._requested != self._urls.login()
+        )
