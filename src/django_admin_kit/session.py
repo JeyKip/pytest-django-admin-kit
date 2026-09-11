@@ -15,6 +15,7 @@ from django.conf import settings
 from django.test import Client
 from playwright.sync_api import BrowserContext
 
+from .pages import AdminPage
 from .urls import AdminUrls
 
 
@@ -65,3 +66,12 @@ class AdminSession:
     def logout(self) -> None:
         """Return the browser to anonymous by dropping its cookies."""
         self._context.clear_cookies()
+
+    def index(self) -> AdminPage:
+        """Open the admin index in a new page."""
+        requested = self._urls.index()
+        page = self._context.new_page()
+        response = page.goto(self.absolute(requested))
+        # `goto` returns None only for same-document navigations, never for a URL.
+        assert response is not None
+        return AdminPage(page, response.status, requested, self._urls)

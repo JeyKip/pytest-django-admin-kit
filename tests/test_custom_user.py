@@ -29,12 +29,6 @@ def passwordless_staff(db, custom_user_model):
     return user
 
 
-def visit_index(admin_ui):
-    page = admin_ui.native.new_page()
-    page.goto(admin_ui.absolute(admin_ui.url.index()))
-    return page
-
-
 def test_the_swapped_model_is_the_active_one(custom_user_model):
     assert get_user_model() is User
     assert "username" not in {field.name for field in User._meta.get_fields()}
@@ -43,10 +37,10 @@ def test_the_swapped_model_is_the_active_one(custom_user_model):
 def test_a_superuser_reaches_the_index(admin_ui, superuser):
     admin_ui.login(superuser)
 
-    page = visit_index(admin_ui)
+    page = admin_ui.index()
 
-    assert page.url.endswith("/admin/")
-    assert "root@example.com" in page.text_content("body")
+    assert page.works
+    assert "root@example.com" in page.native.text_content("body")
 
 
 def test_a_user_with_no_usable_password_still_logs_in(admin_ui, passwordless_staff):
@@ -54,13 +48,13 @@ def test_a_user_with_no_usable_password_still_logs_in(admin_ui, passwordless_sta
 
     admin_ui.login(passwordless_staff)
 
-    assert visit_index(admin_ui).url.endswith("/admin/")
+    assert admin_ui.index().works
 
 
 def test_logout_returns_the_browser_to_anonymous(admin_ui, superuser):
     admin_ui.login(superuser)
-    assert visit_index(admin_ui).url.endswith("/admin/")
+    assert admin_ui.index().works
 
     admin_ui.logout()
 
-    assert "/login/" in visit_index(admin_ui).url
+    assert admin_ui.index().denied

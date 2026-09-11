@@ -23,8 +23,8 @@ def test_urls_follow_the_prefix(admin_ui):
 def test_a_superuser_reaches_the_index_under_the_prefix(admin_ui, superuser):
     admin_ui.login(superuser)
 
-    page = admin_ui.native.new_page()
-    page.goto(admin_ui.absolute(admin_ui.url.index()))
+    page = admin_ui.index()
 
-    assert page.url.endswith("/backoffice/")
-    assert "Site administration" in page.text_content("body")
+    assert page.works
+    assert page.destination == "/backoffice/"
+    assert "Site administration" in page.native.text_content("body")

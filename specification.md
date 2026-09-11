@@ -476,23 +476,36 @@ according to its normal expected behavior.
 
 The outcome of requesting a page is a first-class value.
 
-A page either worked, was refused, or sent the user somewhere else:
+A page either worked, was refused, was not there, or sent the user somewhere else:
 
 ```python
 assert page.works
 assert page.denied
+assert page.missing
 assert page.redirected
 assert page.destination
 ```
+
+`works` means the page loaded where it was asked for. Landing on a different page is never
+`works`, however that page loaded.
 
 The admin refuses access in more than one way, and not every refusal changes the destination:
 
 * an unauthenticated or non-staff user is sent to the login page;
 * a user who may not act on a particular model is refused in place, with the destination
-  unchanged;
-* a missing object is reported as absent.
+  unchanged.
 
-`denied` must be true for all of these, not only for the ones that move the user.
+`denied` must be true for both, not only for the one that moves the user.
+
+A missing object is a separate outcome, `missing`, not a refusal. The admin checks permission
+before existence, so a user who may not act on a model is refused without learning whether the
+object exists; a user who may is sent to the index with a message that the object does not
+exist. A URL the admin does not serve at all is also `missing`. Keeping `missing` apart from
+`denied` matters for tests: an assertion that a user is refused must not pass because the
+object was never created.
+
+Anything else that is not `works`, such as a server error, is none of the above, and the
+response status of section 6.4 says what it was.
 
 Recognizing the refusals that leave the destination unchanged requires the response status,
 which section 6.4 makes part of the contract for exactly this reason.
