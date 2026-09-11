@@ -51,6 +51,13 @@ def test_a_user_with_no_usable_password_still_logs_in(admin_ui, passwordless_sta
     assert admin_ui.index().works
 
 
+def test_the_login_form_takes_the_email_as_the_identity(admin_ui, superuser):
+    """The form's input is still called `username`; what goes in it is the email."""
+    admin_ui.login(superuser, password="pw")
+
+    assert admin_ui.index().works
+
+
 def test_logout_returns_the_browser_to_anonymous(admin_ui, superuser):
     admin_ui.login(superuser)
     assert admin_ui.index().works

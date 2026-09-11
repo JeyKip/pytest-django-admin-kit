@@ -87,6 +87,22 @@ def test_logout_returns_the_browser_to_anonymous(admin_ui, superuser):
     assert admin_ui.index().denied
 
 
+def test_the_login_form_accepts_the_right_password(admin_ui, superuser):
+    """The opt-in for tests whose subject is the login page."""
+    admin_ui.login(superuser, password="pw")
+
+    assert admin_ui.index().works
+
+
+def test_the_login_form_refuses_the_wrong_password(admin_ui, superuser):
+    admin_ui.login(superuser, password="wrong")
+
+    form = admin_ui.native.pages[0]
+    assert form.url.endswith(admin_ui.url.login())
+    assert "Please enter the correct" in form.locator(".errornote").text_content()
+    assert admin_ui.index().denied
+
+
 def test_the_context_and_the_page_are_reachable_natively(admin_ui):
     """Anything the package does not model is driven through these handles."""
     page = admin_ui.index()
