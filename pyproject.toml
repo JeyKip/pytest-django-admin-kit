@@ -44,6 +44,9 @@ dependencies = [
     # package needs pytest-django whether or not it already had it.
     "pytest-django>=4.5",
     "pytest-playwright>=0.5.2",
+    # Imported for the types of the native handles the package hands out, so a
+    # major version of Playwright is a major version of this package.
+    "playwright>=1.48",
 ]
 
 # Registers the plugin with pytest on install, so a consuming project gets the

@@ -29,6 +29,9 @@ from .config import Config, from_django_settings
 # modules and 150ms to pytest startup in every project that installs the package,
 # most of it django.contrib.admin. mypy reads this block; Python never runs it.
 if TYPE_CHECKING:
+    from pytest_django.live_server_helper import LiveServer
+    from pytest_playwright.pytest_playwright import CreateContextCallback
+
     from .session import AdminSession
     from .urls import AdminUrls
 
@@ -101,8 +104,8 @@ def admin_ui(
     # Inverting it here did not reproduce a hang, so treat that half as precaution
     # rather than a demonstrated fix.
     admin_ui_driving: None,
-    live_server: Any,
-    new_context: Any,
+    live_server: LiveServer,
+    new_context: CreateContextCallback,
     admin_ui_config: Config,
     admin_ui_urls: AdminUrls,
     browser_context_args: dict[str, Any],
@@ -121,10 +124,11 @@ def admin_ui(
     # Only pass what the project has not set itself: the factory merges its own
     # arguments with these, and a duplicate key raises TypeError. `base_url` is
     # deliberately absent, since AdminSession navigates absolutely.
-    wanted = {"timezone_id": admin_ui_config.timezone}
-    extra = {k: v for k, v in wanted.items() if v is not None and k not in browser_context_args}
-
-    context = new_context(**extra)
+    timezone = admin_ui_config.timezone
+    if timezone is None or "timezone_id" in browser_context_args:
+        context = new_context()
+    else:
+        context = new_context(timezone_id=timezone)
     context.set_default_timeout(admin_ui_config.timeout)
 
     # No close here: the factory closes the contexts it made when the test ends.

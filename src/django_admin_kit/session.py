@@ -13,6 +13,7 @@ from urllib.parse import urljoin
 
 from django.conf import settings
 from django.test import Client
+from playwright.sync_api import BrowserContext
 
 from .urls import AdminUrls
 
@@ -20,13 +21,13 @@ from .urls import AdminUrls
 class AdminSession:
     """One test's view of the admin: who is logged in, and where things live."""
 
-    def __init__(self, context: Any, urls: AdminUrls, base_url: str) -> None:
+    def __init__(self, context: BrowserContext, urls: AdminUrls, base_url: str) -> None:
         self._context = context
         self._urls = urls
         self._base_url = base_url
 
     @property
-    def native(self) -> Any:
+    def native(self) -> BrowserContext:
         """The browsing context, unwrapped, for anything the package does not model."""
         return self._context
 
