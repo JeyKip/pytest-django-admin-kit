@@ -93,6 +93,7 @@ While you're working, this is the whole loop:
 
 ```bash
 uv run pytest
+uv run pytest -n auto      # the same, on every core
 ```
 
 Before you push:
@@ -231,7 +232,8 @@ uv run tox list -m full          # the 33 cell names
 Two workflows, both in `.github/workflows/`.
 
 `ci.yml` runs on pull requests and pushes to `main`. It lints, type-checks, runs the 18 cells,
-and runs one extra job that exercises firefox and webkit. `release.yml` runs on a `v*` tag: it
+runs one extra job that exercises firefox and webkit, and one that runs the whole suite under
+`pytest-xdist` with four workers, because parallel safety is something the package promises. `release.yml` runs on a `v*` tag: it
 runs all 33 cells, then builds, then publishes to PyPI, each job gated on the one before it, so
 a matrix failure stops the release rather than merely being recorded next to it.
 

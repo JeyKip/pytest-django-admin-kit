@@ -2348,7 +2348,7 @@ supported Django versions:
 39. Reach a native handle from a page and from a field, and drive a project-specific widget
     with it.
 40. Open an arbitrary admin URL and read its access outcome and identity.
-41. Run the test suite in parallel.
+41. Run the test suite in parallel. (done)
 42. Run the same public test syntax starting with Django 3.2.
 
 ---
