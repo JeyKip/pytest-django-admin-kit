@@ -1997,7 +1997,17 @@ The name is deliberately explicit. It names what is under test rather than how i
 it does not collide with project fixtures named `admin` or with the `admin` module imported in
 most Django test modules.
 
-The fixture is parameterizable for the admin site described in sections 28 and 29. (done)
+`admin_ui` is assembled from three session-scoped fixtures, and a project adjusts it by
+overriding one of them at whatever scope pytest allows, keeping the rest:
+
+```python
+admin_ui_config     # the settings of section 28, resolved and validated once
+admin_ui_urls       # the URLs of section 6.3 for the site under test; see section 29
+admin_ui_driving    # keeps Django's ORM usable while a browser is running
+```
+
+The first two are the intended extension points. The third exists so that it is set up before
+the test database and torn down after it, and a project has no reason to replace it. (done)
 
 Public names are importable from the module that defines them:
 

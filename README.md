@@ -21,25 +21,58 @@ Early development. The public API is written up in [specification.md](specificat
 implemented yet, so there's nothing here you can point at a real project. What you can do today is
 help build it.
 
-## What works today
+## What it solves today
 
-Enough to log in and open pages. `admin_ui` gives each test its own browser context on a live
-server; `admin_ui.url` resolves admin paths through the site under test; `index()` and `open()`
-return a page that says how the request went:
+**Logging in as any user, without knowing a password.** Passwords are stored hashed, and a
+user created for a test may have none at all.
 
 ```python
-def test_reports_page(admin_ui, admin_user):
-    admin_ui.login(admin_user)
-
-    page = admin_ui.open(reverse("admin:shop_product_report"))
-
-    assert page.works                  # or .denied, .missing, .redirected
-    assert page.status_code == 200
-    page.native.click("#download")     # the Playwright page, for anything else
+admin_ui.login(user)
 ```
 
-`admin_ui.native` is the Playwright context, and `admin_ui.absolute(path)` turns a path into a
-full URL against the live server for the rare case something outside the package needs one.
+**Telling whether a page opened, was refused, or is not there.** The admin refuses in several
+ways, and only some of them change the URL.
+
+```python
+page = admin_ui.index()
+
+assert page.works        # or page.denied, page.missing, page.redirected
+```
+
+**Getting admin URLs without hardcoding `/admin/`.** URLs come from the site under test, so a
+project that mounts its admin elsewhere changes nothing.
+
+```python
+admin_ui.url.edit(product)
+```
+
+**Testing the login page itself.** Typing into the form is an opt-in, never the default.
+
+```python
+admin_ui.login(user, password="secret")
+```
+
+**Reaching anything the package does not model.** Open any admin path, then use the Playwright
+page directly.
+
+```python
+page = admin_ui.open(reverse("admin:shop_product_report"))
+
+assert page.works
+page.native.click("#download")
+```
+
+`admin_ui.native` is the Playwright context, and `admin_ui.absolute(path)` builds a full URL on
+the live server when something outside the package needs one.
+
+`admin_ui` is put together from three session fixtures. Override one and the others stay as
+they are:
+
+- `admin_ui_config`: the `DJANGO_ADMIN_KIT` settings, read and checked once.
+- `admin_ui_urls`: the admin URLs for the site under test. Override it to point the session at
+  another admin site.
+- `admin_ui_driving`: keeps Django's database access working while a browser runs. Leave it
+  alone.
 
 ## Requirements
 
