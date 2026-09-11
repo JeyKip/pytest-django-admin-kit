@@ -65,10 +65,34 @@ page.native.click("#download")
 `admin_ui.native` is the Playwright context, and `admin_ui.absolute(path)` builds a full URL on
 the live server when something outside the package needs one.
 
+## Settings
+
+Everything lives under one key in Django settings, and a key it does not know is an error:
+
+```python
+DJANGO_ADMIN_KIT = {
+    "site": "project.ops.ops_site",   # dotted path to the AdminSite; default: admin.site
+    "timeout": 30_000,                # ms for any single browser operation
+    "timezone": "Europe/Kyiv",        # default: TIME_ZONE
+    "locale": "uk",                   # default: LANGUAGE_CODE
+}
+```
+
+`timezone` and `locale` pin what the browser reports, so a date or a label reads the same on
+every machine.
+
+If your project already sets `timezone_id` or `locale` in pytest-playwright's
+`browser_context_args`, those win. The package only fills in what `browser_context_args` leaves
+unset, whether the value under `DJANGO_ADMIN_KIT` was written by you or defaulted from
+`TIME_ZONE` and `LANGUAGE_CODE`. So if you want admin tests to run with the same zone and
+language as the rest of your browser tests, keep `timezone` and `locale` out of
+`DJANGO_ADMIN_KIT` and set them in `browser_context_args` only.
+
 `admin_ui` is put together from three session fixtures. Override one and the others stay as
 they are:
 
-- `admin_ui_config`: the `DJANGO_ADMIN_KIT` settings, read and checked once.
+- `admin_ui_config`: the `DJANGO_ADMIN_KIT` settings, read and checked once. An override must
+  be session-scoped too.
 - `admin_ui_urls`: the admin URLs for the site under test. Override it to point the session at
   another admin site.
 - `admin_ui_driving`: keeps Django's database access working while a browser runs. Leave it
