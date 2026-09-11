@@ -134,6 +134,13 @@ of **every** pytest session, whether or not the session opens a browser. If your
 JUnit XML or coverage output there, move it or pass `--output` somewhere else. We inherit that
 behaviour by depending on the plugin, and there's no way to switch it off.
 
+**Don't pin the live server's port.** `admin_ui` is built on pytest-django's `live_server`, which
+binds a free port for each process, so running the suite in parallel with `pytest-xdist` works
+out of the box. Setting a fixed address with `--liveserver=localhost:8081` or the
+`DJANGO_LIVE_TEST_SERVER_ADDRESS` environment variable makes every worker fight for the same
+port. It passes under a single process and fails under `-n`, looking like a flaky port bug
+rather than a configuration one.
+
 ## The test project
 
 The suite runs against a small Django project in `tests/project/`, wired up by the
