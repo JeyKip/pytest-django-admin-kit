@@ -1989,11 +1989,14 @@ most Django test modules.
 
 The fixture is parameterizable for the admin site and URL prefix described in sections 28 and 29.
 
-Public names are importable from one module:
+Public names are importable from the module that defines them:
 
 ```python
-from django_admin_kit import ANY, ANY_ROW
+from django_admin_kit.pages import AdminPage
 ```
+
+The package root exports nothing else. It is imported at pytest startup by every project that
+installs the package, and must stay free of anything that loads the admin or the browser. (done)
 
 Two guarantees hold for every test that uses the fixture:
 
