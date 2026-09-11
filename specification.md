@@ -6,7 +6,7 @@ The package provides a pytest-oriented API for testing Django Admin behavior.
 
 It should allow developers to verify:
 
-* authentication and access with different users;
+* authentication and access with different users (done);
 * effective admin permissions, including constraints imposed by the admin configuration itself;
 * availability and basic operation of admin pages;
 * the set of models the admin exposes;
@@ -45,7 +45,7 @@ automatic traversal or creation of related object graphs is not required for 1.0
 
 ---
 
-## 2.2 Driving model
+## 2.2 Driving model (done)
 
 The package drives the admin **as a real browser renders it**, against a live server.
 
@@ -123,10 +123,10 @@ Admin internals.
 Typical concepts exposed by the package:
 
 ```python
-admin_ui
-admin_ui.login(...)
+admin_ui                   # done
+admin_ui.login(...)        # done
 admin_ui.permissions(...)
-admin_ui.index()
+admin_ui.index()           # done
 admin_ui.list(...)
 admin_ui.create(...)
 admin_ui.edit(...)
@@ -213,8 +213,8 @@ the browser only for the part the package cannot know about.
 Native handles are available at every level of the object model:
 
 ```python
-admin_ui.native
-page.native
+admin_ui.native                        # done
+page.native                            # done
 page.field("name").native
 page.row(1).native
 page.row(1).cell("Email").native
@@ -248,7 +248,7 @@ See section 28.
 
 ---
 
-# 4. Authentication
+# 4. Authentication (done)
 
 The package must support using any Django user object.
 
@@ -279,8 +279,9 @@ Where a test's own subject is the login page, an explicit password may be suppli
 admin_ui.login(user, password="secret")
 ```
 
-This drives the rendered login form, filling whichever field the user model identifies users by.
-It is an opt-in for testing the login page, never a requirement for logging in.
+This drives the rendered login form, typing the value the user model identifies users by, such
+as an email address on a model without a `username`. It is an opt-in for testing the login page,
+never a requirement for logging in.
 
 Example:
 
@@ -449,7 +450,7 @@ The package must provide abstractions for the admin index and for these four sta
 admin operations:
 
 ```python
-admin_ui.index()
+admin_ui.index()           # done
 
 admin_ui.list(Model)
 admin_ui.create(Model)
@@ -472,7 +473,7 @@ according to its normal expected behavior.
 
 ---
 
-## 6.1 Access outcome
+## 6.1 Access outcome (done)
 
 The outcome of requesting a page is a first-class value.
 
@@ -532,12 +533,12 @@ Every admin page is addressable without being opened.
 The package exposes a URL for each operation of this section:
 
 ```python
-admin_ui.url.index()
+admin_ui.url.index()           # done
 
-admin_ui.url.list(Model)
-admin_ui.url.create(Model)
-admin_ui.url.edit(instance)
-admin_ui.url.delete(instance)
+admin_ui.url.list(Model)       # done
+admin_ui.url.create(Model)     # done
+admin_ui.url.edit(instance)    # done
+admin_ui.url.delete(instance)  # done
 ```
 
 These are the values a test compares a link target against:
@@ -548,7 +549,7 @@ assert page.row(1).cell("Customer").link == admin_ui.url.edit(customer)
 
 URLs resolve through the admin site under test and its URL prefix. The package never assumes a
 location, so a project that mounts its admin elsewhere gets correct URLs without changing its
-tests. See section 28.2.
+tests. See section 28.2. (done)
 
 Link targets read from a page are normalized so that they compare equal to the URL the package
 produces for the same page, whether the page rendered that target in relative or absolute form.
@@ -556,14 +557,14 @@ A test must never need to know which form was rendered.
 
 Resolution does not require the page to exist or to be reachable. Asking for the URL of a page
 the current user may not open still returns that URL; whether the page works is the separate
-question of section 6.1.
+question of section 6.1. (done)
 
 A model the admin site does not register has no URLs. The package must report that rather than
-produce a value that cannot work.
+produce a value that cannot work. (done)
 
 ---
 
-## 6.4 Underlying access
+## 6.4 Underlying access (done)
 
 The response status of a page is part of the public contract:
 
@@ -1970,7 +1971,7 @@ def test_product_form_is_rendered_back(admin_ui, admin_user):
 
 # 27. Public Fixtures
 
-The package exposes a primary pytest fixture:
+The package exposes a primary pytest fixture (done):
 
 ```python
 admin_ui
@@ -1987,7 +1988,7 @@ The name is deliberately explicit. It names what is under test rather than how i
 it does not collide with project fixtures named `admin` or with the `admin` module imported in
 most Django test modules.
 
-The fixture is parameterizable for the admin site and URL prefix described in sections 28 and 29.
+The fixture is parameterizable for the admin site described in sections 28 and 29. (done)
 
 Public names are importable from the module that defines them:
 
@@ -2001,14 +2002,14 @@ installs the package, and must stay free of anything that loads the admin or the
 Two guarantees hold for every test that uses the fixture:
 
 * **Each test begins unauthenticated.** No session, cookie, or page state established by one
-  test is visible to another, whatever order tests run in.
+  test is visible to another, whatever order tests run in. (done)
 * **Tests are safe to run in parallel.** Nothing the fixture provides is shared between
-  concurrently running tests.
+  concurrently running tests. (done)
 
 A test that uses the fixture is identified by the browser it ran on as well as by its name, so
 asking for two browsers runs it twice. That follows from taking the browser from the established
 plugin rather than owning one (section 28.4), and it means test identifiers change for a project
-adopting this package.
+adopting this package. (done)
 
 ---
 
@@ -2033,23 +2034,20 @@ DJANGO_ADMIN_KIT = {
 
 Configurable at minimum:
 
-* the admin site under test;
-* the admin URL prefix;
+* the admin site under test (done);
 * how long any single browser operation may take, and the time zone and locale the browser
-  reports;
+  reports (done);
 * value normalization;
 * field handling.
 
-How the browser itself is chosen and shown is **not** configured here. See section 28.4.
+How the browser itself is chosen and shown is **not** configured here. See section 28.4. (done)
 
 ---
 
 ## 28.2 Admin location
 
-The admin URL prefix is **not** assumed to be `/admin/`.
-
-URLs are resolved from the admin site under test. An explicit override must also be available
-for projects that mount the admin somewhere the package cannot infer.
+The admin URL prefix is **not** assumed to be `/admin/`. URLs are resolved from the admin site
+under test. (done)
 
 ---
 
@@ -2101,7 +2099,7 @@ admin_ui.normalizer("boolean", my_boolean_rule)
 
 ---
 
-## 28.4 Browser settings
+## 28.4 Browser settings (done)
 
 The package does not own the browser. It takes one from the established pytest plugin for
 browser testing, and that plugin's own options decide which browser runs, whether it is visible,
@@ -2257,8 +2255,10 @@ Django 3.2
 Python 3.8
 ```
 
+(done)
+
 The package architecture must support testing multiple later Django releases without exposing
-version-specific behavior through the public API.
+version-specific behavior through the public API. (done)
 
 A user test such as:
 
@@ -2283,11 +2283,11 @@ hardcode a rendering format in order to pass.
 
 Results must not depend on the machine a test runs on. The browser carries its own notion of
 locale and time zone, and the package pins both to what the project has configured, so the same
-test yields the same values everywhere.
+test yields the same values everywhere. (done)
 
 Where a project has already pinned one of them for its own browser tests, that setting stands.
 The package fills in what is unset rather than overriding a deliberate choice, so a project
-cannot end up with admin tests running in a different zone from the rest of its suite.
+cannot end up with admin tests running in a different zone from the rest of its suite. (done)
 
 ---
 
@@ -2296,15 +2296,15 @@ cannot end up with admin tests running in a different zone from the rest of its 
 1.0.0 is considered complete when a test project can demonstrate all of the following against
 supported Django versions:
 
-1. Log in with a superuser.
-2. Log in with a staff user.
-3. Log in with an arbitrary user object, including one that has no usable password.
+1. Log in with a superuser. (done)
+2. Log in with a staff user. (done)
+3. Log in with an arbitrary user object, including one that has no usable password. (done)
 4. Determine view/add/change/delete permissions for a model.
 5. Determine a permission a model declares beyond the standard four, and read the
    complete effective permission set.
 6. Determine effective permissions where the admin imposes constraints of its own.
 7. Determine permissions for an individual object.
-8. Verify that a page the user may not open is reported as refused.
+8. Verify that a page the user may not open is reported as refused. (done)
 9. Verify that model changelist, create, edit, and delete pages work.
 10. Read a page's title and subtitle.
 11. Read changelist headers, by label and by configured column name.
