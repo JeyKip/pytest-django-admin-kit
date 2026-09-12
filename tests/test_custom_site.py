@@ -58,3 +58,14 @@ def test_the_index_lists_only_what_the_site_registers(admin_ui, superuser):
 
     assert page.apps == ["Shop"]
     assert page.models == [Product]
+
+
+def test_the_changelist_of_the_site_opens(admin_ui, superuser):
+    Product.objects.create(name="Bolt", sku="SKU-1", price="10.00")
+    admin_ui.login(superuser)
+
+    page = admin_ui.list(Product)
+
+    assert page.works
+    assert page.destination == "/ops/shop/product/"
+    assert page.count == 1

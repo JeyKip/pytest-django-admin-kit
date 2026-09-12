@@ -52,6 +52,23 @@ admin_ui.url.edit(product)
 admin_ui.login(user, password="secret")
 ```
 
+**Opening a changelist and reading its count and columns.** The count is what the page says,
+not the rows on one page of it; columns come by label and by the name the admin configures
+them with; and a refused user gets `denied` rather than a count.
+
+```python
+page = admin_ui.list(Product)
+
+assert page.works
+assert page.count == 3
+assert page.summary == "3 products"
+assert not page.empty
+assert page.headers == ["Name", "Sku", "Price", "Is active", "Released on"]
+assert page.columns == ["name", "sku", "price", "is_active", "released_on"]
+assert page.has_header("Price")
+assert page.has_column("is_active")
+```
+
 **Knowing what the index shows a user.** Models and apps a user may not see are not listed,
 and the lists come back in the admin's order.
 

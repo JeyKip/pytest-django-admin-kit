@@ -12,6 +12,7 @@ so that reading is written once.
 
 from __future__ import annotations
 
+import re
 from functools import cached_property
 from urllib.parse import urlsplit
 
@@ -82,6 +83,19 @@ class AdminPage:
             and self._requested != self._urls.login()
         )
 
+    def _shown(self) -> Page:
+        """The page, once it is known to be the one that was asked for.
+
+        A page that did not open shows nothing to read, and reading it anyway would
+        let a test pass for a user who never saw it.
+        """
+        if not self.works:
+            raise LookupError(
+                "The page did not open, so there is nothing to read from it. "
+                f"Status {self.status_code}, at {self.destination}."
+            )
+        return self._page
+
 
 class IndexPage(AdminPage):
     """The admin index: which models it lists for the current user."""
@@ -99,7 +113,6 @@ class IndexPage(AdminPage):
         """The registered models the index shows, in the order shown.
 
         A model the user may not see is not on the page, so it is not here either.
-        A refused user landed on the login page, which lists nothing.
         """
         return [model for models in self._app_list.values() for model in models]
 
@@ -123,7 +136,7 @@ class IndexPage(AdminPage):
         # are read from the class list rather than by a substring match because
         # Django 6.1 puts a class named `app-list` on the content area itself.
         app_list: dict[str, list[type]] = {}
-        for app in self._page.locator("#content-main div.module").all():
+        for app in self._shown().locator("#content-main div.module").all():
             # `text_content`, not `inner_text`: the admin's stylesheet upper-cases
             # captions, and the name is what the document says, not how it is drawn.
             name = (app.locator("caption").text_content() or "").strip()
@@ -144,6 +157,73 @@ class IndexPage(AdminPage):
         except LookupError:
             return None
         return model if self._urls.site.is_registered(model) else None
+
+
+class ChangelistPage(AdminPage):
+    """A model's changelist: its columns, and how many records it reports."""
+
+    @property
+    def headers(self) -> list[str]:
+        """The column labels the page shows, in order.
+
+        An empty changelist shows no table, so it has no headers either.
+        """
+        return [
+            (cell.locator("div.text").text_content() or "").strip() for cell in self._header_cells
+        ]
+
+    def has_header(self, label: str) -> bool:
+        return label in self.headers
+
+    @property
+    def columns(self) -> list[str]:
+        """The same columns by the names the admin is configured with, in the same order."""
+        return [_token(cell, "column-") for cell in self._header_cells]
+
+    def has_column(self, name: str) -> bool:
+        return name in self.columns
+
+    @cached_property
+    def _header_cells(self) -> list[Locator]:
+        # The checkbox Django adds for actions is a column only for users who have an
+        # action to run, and it has no label, so it is not one here. The label is read
+        # from `div.text` because the cell also holds sorting controls.
+        return self._shown().locator("#result_list thead th:not(.action-checkbox-column)").all()
+
+    @property
+    def count(self) -> int:
+        """The number of records the changelist reports, across all of its pages."""
+        number = self._count_line.group("number")
+        return int(re.sub(r"\D", "", number))
+
+    @property
+    def summary(self) -> str:
+        """The count as the page words it, such as ``"3 products"``."""
+        return self._count_line.group(0)
+
+    @property
+    def empty(self) -> bool:
+        """Reports no records at all."""
+        return self.count == 0
+
+    @cached_property
+    def _count_line(self) -> re.Match[str]:
+        # The count is the paginator's own text. Page links, "Show all" and, from
+        # Django 6.0, a heading for screen readers are all inside child elements, so
+        # only the element's direct text nodes are read.
+        paginator = self._shown().locator("#changelist .paginator")
+        text = paginator.evaluate(
+            "el => Array.from(el.childNodes)"
+            ".filter(node => node.nodeType === Node.TEXT_NODE)"
+            ".map(node => node.textContent).join(' ')"
+        )
+        # The number may carry grouping characters when the project localizes it,
+        # which is why the name is required to start with something other than a
+        # digit. Stripping them in `count` is a stopgap until value normalization
+        # exists, at which point the number normalizer should read this instead.
+        match = re.search(r"(?P<number>\d[\d,.\s]*?)\s+[^\d\s].*", " ".join(str(text).split()))
+        assert match is not None, f"unexpected paginator text {text!r}"
+        return match
 
 
 def _token(element: Locator, prefix: str) -> str:
