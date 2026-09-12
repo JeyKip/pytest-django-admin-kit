@@ -12,9 +12,11 @@ so that reading is written once.
 
 from __future__ import annotations
 
+from functools import cached_property
 from urllib.parse import urlsplit
 
-from playwright.sync_api import Page
+from django.apps import apps
+from playwright.sync_api import Locator, Page
 
 from .urls import AdminUrls
 
@@ -79,3 +81,63 @@ class AdminPage:
             and self.destination == self._urls.index()
             and self._requested != self._urls.login()
         )
+
+
+class IndexPage(AdminPage):
+    """The admin index: which models it lists for the current user."""
+
+    @property
+    def apps(self) -> list[str]:
+        """The apps the index shows, by the name shown, in the order shown.
+
+        An app is shown only when the user may see at least one of its models.
+        """
+        return [name for name, _label, _rows in self._app_list]
+
+    @property
+    def models(self) -> list[type]:
+        """The registered models the index shows, in the order shown.
+
+        A model the user may not see is not on the page, so it is not here either.
+        A refused user landed on the login page, which lists nothing.
+        """
+        return [
+            model
+            for _name, app_label, rows in self._app_list
+            for row in rows
+            if (model := self._registered_model(app_label, row)) is not None
+        ]
+
+    @cached_property
+    def _app_list(self) -> list[tuple[str, str, list[Locator]]]:
+        # Django renders the app list twice, the second time in the navigation
+        # sidebar, so reading stays inside the content area. Each app is a `module`
+        # block with an `app-<label>` class; each model a row with `model-<name>`,
+        # which also leaves out the header row newer Django versions add. The names
+        # are read from the class list rather than by a substring match because
+        # Django 6.1 puts a class named `app-list` on the content area itself.
+        return [
+            (
+                # `text_content`, not `inner_text`: the admin's stylesheet upper-cases
+                # captions, and the name is what the document says, not how it is drawn.
+                (app.locator("caption").text_content() or "").strip(),
+                _token(app, "app-"),
+                app.locator("tr[class*='model-']").all(),
+            )
+            for app in self._page.locator("#content-main div.module").all()
+        ]
+
+    def _registered_model(self, app_label: str, row: Locator) -> type | None:
+        # Matching the registry rather than the changelist link finds a model the
+        # user may only add, which the admin lists without a link. A row that is no
+        # registered model, which a third-party app may add, is left out.
+        try:
+            model = apps.get_model(app_label, _token(row, "model-"))
+        except LookupError:
+            return None
+        return model if self._urls.site.is_registered(model) else None
+
+
+def _token(element: Locator, prefix: str) -> str:
+    classes = (element.get_attribute("class") or "").split()
+    return next(c[len(prefix) :] for c in classes if c.startswith(prefix))

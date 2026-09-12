@@ -365,7 +365,7 @@ See section 16.1.
 
 ---
 
-## 5.4 Models
+## 5.4 Models (done)
 
 A user who may not see a model does not find it on the index:
 
@@ -1617,14 +1617,14 @@ assert page.works          # done
 Which models are exposed:
 
 ```python
-assert Product in page.models
-assert Category in page.models
+assert Product in page.models     # done
+assert Category in page.models    # done
 ```
 
 How they are grouped, in the order presented:
 
 ```python
-assert page.apps == [
+assert page.apps == [                     # done
     "Shop",
     "Authentication and Authorization",
 ]
@@ -1635,7 +1635,8 @@ assert page.models_for("Shop") == [
 ]
 ```
 
-Model exposure reflects the current user. A model the user may not see is not listed.
+Model exposure reflects the current user. A model the user may not see is not listed, and
+an app none of whose models the user may see is not listed either. (done)
 
 ---
 

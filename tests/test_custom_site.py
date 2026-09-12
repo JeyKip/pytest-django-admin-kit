@@ -10,6 +10,7 @@ from django.contrib.auth.models import User
 
 from django_admin_kit.urls import AdminUrls
 from project.ops import ops_site
+from project.shop.models import Product
 
 pytestmark = pytest.mark.urls("project.urls_with_ops")
 
@@ -47,3 +48,13 @@ def test_a_non_staff_user_is_sent_to_the_login_page_of_the_site(admin_ui, custom
 
     assert page.denied
     assert page.destination == "/ops/login/"
+
+
+def test_the_index_lists_only_what_the_site_registers(admin_ui, superuser):
+    """The default site would also list the auth app. This one has only Product."""
+    admin_ui.login(superuser)
+
+    page = admin_ui.index()
+
+    assert page.apps == ["Shop"]
+    assert page.models == [Product]
