@@ -6,7 +6,6 @@ assume the default site or its prefix.
 """
 
 import pytest
-from django.contrib.auth.models import User
 
 from django_admin_kit.urls import AdminUrls
 from project.ops import ops_site
@@ -18,17 +17,6 @@ pytestmark = pytest.mark.urls("project.urls_with_ops")
 @pytest.fixture
 def admin_ui_urls():
     return AdminUrls(ops_site)
-
-
-@pytest.fixture
-def superuser(db):
-    return User.objects.create_superuser(username="alice", password="pw")
-
-
-@pytest.fixture
-def customer(db):
-    """Not staff, so the admin must refuse them."""
-    return User.objects.create_user(username="carol", password="pw")
 
 
 def test_a_superuser_reaches_the_index_of_the_site(admin_ui, superuser):

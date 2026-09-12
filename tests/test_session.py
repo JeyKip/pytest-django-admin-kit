@@ -4,29 +4,7 @@ Every user here belongs to Django's default `auth.User`. A user model with no
 `username` field is covered in `test_custom_user.py`.
 """
 
-import pytest
-from django.contrib.auth.models import User
 from django.urls import reverse
-
-
-@pytest.fixture
-def superuser(db):
-    return User.objects.create_superuser(username="alice", password="pw")
-
-
-@pytest.fixture
-def passwordless_staff(db):
-    """The case a password-based login cannot serve: single sign-on users."""
-    user = User.objects.create_user(username="bruno", is_staff=True)
-    user.set_unusable_password()
-    user.save()
-    return user
-
-
-@pytest.fixture
-def customer(db):
-    """Not staff, so the admin must refuse them."""
-    return User.objects.create_user(username="carol", password="pw")
 
 
 def test_a_superuser_reaches_the_index(admin_ui, superuser):

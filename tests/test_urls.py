@@ -10,12 +10,8 @@ from project.shop.models import Product
 
 
 @pytest.fixture
-def urls():
-    return AdminUrls(admin.site)
-
-
-@pytest.fixture
-def product():
+def unsaved_product():
+    """Has a primary key but was never saved: resolution needs no database."""
     return Product(pk=7, name="Widget", sku="W-1", price="9.99")
 
 
@@ -26,9 +22,9 @@ def test_urls_come_from_the_resolver(urls):
     assert urls.create(Product) == "/admin/shop/product/add/"
 
 
-def test_instance_urls_carry_the_primary_key(urls, product):
-    assert urls.edit(product) == f"/admin/shop/product/{product.pk}/change/"
-    assert urls.delete(product) == f"/admin/shop/product/{product.pk}/delete/"
+def test_instance_urls_carry_the_primary_key(urls, unsaved_product):
+    assert urls.edit(unsaved_product) == f"/admin/shop/product/{unsaved_product.pk}/change/"
+    assert urls.delete(unsaved_product) == f"/admin/shop/product/{unsaved_product.pk}/delete/"
 
 
 @pytest.mark.urls("project.urls_with_ops")
@@ -65,9 +61,9 @@ def test_an_unsaved_instance_has_no_url(urls):
         urls.edit(Product(name="Draft", sku="D-1", price="1.00"))
 
 
-def test_resolution_does_not_depend_on_access(urls, product):
+def test_resolution_does_not_depend_on_access(urls, unsaved_product):
     """A URL exists whether or not anyone may open it. Access is a separate question."""
-    assert urls.delete(product).endswith("/delete/")
+    assert urls.delete(unsaved_product).endswith("/delete/")
 
 
 def test_the_default_site_is_used_when_none_is_configured():

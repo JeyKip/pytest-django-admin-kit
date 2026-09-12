@@ -5,47 +5,9 @@ The default site registers Product from the test project and User and Group from
 """
 
 import pytest
-from django.contrib.auth.models import Group, Permission, User
+from django.contrib.auth.models import Group, User
 
 from project.shop.models import Product
-
-
-def grant(user, *codenames):
-    permissions = list(Permission.objects.filter(codename__in=codenames))
-    assert len(permissions) == len(codenames), f"unknown permission among {codenames}"
-    user.user_permissions.add(*permissions)
-
-
-@pytest.fixture
-def superuser(db):
-    return User.objects.create_superuser(username="alice", password="pw")
-
-
-@pytest.fixture
-def viewer(db):
-    user = User.objects.create_user(username="vera", is_staff=True)
-    grant(user, "view_product")
-    return user
-
-
-@pytest.fixture
-def adder(db):
-    """May add products and nothing else, so the index lists Product without a link."""
-    user = User.objects.create_user(username="adam", is_staff=True)
-    grant(user, "add_product")
-    return user
-
-
-@pytest.fixture
-def outsider(db):
-    """Staff, so the index opens, but with no permission on anything."""
-    return User.objects.create_user(username="otto", is_staff=True)
-
-
-@pytest.fixture
-def customer(db):
-    """Not staff, so the admin must refuse them."""
-    return User.objects.create_user(username="carol", password="pw")
 
 
 def test_a_superuser_sees_every_app_and_model_in_the_admins_order(admin_ui, superuser):

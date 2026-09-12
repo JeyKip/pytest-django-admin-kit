@@ -5,21 +5,12 @@ are fed to the resolver directly. The browser tests in `test_session.py` cover t
 redirect end to end.
 """
 
-import pytest
-from django.contrib import admin
-
 from django_admin_kit.pages import AdminPage
-from django_admin_kit.urls import AdminUrls
 
 
 class FakePage:
     def __init__(self, url):
         self.url = url
-
-
-@pytest.fixture
-def urls():
-    return AdminUrls(admin.site)
 
 
 def page_at(path, status, urls, requested=None):

@@ -4,53 +4,8 @@ object is gone."""
 from datetime import date
 
 import django
-import pytest
-from django.contrib.auth.models import Permission, User
 
 from project.shop.models import Product
-
-
-def grant(user, *codenames):
-    permissions = list(Permission.objects.filter(codename__in=codenames))
-    assert len(permissions) == len(codenames), f"unknown permission among {codenames}"
-    user.user_permissions.add(*permissions)
-
-
-@pytest.fixture
-def superuser(db):
-    return User.objects.create_superuser(username="alice", password="pw")
-
-
-@pytest.fixture
-def viewer(db):
-    user = User.objects.create_user(username="vera", is_staff=True)
-    grant(user, "view_product")
-    return user
-
-
-@pytest.fixture
-def editor(db):
-    user = User.objects.create_user(username="eve", is_staff=True)
-    grant(user, "view_product", "change_product")
-    return user
-
-
-@pytest.fixture
-def adder(db):
-    user = User.objects.create_user(username="adam", is_staff=True)
-    grant(user, "add_product")
-    return user
-
-
-@pytest.fixture
-def customer(db):
-    """Not staff, so the admin must refuse them."""
-    return User.objects.create_user(username="carol", password="pw")
-
-
-@pytest.fixture
-def product(db):
-    return Product.objects.create(name="Widget", sku="SKU-1", price="10.00")
 
 
 def test_a_superuser_reaches_the_confirmation(admin_ui, superuser, product):

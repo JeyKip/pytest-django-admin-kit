@@ -5,49 +5,8 @@ the number of rows on the one that opened.
 """
 
 import pytest
-from django.contrib.auth.models import Permission, User
 
 from project.shop.models import Product
-
-
-def grant(user, *codenames):
-    permissions = list(Permission.objects.filter(codename__in=codenames))
-    assert len(permissions) == len(codenames), f"unknown permission among {codenames}"
-    user.user_permissions.add(*permissions)
-
-
-@pytest.fixture
-def superuser(db):
-    return User.objects.create_superuser(username="alice", password="pw")
-
-
-@pytest.fixture
-def viewer(db):
-    user = User.objects.create_user(username="vera", is_staff=True)
-    grant(user, "view_product")
-    return user
-
-
-@pytest.fixture
-def adder(db):
-    """May add products and nothing else, which is not enough to open the changelist."""
-    user = User.objects.create_user(username="adam", is_staff=True)
-    grant(user, "add_product")
-    return user
-
-
-@pytest.fixture
-def customer(db):
-    """Not staff, so the admin must refuse them."""
-    return User.objects.create_user(username="carol", password="pw")
-
-
-@pytest.fixture
-def products(db):
-    return [
-        Product.objects.create(name=name, sku=f"SKU-{name}", price="10.00")
-        for name in ("Bolt", "Nut", "Washer")
-    ]
 
 
 def test_a_viewer_opens_the_changelist_and_reads_the_count(admin_ui, viewer, products):

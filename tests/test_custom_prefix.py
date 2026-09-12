@@ -5,14 +5,8 @@ admin at `/backoffice/`, so nothing in the package may hardcode the prefix.
 """
 
 import pytest
-from django.contrib.auth.models import User
 
 pytestmark = pytest.mark.urls("project.urls_backoffice")
-
-
-@pytest.fixture
-def superuser(db):
-    return User.objects.create_superuser(username="alice", password="pw")
 
 
 def test_urls_follow_the_prefix(admin_ui):
