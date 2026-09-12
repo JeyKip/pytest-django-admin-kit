@@ -1,6 +1,8 @@
 """Whether the delete confirmation opens for each user, and what happens when the
 object is gone."""
 
+from datetime import date
+
 import django
 import pytest
 from django.contrib.auth.models import Permission, User
@@ -121,6 +123,21 @@ def test_an_object_that_no_longer_exists_is_missing_not_denied(admin_ui, superus
     assert page.missing
     assert not page.denied
     assert page.destination == admin_ui.url.index()
+
+
+def test_the_admin_may_refuse_one_object_and_allow_another(admin_ui, superuser, product):
+    """The shop's rule: a released product stays on record. Same user, two answers."""
+    released = Product.objects.create(
+        name="Gadget", sku="SKU-2", price="10.00", released_on=date(2026, 1, 1)
+    )
+    admin_ui.login(superuser)
+
+    assert admin_ui.delete(product).works
+
+    page = admin_ui.delete(released)
+
+    assert page.denied
+    assert page.status_code == 403
 
 
 def test_a_refused_user_is_not_told_whether_the_object_exists(admin_ui, viewer, product):

@@ -335,15 +335,15 @@ assert admin_ui.create(Product).denied  # done
 
 ---
 
-## 5.2 Objects
+## 5.2 Objects (done)
 
 An admin may decide per object, through rules of its own or through an authentication backend
 that answers per object. The page for that object reports what was decided, and a test never
 needs to know which source produced it:
 
 ```python
-assert admin_ui.delete(draft).works
-assert admin_ui.delete(published).denied
+assert admin_ui.delete(draft).works        # done
+assert admin_ui.delete(published).denied   # done
 ```
 
 ---
