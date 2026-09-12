@@ -8,15 +8,17 @@ has no password at all and must still be able to log in.
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, TypeVar
 from urllib.parse import urljoin
 
 from django.conf import settings
 from django.test import Client
 from playwright.sync_api import BrowserContext
 
-from .pages import AdminPage
+from .pages import AdminPage, IndexPage
 from .urls import AdminUrls
+
+_P = TypeVar("_P", bound=AdminPage)
 
 
 class AdminSession:
@@ -94,12 +96,15 @@ class AdminSession:
     def open(self, path: str) -> AdminPage:
         """Open any admin path in a new page, including views the package does not
         model, and report how it went."""
+        return self._open(path, AdminPage)
+
+    def index(self) -> IndexPage:
+        """Open the admin index."""
+        return self._open(self._urls.index(), IndexPage)
+
+    def _open(self, path: str, page_class: type[_P]) -> _P:
         page = self._context.new_page()
         response = page.goto(self.absolute(path))
         # `goto` returns None only for same-document navigations, never for a URL.
         assert response is not None
-        return AdminPage(page, response.status, path, self._urls)
-
-    def index(self) -> AdminPage:
-        """Open the admin index."""
-        return self.open(self._urls.index())
+        return page_class(page, response.status, path, self._urls)
