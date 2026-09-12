@@ -126,9 +126,9 @@ admin_ui                   # done
 admin_ui.login(...)        # done
 admin_ui.index()           # done
 admin_ui.list(...)         # done
-admin_ui.create(...)
-admin_ui.edit(...)
-admin_ui.delete(...)
+admin_ui.create(...)       # done
+admin_ui.edit(...)         # done
+admin_ui.delete(...)       # done
 ```
 
 Page objects should expose normalized information such as fields, errors, headers, rows,
@@ -314,15 +314,15 @@ Permissions are tested through what the admin shows the current user, never thro
 permission system directly. A test states what a user can see and do; the admin's own checks
 decide the rest, and the package reports what they decided.
 
-## 5.1 Pages
+## 5.1 Pages (done)
 
 A page the current user may not open must not report itself as working, and must say why:
 
 ```python
-page = admin_ui.edit(product)
+page = admin_ui.edit(product)    # done
 
-assert not page.works
-assert page.denied
+assert not page.works            # done
+assert page.denied               # done
 ```
 
 The standard view, add, change and delete permissions are therefore tested by opening the
@@ -330,7 +330,7 @@ page each one guards:
 
 ```python
 assert admin_ui.list(Product).works    # done
-assert admin_ui.create(Product).denied
+assert admin_ui.create(Product).denied  # done
 ```
 
 ---
@@ -386,9 +386,9 @@ admin operations:
 admin_ui.index()           # done
 
 admin_ui.list(Model)       # done
-admin_ui.create(Model)
-admin_ui.edit(instance)
-admin_ui.delete(instance)
+admin_ui.create(Model)     # done
+admin_ui.edit(instance)    # done
+admin_ui.delete(instance)  # done
 ```
 
 Each returned page must make it easy to determine whether the page works.
@@ -459,7 +459,7 @@ assert page.subtitle == "Widget"
 
 ---
 
-## 6.3 Admin URLs
+## 6.3 Admin URLs (done)
 
 Every admin page is addressable without being opened.
 
@@ -1682,9 +1682,9 @@ Every type listed above exposes a native handle, as described in section 3.6.
 def test_staff_access(admin_ui, staff_user, product):
     admin_ui.login(staff_user)
 
-    assert admin_ui.list(Product).works
-    assert admin_ui.edit(product).works
-    assert admin_ui.delete(product).denied
+    assert admin_ui.list(Product).works      # done
+    assert admin_ui.edit(product).works      # done
+    assert admin_ui.delete(product).denied   # done
 ```
 
 ---
@@ -1695,10 +1695,10 @@ def test_staff_access(admin_ui, staff_user, product):
 def test_product_admin_pages(admin_ui, admin_user, product):
     admin_ui.login(admin_user)
 
-    assert admin_ui.list(Product).works
-    assert admin_ui.create(Product).works
-    assert admin_ui.edit(product).works
-    assert admin_ui.delete(product).works
+    assert admin_ui.list(Product).works      # done
+    assert admin_ui.create(Product).works    # done
+    assert admin_ui.edit(product).works      # done
+    assert admin_ui.delete(product).works    # done
 ```
 
 ---
@@ -2250,7 +2250,7 @@ supported Django versions:
 2. Log in with a staff user. (done)
 3. Log in with an arbitrary user object, including one that has no usable password. (done)
 4. Verify that a page the user may not open is reported as refused. (done)
-5. Verify that model changelist, create, edit, and delete pages work.
+5. Verify that model changelist, create, edit, and delete pages work. (done)
 6. Read a page's title and subtitle.
 7. Read changelist headers, by label and by configured column name. (done)
 8. Read the changelist record count and assert an empty changelist. (done)

@@ -15,7 +15,7 @@ from django.conf import settings
 from django.test import Client
 from playwright.sync_api import BrowserContext
 
-from .pages import AdminPage, ChangelistPage, IndexPage
+from .pages import AdminPage, ChangelistPage, CreatePage, DeletePage, EditPage, IndexPage
 from .urls import AdminUrls
 
 _P = TypeVar("_P", bound=AdminPage)
@@ -105,6 +105,18 @@ class AdminSession:
     def list(self, model: type[Any]) -> ChangelistPage:
         """Open a model's changelist."""
         return self._open(self._urls.list(model), ChangelistPage)
+
+    def create(self, model: type[Any]) -> CreatePage:
+        """Open the page that adds a new instance of ``model``."""
+        return self._open(self._urls.create(model), CreatePage)
+
+    def edit(self, instance: Any) -> EditPage:
+        """Open the change page of ``instance``."""
+        return self._open(self._urls.edit(instance), EditPage)
+
+    def delete(self, instance: Any) -> DeletePage:
+        """Open the page that asks whether to delete ``instance``."""
+        return self._open(self._urls.delete(instance), DeletePage)
 
     def _open(self, path: str, page_class: type[_P]) -> _P:
         page = self._context.new_page()

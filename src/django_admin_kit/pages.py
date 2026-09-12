@@ -226,6 +226,18 @@ class ChangelistPage(AdminPage):
         return match
 
 
+class CreatePage(AdminPage):
+    """The page that adds a new instance of a model."""
+
+
+class EditPage(AdminPage):
+    """The change page of one instance, read only for a user who may only view it."""
+
+
+class DeletePage(AdminPage):
+    """The page that asks whether to delete one instance."""
+
+
 def _token(element: Locator, prefix: str) -> str:
     classes = (element.get_attribute("class") or "").split()
     return next(c[len(prefix) :] for c in classes if c.startswith(prefix))

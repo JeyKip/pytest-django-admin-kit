@@ -34,7 +34,7 @@ admin_ui.login(user)
 ways, and only some of them change the URL.
 
 ```python
-page = admin_ui.index()
+page = admin_ui.edit(product)
 
 assert page.works        # or page.denied, page.missing, page.redirected
 ```

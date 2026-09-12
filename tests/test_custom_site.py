@@ -69,3 +69,16 @@ def test_the_changelist_of_the_site_opens(admin_ui, superuser):
     assert page.works
     assert page.destination == "/ops/shop/product/"
     assert page.count == 1
+
+
+def test_every_model_page_of_the_site_opens(admin_ui, superuser):
+    product = Product.objects.create(name="Bolt", sku="SKU-1", price="10.00")
+    admin_ui.login(superuser)
+
+    for page, path in (
+        (admin_ui.create(Product), "/ops/shop/product/add/"),
+        (admin_ui.edit(product), f"/ops/shop/product/{product.pk}/change/"),
+        (admin_ui.delete(product), f"/ops/shop/product/{product.pk}/delete/"),
+    ):
+        assert page.works
+        assert page.destination == path
