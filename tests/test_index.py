@@ -56,6 +56,26 @@ def test_a_superuser_sees_every_app_and_model_in_the_admins_order(admin_ui, supe
 
     assert page.apps == ["Authentication and Authorization", "Shop"]
     assert page.models == [Group, User, Product]
+    assert page.models_for("Authentication and Authorization") == [Group, User]
+    assert page.models_for("Shop") == [Product]
+
+
+def test_an_app_the_index_does_not_show_is_reported_not_guessed(admin_ui, viewer):
+    admin_ui.login(viewer)
+
+    with pytest.raises(LookupError) as error:
+        admin_ui.index().models_for("Billing")
+
+    message = str(error.value)
+    assert "no app named 'Billing'" in message
+    assert "'Shop'" in message  # what it does show, so the mistake is obvious
+
+
+def test_an_empty_index_says_so_when_asked_for_an_app(admin_ui, outsider):
+    admin_ui.login(outsider)
+
+    with pytest.raises(LookupError, match=r"no app named 'Shop'\. Shown: none\."):
+        admin_ui.index().models_for("Shop")
 
 
 def test_a_user_sees_only_the_apps_and_models_they_have_a_permission_on(admin_ui, viewer):

@@ -92,7 +92,7 @@ class IndexPage(AdminPage):
 
         An app is shown only when the user may see at least one of its models.
         """
-        return [name for name, _label, _rows in self._app_list]
+        return list(self._app_list)
 
     @property
     def models(self) -> list[type]:
@@ -101,31 +101,39 @@ class IndexPage(AdminPage):
         A model the user may not see is not on the page, so it is not here either.
         A refused user landed on the login page, which lists nothing.
         """
-        return [
-            model
-            for _name, app_label, rows in self._app_list
-            for row in rows
-            if (model := self._registered_model(app_label, row)) is not None
-        ]
+        return [model for models in self._app_list.values() for model in models]
+
+    def models_for(self, app: str) -> list[type]:
+        """The models the index shows under one app, named as ``apps`` names it."""
+        try:
+            return list(self._app_list[app])
+        except KeyError:
+            raise LookupError(
+                f"The index shows no app named {app!r}. Shown: "
+                f"{', '.join(repr(name) for name in self._app_list) or 'none'}."
+            ) from None
 
     @cached_property
-    def _app_list(self) -> list[tuple[str, str, list[Locator]]]:
+    def _app_list(self) -> dict[str, list[type]]:
+        """App name to the registered models under it, read from the page once."""
         # Django renders the app list twice, the second time in the navigation
         # sidebar, so reading stays inside the content area. Each app is a `module`
         # block with an `app-<label>` class; each model a row with `model-<name>`,
         # which also leaves out the header row newer Django versions add. The names
         # are read from the class list rather than by a substring match because
         # Django 6.1 puts a class named `app-list` on the content area itself.
-        return [
-            (
-                # `text_content`, not `inner_text`: the admin's stylesheet upper-cases
-                # captions, and the name is what the document says, not how it is drawn.
-                (app.locator("caption").text_content() or "").strip(),
-                _token(app, "app-"),
-                app.locator("tr[class*='model-']").all(),
-            )
-            for app in self._page.locator("#content-main div.module").all()
-        ]
+        app_list: dict[str, list[type]] = {}
+        for app in self._page.locator("#content-main div.module").all():
+            # `text_content`, not `inner_text`: the admin's stylesheet upper-cases
+            # captions, and the name is what the document says, not how it is drawn.
+            name = (app.locator("caption").text_content() or "").strip()
+            app_label = _token(app, "app-")
+            app_list[name] = [
+                model
+                for row in app.locator("tr[class*='model-']").all()
+                if (model := self._registered_model(app_label, row)) is not None
+            ]
+        return app_list
 
     def _registered_model(self, app_label: str, row: Locator) -> type | None:
         # Matching the registry rather than the changelist link finds a model the

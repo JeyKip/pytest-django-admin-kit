@@ -1604,7 +1604,7 @@ assert not result.success
 
 ---
 
-# 24. Admin Index and Model Exposure
+# 24. Admin Index and Model Exposure (done)
 
 The package must expose what the admin presents to the current user.
 
@@ -2287,6 +2287,7 @@ supported Django versions:
 30. Read the contents of a deletion confirmation.
 31. Verify that a refused deletion is not offered or not performed.
 32. Read the models the admin exposes to the current user, their grouping, and their order.
+    (done)
 33. Run against a non-default admin site mounted under a non-default URL prefix. (done)
 34. Override a default normalization rule, add a new one, and extend field handling from a
     project, without subclassing package internals.

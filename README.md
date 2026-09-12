@@ -52,6 +52,18 @@ admin_ui.url.edit(product)
 admin_ui.login(user, password="secret")
 ```
 
+**Knowing what the index shows a user.** Models and apps a user may not see are not listed,
+and the lists come back in the admin's order.
+
+```python
+page = admin_ui.index()
+
+assert Product in page.models
+assert page.models == [Group, User, Product]
+assert page.apps == ["Authentication and Authorization", "Shop"]
+assert page.models_for("Shop") == [Product]
+```
+
 **Reaching anything the package does not model.** Open any admin path, then use the Playwright
 page directly.
 
