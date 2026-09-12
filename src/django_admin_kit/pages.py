@@ -83,6 +83,18 @@ class AdminPage:
             and self._requested != self._urls.login()
         )
 
+    @property
+    def title(self) -> str:
+        """The title the admin renders for the page, or ``""`` when it renders none."""
+        return _text(self._shown().locator("#content h1").first)
+
+    @property
+    def subtitle(self) -> str:
+        """The subtitle under the title, such as the object's name on a change page."""
+        # The subtitle is the heading right after the title. The content area holds
+        # other h2 elements, for filters and the like, but none next to the h1.
+        return _text(self._shown().locator("#content h1 + h2"))
+
     def _shown(self) -> Page:
         """The page, once it is known to be the one that was asked for.
 
@@ -139,7 +151,7 @@ class IndexPage(AdminPage):
         for app in self._shown().locator("#content-main div.module").all():
             # `text_content`, not `inner_text`: the admin's stylesheet upper-cases
             # captions, and the name is what the document says, not how it is drawn.
-            name = (app.locator("caption").text_content() or "").strip()
+            name = _text(app.locator("caption"))
             app_label = _token(app, "app-")
             app_list[name] = [
                 model
@@ -168,9 +180,7 @@ class ChangelistPage(AdminPage):
 
         An empty changelist shows no table, so it has no headers either.
         """
-        return [
-            (cell.locator("div.text").text_content() or "").strip() for cell in self._header_cells
-        ]
+        return [_text(cell.locator("div.text")) for cell in self._header_cells]
 
     def has_header(self, label: str) -> bool:
         return label in self.headers
@@ -224,6 +234,22 @@ class ChangelistPage(AdminPage):
         match = re.search(r"(?P<number>\d[\d,.\s]*?)\s+[^\d\s].*", " ".join(str(text).split()))
         assert match is not None, f"unexpected paginator text {text!r}"
         return match
+
+
+class CreatePage(AdminPage):
+    """The page that adds a new instance of a model."""
+
+
+class EditPage(AdminPage):
+    """The change page of one instance, read only for a user who may only view it."""
+
+
+class DeletePage(AdminPage):
+    """The page that asks whether to delete one instance."""
+
+
+def _text(element: Locator) -> str:
+    return (element.text_content() or "").strip() if element.count() else ""
 
 
 def _token(element: Locator, prefix: str) -> str:

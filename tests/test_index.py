@@ -5,47 +5,9 @@ The default site registers Product from the test project and User and Group from
 """
 
 import pytest
-from django.contrib.auth.models import Group, Permission, User
+from django.contrib.auth.models import Group, User
 
 from project.shop.models import Product
-
-
-def grant(user, *codenames):
-    permissions = list(Permission.objects.filter(codename__in=codenames))
-    assert len(permissions) == len(codenames), f"unknown permission among {codenames}"
-    user.user_permissions.add(*permissions)
-
-
-@pytest.fixture
-def superuser(db):
-    return User.objects.create_superuser(username="alice", password="pw")
-
-
-@pytest.fixture
-def viewer(db):
-    user = User.objects.create_user(username="vera", is_staff=True)
-    grant(user, "view_product")
-    return user
-
-
-@pytest.fixture
-def adder(db):
-    """May add products and nothing else, so the index lists Product without a link."""
-    user = User.objects.create_user(username="adam", is_staff=True)
-    grant(user, "add_product")
-    return user
-
-
-@pytest.fixture
-def outsider(db):
-    """Staff, so the index opens, but with no permission on anything."""
-    return User.objects.create_user(username="otto", is_staff=True)
-
-
-@pytest.fixture
-def customer(db):
-    """Not staff, so the admin must refuse them."""
-    return User.objects.create_user(username="carol", password="pw")
 
 
 def test_a_superuser_sees_every_app_and_model_in_the_admins_order(admin_ui, superuser):
@@ -115,6 +77,21 @@ def test_a_refused_user_has_nothing_to_read(admin_ui, customer):
     page = admin_ui.index()
 
     assert page.denied
-    for read in (lambda: page.apps, lambda: page.models, lambda: page.models_for("Shop")):
+    for read in (
+        lambda: page.apps,
+        lambda: page.models,
+        lambda: page.models_for("Shop"),
+        lambda: page.title,
+        lambda: page.subtitle,
+    ):
         with pytest.raises(LookupError, match=r"did not open.*Status 200, at /admin/login/"):
             read()
+
+
+def test_the_index_says_what_it_is(admin_ui, superuser):
+    admin_ui.login(superuser)
+
+    page = admin_ui.index()
+
+    assert page.title == "Site administration"
+    assert page.subtitle == ""

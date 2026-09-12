@@ -6,7 +6,6 @@ assume the default site or its prefix.
 """
 
 import pytest
-from django.contrib.auth.models import User
 
 from django_admin_kit.urls import AdminUrls
 from project.ops import ops_site
@@ -18,17 +17,6 @@ pytestmark = pytest.mark.urls("project.urls_with_ops")
 @pytest.fixture
 def admin_ui_urls():
     return AdminUrls(ops_site)
-
-
-@pytest.fixture
-def superuser(db):
-    return User.objects.create_superuser(username="alice", password="pw")
-
-
-@pytest.fixture
-def customer(db):
-    """Not staff, so the admin must refuse them."""
-    return User.objects.create_user(username="carol", password="pw")
 
 
 def test_a_superuser_reaches_the_index_of_the_site(admin_ui, superuser):
@@ -69,3 +57,16 @@ def test_the_changelist_of_the_site_opens(admin_ui, superuser):
     assert page.works
     assert page.destination == "/ops/shop/product/"
     assert page.count == 1
+
+
+def test_every_model_page_of_the_site_opens(admin_ui, superuser):
+    product = Product.objects.create(name="Bolt", sku="SKU-1", price="10.00")
+    admin_ui.login(superuser)
+
+    for page, path in (
+        (admin_ui.create(Product), "/ops/shop/product/add/"),
+        (admin_ui.edit(product), f"/ops/shop/product/{product.pk}/change/"),
+        (admin_ui.delete(product), f"/ops/shop/product/{product.pk}/delete/"),
+    ):
+        assert page.works
+        assert page.destination == path

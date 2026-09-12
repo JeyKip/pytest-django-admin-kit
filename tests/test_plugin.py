@@ -39,6 +39,26 @@ def test_a_session_that_never_opens_the_admin_leaves_the_guard_alone(tmp_path):
     assert result.returncode == 0, result.stdout + result.stderr
 
 
+def test_a_project_gets_only_the_plugins_fixtures(tmp_path):
+    """The suite's own users and products live in `tests/conftest.py`, which no
+    installing project collects. Asked from an empty project, pytest lists what the
+    package really adds, and it must be the four fixtures and nothing else."""
+    environment = {k: v for k, v in os.environ.items() if k != "DJANGO_SETTINGS_MODULE"}
+
+    result = subprocess.run(
+        [sys.executable, "-m", "pytest", "--fixtures", "-q", "-p", "no:cacheprovider"],
+        capture_output=True,
+        text=True,
+        cwd=tmp_path,
+        env=environment,
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    listed = {line.split(" ")[0] for line in result.stdout.splitlines() if line[:1].isalpha()}
+    assert {"admin_ui", "admin_ui_config", "admin_ui_urls", "admin_ui_driving"} <= listed
+    assert not {"superuser", "viewer", "editor", "adder", "customer", "product"} & listed
+
+
 def test_the_plugin_pulls_no_admin_imports_into_startup():
     """`plugin` loads in every project that installs the package, so its fixtures
     import their dependencies lazily rather than dragging in django.contrib.admin."""

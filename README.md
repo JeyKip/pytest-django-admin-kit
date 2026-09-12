@@ -34,9 +34,19 @@ admin_ui.login(user)
 ways, and only some of them change the URL.
 
 ```python
-page = admin_ui.index()
+page = admin_ui.edit(product)
 
 assert page.works        # or page.denied, page.missing, page.redirected
+```
+
+**Reading what a page calls itself.** The title and subtitle the admin renders, so a test
+can say which page it is looking at without matching markup.
+
+```python
+page = admin_ui.edit(product)
+
+assert page.title == "Change product"
+assert page.subtitle == "Widget"
 ```
 
 **Getting admin URLs without hardcoding `/admin/`.** URLs come from the site under test, so a

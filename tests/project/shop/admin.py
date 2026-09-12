@@ -16,3 +16,10 @@ class ProductAdmin(admin.ModelAdmin):
     @admin.display(description="Price with tax")
     def price_with_tax(self, product):
         return product.price * Decimal("1.2")
+
+    # A released product stays on record. This gives the suite one page whose answer
+    # depends on the object, not only on the user.
+    def has_delete_permission(self, request, obj=None):
+        if obj is not None and obj.released_on is not None:
+            return False
+        return super().has_delete_permission(request, obj)

@@ -126,9 +126,9 @@ admin_ui                   # done
 admin_ui.login(...)        # done
 admin_ui.index()           # done
 admin_ui.list(...)         # done
-admin_ui.create(...)
-admin_ui.edit(...)
-admin_ui.delete(...)
+admin_ui.create(...)       # done
+admin_ui.edit(...)         # done
+admin_ui.delete(...)       # done
 ```
 
 Page objects should expose normalized information such as fields, errors, headers, rows,
@@ -314,15 +314,15 @@ Permissions are tested through what the admin shows the current user, never thro
 permission system directly. A test states what a user can see and do; the admin's own checks
 decide the rest, and the package reports what they decided.
 
-## 5.1 Pages
+## 5.1 Pages (done)
 
 A page the current user may not open must not report itself as working, and must say why:
 
 ```python
-page = admin_ui.edit(product)
+page = admin_ui.edit(product)    # done
 
-assert not page.works
-assert page.denied
+assert not page.works            # done
+assert page.denied               # done
 ```
 
 The standard view, add, change and delete permissions are therefore tested by opening the
@@ -330,20 +330,20 @@ page each one guards:
 
 ```python
 assert admin_ui.list(Product).works    # done
-assert admin_ui.create(Product).denied
+assert admin_ui.create(Product).denied  # done
 ```
 
 ---
 
-## 5.2 Objects
+## 5.2 Objects (done)
 
 An admin may decide per object, through rules of its own or through an authentication backend
 that answers per object. The page for that object reports what was decided, and a test never
 needs to know which source produced it:
 
 ```python
-assert admin_ui.delete(draft).works
-assert admin_ui.delete(published).denied
+assert admin_ui.delete(draft).works        # done
+assert admin_ui.delete(published).denied   # done
 ```
 
 ---
@@ -377,7 +377,7 @@ See section 24.
 
 ---
 
-# 6. Admin Page Availability
+# 6. Admin Page Availability (done)
 
 The package must provide abstractions for the admin index and for these four standard model
 admin operations:
@@ -386,9 +386,9 @@ admin operations:
 admin_ui.index()           # done
 
 admin_ui.list(Model)       # done
-admin_ui.create(Model)
-admin_ui.edit(instance)
-admin_ui.delete(instance)
+admin_ui.create(Model)     # done
+admin_ui.edit(instance)    # done
+admin_ui.delete(instance)  # done
 ```
 
 Each returned page must make it easy to determine whether the page works.
@@ -446,7 +446,7 @@ which section 6.4 makes part of the contract for exactly this reason.
 
 ---
 
-## 6.2 Page identity
+## 6.2 Page identity (done)
 
 Pages expose the title and subtitle the admin renders for them:
 
@@ -459,7 +459,7 @@ assert page.subtitle == "Widget"
 
 ---
 
-## 6.3 Admin URLs
+## 6.3 Admin URLs (done)
 
 Every admin page is addressable without being opened.
 
@@ -525,7 +525,7 @@ page.native
 
 ---
 
-## 6.5 Arbitrary admin pages
+## 6.5 Arbitrary admin pages (done)
 
 Any admin URL can be opened, including views the package knows nothing about:
 
@@ -533,7 +533,7 @@ Any admin URL can be opened, including views the package knows nothing about:
 page = admin_ui.open(reverse("admin:shop_product_import"))    # done
 
 assert page.works                                             # done
-assert page.title == "Import products"
+assert page.title == "Import products"                        # done
 ```
 
 Everything beyond that is reached through `page.native`.
@@ -541,9 +541,9 @@ Everything beyond that is reached through `page.native`.
 Such a page guarantees what does not depend on knowing the page's shape:
 
 * the access outcome of section 6.1 (done);
-* the page identity of section 6.2;
+* the page identity of section 6.2 (done);
 * the response status of section 6.4 (done);
-* the operation messages of section 22;
+* the operation messages of section 22, once that section is built;
 * a native handle (done).
 
 It does not expose fields or rows. Their shape is unknowable for a page the package has never
@@ -1682,9 +1682,9 @@ Every type listed above exposes a native handle, as described in section 3.6.
 def test_staff_access(admin_ui, staff_user, product):
     admin_ui.login(staff_user)
 
-    assert admin_ui.list(Product).works
-    assert admin_ui.edit(product).works
-    assert admin_ui.delete(product).denied
+    assert admin_ui.list(Product).works      # done
+    assert admin_ui.edit(product).works      # done
+    assert admin_ui.delete(product).denied   # done
 ```
 
 ---
@@ -1695,10 +1695,10 @@ def test_staff_access(admin_ui, staff_user, product):
 def test_product_admin_pages(admin_ui, admin_user, product):
     admin_ui.login(admin_user)
 
-    assert admin_ui.list(Product).works
-    assert admin_ui.create(Product).works
-    assert admin_ui.edit(product).works
-    assert admin_ui.delete(product).works
+    assert admin_ui.list(Product).works      # done
+    assert admin_ui.create(Product).works    # done
+    assert admin_ui.edit(product).works      # done
+    assert admin_ui.delete(product).works    # done
 ```
 
 ---
@@ -2250,8 +2250,8 @@ supported Django versions:
 2. Log in with a staff user. (done)
 3. Log in with an arbitrary user object, including one that has no usable password. (done)
 4. Verify that a page the user may not open is reported as refused. (done)
-5. Verify that model changelist, create, edit, and delete pages work.
-6. Read a page's title and subtitle.
+5. Verify that model changelist, create, edit, and delete pages work. (done)
+6. Read a page's title and subtitle. (done)
 7. Read changelist headers, by label and by configured column name. (done)
 8. Read the changelist record count and assert an empty changelist. (done)
 9. Verify changelist rows using:
@@ -2293,7 +2293,7 @@ supported Django versions:
     project, without subclassing package internals.
 35. Reach a native handle from a page and from a field, and drive a project-specific widget
     with it.
-36. Open an arbitrary admin URL and read its access outcome and identity.
+36. Open an arbitrary admin URL and read its access outcome and identity. (done)
 37. Run the test suite in parallel. (done)
 38. Run the same public test syntax starting with Django 3.2.
 
