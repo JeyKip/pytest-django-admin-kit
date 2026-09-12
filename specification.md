@@ -7,7 +7,6 @@ The package provides a pytest-oriented API for testing Django Admin behavior.
 It should allow developers to verify:
 
 * authentication and access with different users (done);
-* effective admin permissions, including constraints imposed by the admin configuration itself;
 * availability and basic operation of admin pages;
 * the set of models the admin exposes;
 * changelist columns, record counts, and row contents;
@@ -125,7 +124,6 @@ Typical concepts exposed by the package:
 ```python
 admin_ui                   # done
 admin_ui.login(...)        # done
-admin_ui.permissions(...)
 admin_ui.index()           # done
 admin_ui.list(...)
 admin_ui.create(...)
@@ -312,126 +310,11 @@ admin_ui.logout()
 
 # 5. Permission Testing
 
-## 5.1 Model permissions
+Permissions are tested through what the admin shows the current user, never through the
+permission system directly. A test states what a user can see and do; the admin's own checks
+decide the rest, and the package reports what they decided.
 
-The package must expose the effective Django Admin permissions of a user for a model.
-
-The four standard permissions are:
-
-* view;
-* add;
-* change;
-* delete.
-
-A model may declare permissions beyond these, and may narrow or remove the standard ones; see
-section 5.2.
-
-Example API:
-
-```python
-permissions = admin_ui.permissions(Product)
-
-assert permissions.view
-assert permissions.add
-assert permissions.change
-assert not permissions.delete
-```
-
-A compact form should also be possible:
-
-```python
-assert admin_ui.permissions(Product) == {
-    "view": True,
-    "add": True,
-    "change": True,
-    "delete": False,
-}
-```
-
-Permission checks must represent the permissions applicable to the currently logged-in user.
-
-The API should also support permission testing without requiring the corresponding page to be
-opened.
-
----
-
-## 5.2 Custom permissions
-
-The four standard permissions are not a closed set.
-
-A model may declare permissions of its own, and may narrow or remove the standard ones. An admin
-may additionally gate one of its own operations behind a permission that is neither standard nor
-declared by the model.
-
-The package must therefore address permissions by name, not only by the four fixed attributes:
-
-```python
-permissions = admin_ui.permissions(Product)
-
-assert permissions["publish"]
-assert not permissions["archive"]
-```
-
-Presence of a permission is distinct from its value:
-
-```python
-assert permissions.has("publish")
-```
-
-The complete effective set must be readable:
-
-```python
-assert permissions.all == {
-    "view": True,
-    "add": True,
-    "change": True,
-    "delete": False,
-    "publish": True,
-}
-```
-
-Equality compares the complete effective set. A model that declares no custom permissions and
-narrows none of the standard ones therefore reports exactly the four of section 5.1, and the
-compact comparison there stays correct.
-
----
-
-## 5.3 Effective permissions
-
-Reported permissions must be **effective** permissions.
-
-A user's assigned permissions are not the whole answer: an admin registration may impose further
-constraints of its own, and may grant or withhold an operation independently of the permission
-system.
-
-The package must report what the admin will actually allow.
-
----
-
-## 5.4 Per-object permissions
-
-Permissions must also be inspectable for a specific object:
-
-```python
-assert admin_ui.permissions(product).change
-assert not admin_ui.permissions(product).delete
-assert admin_ui.permissions(product)["publish"]
-```
-
-The model form and the object form share one public representation, custom permissions included.
-
-Two independent sources can make an object's permissions differ from its model's: the admin can
-decide per object, and an authentication backend can answer per object. The package reports the
-combined effective result, and never requires a test to say which source produced it.
-
-Django's default authentication backend does not answer per-object questions. A project whose
-per-object rules live in its admin needs nothing further; a project that expects the permission
-system itself to answer per object must be running a backend that supports it. The package must
-behave the same way in both cases.
-
----
-
-## 5.5 Observable consequences
+## 5.1 Pages
 
 A page the current user may not open must not report itself as working, and must say why:
 
@@ -441,6 +324,56 @@ page = admin_ui.edit(product)
 assert not page.works
 assert page.denied
 ```
+
+The standard view, add, change and delete permissions are therefore tested by opening the
+page each one guards:
+
+```python
+assert admin_ui.list(Product).works
+assert admin_ui.create(Product).denied
+```
+
+---
+
+## 5.2 Objects
+
+An admin may decide per object, through rules of its own or through an authentication backend
+that answers per object. The page for that object reports what was decided, and a test never
+needs to know which source produced it:
+
+```python
+assert admin_ui.delete(draft).works
+assert admin_ui.delete(published).denied
+```
+
+---
+
+## 5.3 Operations
+
+An admin may withhold an operation independently of the permission system, or gate an
+operation of its own behind a permission the model never declared. Either way, what a user may
+do shows up as what the page offers:
+
+```python
+page = admin_ui.edit(product)
+
+assert not page.has_action("delete")
+assert page.has_action("publish")
+```
+
+See section 16.1.
+
+---
+
+## 5.4 Models
+
+A user who may not see a model does not find it on the index:
+
+```python
+assert Product not in admin_ui.index().models
+```
+
+See section 24.
 
 ---
 
@@ -1727,7 +1660,6 @@ AdminSession
 ├── SubmitActions
 ├── Row
 ├── Cell
-├── Permissions
 │
 └── SubmissionResult
     ├── ValidationErrors
@@ -1746,14 +1678,12 @@ Every type listed above exposes a native handle, as described in section 3.6.
 ## Authentication and permissions
 
 ```python
-def test_staff_access(admin_ui, staff_user):
+def test_staff_access(admin_ui, staff_user, product):
     admin_ui.login(staff_user)
 
-    permissions = admin_ui.permissions(Product)
-
-    assert permissions.view
-    assert permissions.change
-    assert not permissions.delete
+    assert admin_ui.list(Product).works
+    assert admin_ui.edit(product).works
+    assert admin_ui.delete(product).denied
 ```
 
 ---
@@ -2318,17 +2248,12 @@ supported Django versions:
 1. Log in with a superuser. (done)
 2. Log in with a staff user. (done)
 3. Log in with an arbitrary user object, including one that has no usable password. (done)
-4. Determine view/add/change/delete permissions for a model.
-5. Determine a permission a model declares beyond the standard four, and read the
-   complete effective permission set.
-6. Determine effective permissions where the admin imposes constraints of its own.
-7. Determine permissions for an individual object.
-8. Verify that a page the user may not open is reported as refused. (done)
-9. Verify that model changelist, create, edit, and delete pages work.
-10. Read a page's title and subtitle.
-11. Read changelist headers, by label and by configured column name.
-12. Read the changelist record count and assert an empty changelist.
-13. Verify changelist rows using:
+4. Verify that a page the user may not open is reported as refused. (done)
+5. Verify that model changelist, create, edit, and delete pages work.
+6. Read a page's title and subtitle.
+7. Read changelist headers, by label and by configured column name.
+8. Read the changelist record count and assert an empty changelist.
+9. Verify changelist rows using:
 
     * exact values;
     * empty values;
@@ -2336,39 +2261,39 @@ supported Django versions:
     * callable cell matchers;
     * `ANY_ROW`;
     * column-addressed expected rows.
-14. Read normalized boolean cells, empty cells, and link cells including their targets.
-15. Inspect fields on create and edit pages.
-16. Determine required and optional fields.
-17. Read field labels, initial values, choices, and presentation order.
-18. Distinguish editable from rendered-only fields and read a rendered-only value.
-19. Populate required fields only.
-20. Populate optional fields only.
-21. Populate all supported fields.
-22. Populate from a dictionary.
-23. Populate from an object.
-24. Submit valid create forms.
-25. Submit valid edit forms.
-26. Invoke a submit action other than the ordinary save, including one the admin defines.
-27. Determine where the admin navigated after a successful operation.
-28. Submit invalid create forms.
-29. Submit invalid edit forms.
-30. Verify that an invalid submission wrote nothing and that the form rendered the submitted
+10. Read normalized boolean cells, empty cells, and link cells including their targets.
+11. Inspect fields on create and edit pages.
+12. Determine required and optional fields.
+13. Read field labels, initial values, choices, and presentation order.
+14. Distinguish editable from rendered-only fields and read a rendered-only value.
+15. Populate required fields only.
+16. Populate optional fields only.
+17. Populate all supported fields.
+18. Populate from a dictionary.
+19. Populate from an object.
+20. Submit valid create forms.
+21. Submit valid edit forms.
+22. Invoke a submit action other than the ordinary save, including one the admin defines.
+23. Determine where the admin navigated after a successful operation.
+24. Submit invalid create forms.
+25. Submit invalid edit forms.
+26. Verify that an invalid submission wrote nothing and that the form rendered the submitted
     values back.
-31. Inspect the admin's summary notice, form-level errors, and field-level errors as three
+27. Inspect the admin's summary notice, form-level errors, and field-level errors as three
     distinct levels.
-32. Read the messages displayed after an operation.
-33. Perform and verify a basic delete operation.
-34. Read the contents of a deletion confirmation.
-35. Verify that a refused deletion is not offered or not performed.
-36. Read the models the admin exposes to the current user, their grouping, and their order.
-37. Run against a non-default admin site mounted under a non-default URL prefix. (done)
-38. Override a default normalization rule, add a new one, and extend field handling from a
+28. Read the messages displayed after an operation.
+29. Perform and verify a basic delete operation.
+30. Read the contents of a deletion confirmation.
+31. Verify that a refused deletion is not offered or not performed.
+32. Read the models the admin exposes to the current user, their grouping, and their order.
+33. Run against a non-default admin site mounted under a non-default URL prefix. (done)
+34. Override a default normalization rule, add a new one, and extend field handling from a
     project, without subclassing package internals.
-39. Reach a native handle from a page and from a field, and drive a project-specific widget
+35. Reach a native handle from a page and from a field, and drive a project-specific widget
     with it.
-40. Open an arbitrary admin URL and read its access outcome and identity.
-41. Run the test suite in parallel. (done)
-42. Run the same public test syntax starting with Django 3.2.
+36. Open an arbitrary admin URL and read its access outcome and identity.
+37. Run the test suite in parallel. (done)
+38. Run the same public test syntax starting with Django 3.2.
 
 ---
 
