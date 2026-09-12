@@ -551,9 +551,9 @@ seen, and guessing would be worse than declining.
 
 ---
 
-# 7. List / Changelist Testing
+# 7. List / Changelist Testing (done)
 
-## 7.1 Column headers
+## 7.1 Column headers (done)
 
 The package must expose normalized changelist column headers.
 
@@ -587,7 +587,7 @@ Header matching uses the human-readable labels rendered by the admin page.
 
 ---
 
-## 7.2 Column identity
+## 7.2 Column identity (done)
 
 Columns are also addressable by the names the admin is configured with:
 
@@ -1729,7 +1729,7 @@ def test_customer_list(admin_ui, admin_user):
 
     assert page.count == 3    # done
 
-    assert page.headers == [
+    assert page.headers == [    # done
         "ID",
         "First name",
         "Last name",
@@ -2252,7 +2252,7 @@ supported Django versions:
 4. Verify that a page the user may not open is reported as refused. (done)
 5. Verify that model changelist, create, edit, and delete pages work.
 6. Read a page's title and subtitle.
-7. Read changelist headers, by label and by configured column name.
+7. Read changelist headers, by label and by configured column name. (done)
 8. Read the changelist record count and assert an empty changelist. (done)
 9. Verify changelist rows using:
 

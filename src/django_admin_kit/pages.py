@@ -160,7 +160,35 @@ class IndexPage(AdminPage):
 
 
 class ChangelistPage(AdminPage):
-    """A model's changelist: how many records it reports for the current user."""
+    """A model's changelist: its columns, and how many records it reports."""
+
+    @property
+    def headers(self) -> list[str]:
+        """The column labels the page shows, in order.
+
+        An empty changelist shows no table, so it has no headers either.
+        """
+        return [
+            (cell.locator("div.text").text_content() or "").strip() for cell in self._header_cells
+        ]
+
+    def has_header(self, label: str) -> bool:
+        return label in self.headers
+
+    @property
+    def columns(self) -> list[str]:
+        """The same columns by the names the admin is configured with, in the same order."""
+        return [_token(cell, "column-") for cell in self._header_cells]
+
+    def has_column(self, name: str) -> bool:
+        return name in self.columns
+
+    @cached_property
+    def _header_cells(self) -> list[Locator]:
+        # The checkbox Django adds for actions is a column only for users who have an
+        # action to run, and it has no label, so it is not one here. The label is read
+        # from `div.text` because the cell also holds sorting controls.
+        return self._shown().locator("#result_list thead th:not(.action-checkbox-column)").all()
 
     @property
     def count(self) -> int:

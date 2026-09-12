@@ -118,12 +118,65 @@ def test_a_refused_user_is_sent_to_the_login_page(admin_ui, customer):
     assert page.destination == admin_ui.url.login()
 
 
+def test_headers_are_the_labels_shown_in_order(admin_ui, superuser, products):
+    admin_ui.login(superuser)
+
+    page = admin_ui.list(Product)
+
+    assert page.headers == ["Name", "Sku", "Price", "Is active", "Released on", "Price with tax"]
+    assert page.columns == ["name", "sku", "price", "is_active", "released_on", "price_with_tax"]
+
+
+def test_a_column_the_admin_computes_is_read_like_a_field(admin_ui, superuser, products):
+    """It is no model field and cannot be sorted, so Django renders its label
+    differently from the others. The reader does not care."""
+    admin_ui.login(superuser)
+
+    page = admin_ui.list(Product)
+
+    assert page.has_header("Price with tax")
+    assert page.has_column("price_with_tax")
+    assert not page.has_header("price_with_tax")
+    assert not page.has_column("Price with tax")
+
+
+def test_a_user_without_actions_reads_the_same_columns(admin_ui, viewer, products):
+    """The superuser's page has the action checkbox column and the viewer's does not.
+    Neither is a column."""
+    admin_ui.login(viewer)
+
+    page = admin_ui.list(Product)
+
+    assert page.headers == ["Name", "Sku", "Price", "Is active", "Released on", "Price with tax"]
+    assert page.columns == ["name", "sku", "price", "is_active", "released_on", "price_with_tax"]
+
+
+def test_an_empty_changelist_shows_no_columns(admin_ui, superuser):
+    admin_ui.login(superuser)
+
+    page = admin_ui.list(Product)
+
+    assert page.works
+    assert page.headers == []
+    assert page.columns == []
+    assert not page.has_header("Name")
+    assert not page.has_column("name")
+
+
 def test_a_changelist_that_did_not_open_has_nothing_to_read(admin_ui, adder):
     """`assert page.empty` must not pass for a user who never saw the list."""
     admin_ui.login(adder)
 
     page = admin_ui.list(Product)
 
-    for name in ("count", "summary", "empty"):
+    for read in (
+        lambda: page.count,
+        lambda: page.summary,
+        lambda: page.empty,
+        lambda: page.headers,
+        lambda: page.columns,
+        lambda: page.has_header("Name"),
+        lambda: page.has_column("name"),
+    ):
         with pytest.raises(LookupError, match=r"did not open.*Status 403"):
-            getattr(page, name)
+            read()
