@@ -82,6 +82,19 @@ class AdminPage:
             and self._requested != self._urls.login()
         )
 
+    def _shown(self) -> Page:
+        """The page, once it is known to be the one that was asked for.
+
+        A page that did not open shows nothing to read, and reading it anyway would
+        let a test pass for a user who never saw it.
+        """
+        if not self.works:
+            raise LookupError(
+                "The page did not open, so there is nothing to read from it. "
+                f"Status {self.status_code}, at {self.destination}."
+            )
+        return self._page
+
 
 class IndexPage(AdminPage):
     """The admin index: which models it lists for the current user."""
@@ -99,7 +112,6 @@ class IndexPage(AdminPage):
         """The registered models the index shows, in the order shown.
 
         A model the user may not see is not on the page, so it is not here either.
-        A refused user landed on the login page, which lists nothing.
         """
         return [model for models in self._app_list.values() for model in models]
 
@@ -123,7 +135,7 @@ class IndexPage(AdminPage):
         # are read from the class list rather than by a substring match because
         # Django 6.1 puts a class named `app-list` on the content area itself.
         app_list: dict[str, list[type]] = {}
-        for app in self._page.locator("#content-main div.module").all():
+        for app in self._shown().locator("#content-main div.module").all():
             # `text_content`, not `inner_text`: the admin's stylesheet upper-cases
             # captions, and the name is what the document says, not how it is drawn.
             name = (app.locator("caption").text_content() or "").strip()

@@ -107,12 +107,14 @@ def test_a_model_the_user_may_not_see_is_not_listed(admin_ui, outsider):
     assert page.models == []
 
 
-def test_a_refused_user_sees_nothing(admin_ui, customer):
-    """They landed on the login page, which lists no models; `denied` says why."""
+def test_a_refused_user_has_nothing_to_read(admin_ui, customer):
+    """They landed on the login page, which lists no models. Reading it as an empty
+    index would let `apps == []` pass for a user who never saw the index."""
     admin_ui.login(customer)
 
     page = admin_ui.index()
 
     assert page.denied
-    assert page.apps == []
-    assert page.models == []
+    for read in (lambda: page.apps, lambda: page.models, lambda: page.models_for("Shop")):
+        with pytest.raises(LookupError, match=r"did not open.*Status 200, at /admin/login/"):
+            read()
