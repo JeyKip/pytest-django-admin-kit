@@ -125,7 +125,7 @@ Typical concepts exposed by the package:
 admin_ui                   # done
 admin_ui.login(...)        # done
 admin_ui.index()           # done
-admin_ui.list(...)
+admin_ui.list(...)         # done
 admin_ui.create(...)
 admin_ui.edit(...)
 admin_ui.delete(...)
@@ -329,7 +329,7 @@ The standard view, add, change and delete permissions are therefore tested by op
 page each one guards:
 
 ```python
-assert admin_ui.list(Product).works
+assert admin_ui.list(Product).works    # done
 assert admin_ui.create(Product).denied
 ```
 
@@ -385,7 +385,7 @@ admin operations:
 ```python
 admin_ui.index()           # done
 
-admin_ui.list(Model)
+admin_ui.list(Model)       # done
 admin_ui.create(Model)
 admin_ui.edit(instance)
 admin_ui.delete(instance)
@@ -396,9 +396,9 @@ Each returned page must make it easy to determine whether the page works.
 Example:
 
 ```python
-page = admin_ui.list(Product)
+page = admin_ui.list(Product)    # done
 
-assert page.works
+assert page.works                # done
 ```
 
 The definition of `works` should represent successful handling of the requested admin page
@@ -606,7 +606,7 @@ A test chooses the vocabulary it prefers. Both must address the same columns in 
 
 # 8. Changelist Result Set
 
-## 8.1 Record count
+## 8.1 Record count (done)
 
 The number of records the changelist reports must be available as a number:
 
@@ -634,9 +634,9 @@ An empty changelist is an explicit, assertable state:
 ```python
 page = admin_ui.list(Product)
 
-assert page.works
-assert page.empty
-assert page.count == 0
+assert page.works         # done
+assert page.empty         # done
+assert page.count == 0    # done
 assert page.rows == []
 ```
 
@@ -1727,7 +1727,7 @@ def test_customer_list(admin_ui, admin_user):
 
     page = admin_ui.list(Customer)
 
-    assert page.count == 3
+    assert page.count == 3    # done
 
     assert page.headers == [
         "ID",
@@ -1784,9 +1784,9 @@ def test_empty_customer_list(admin_ui, admin_user):
 
     page = admin_ui.list(Customer)
 
-    assert page.works
-    assert page.empty
-    assert page.count == 0
+    assert page.works         # done
+    assert page.empty         # done
+    assert page.count == 0    # done
 ```
 
 ---
@@ -2253,7 +2253,7 @@ supported Django versions:
 5. Verify that model changelist, create, edit, and delete pages work.
 6. Read a page's title and subtitle.
 7. Read changelist headers, by label and by configured column name.
-8. Read the changelist record count and assert an empty changelist.
+8. Read the changelist record count and assert an empty changelist. (done)
 9. Verify changelist rows using:
 
     * exact values;

@@ -12,6 +12,7 @@ so that reading is written once.
 
 from __future__ import annotations
 
+import re
 from functools import cached_property
 from urllib.parse import urlsplit
 
@@ -156,6 +157,45 @@ class IndexPage(AdminPage):
         except LookupError:
             return None
         return model if self._urls.site.is_registered(model) else None
+
+
+class ChangelistPage(AdminPage):
+    """A model's changelist: how many records it reports for the current user."""
+
+    @property
+    def count(self) -> int:
+        """The number of records the changelist reports, across all of its pages."""
+        number = self._count_line.group("number")
+        return int(re.sub(r"\D", "", number))
+
+    @property
+    def summary(self) -> str:
+        """The count as the page words it, such as ``"3 products"``."""
+        return self._count_line.group(0)
+
+    @property
+    def empty(self) -> bool:
+        """Reports no records at all."""
+        return self.count == 0
+
+    @cached_property
+    def _count_line(self) -> re.Match[str]:
+        # The count is the paginator's own text. Page links, "Show all" and, from
+        # Django 6.0, a heading for screen readers are all inside child elements, so
+        # only the element's direct text nodes are read.
+        paginator = self._shown().locator("#changelist .paginator")
+        text = paginator.evaluate(
+            "el => Array.from(el.childNodes)"
+            ".filter(node => node.nodeType === Node.TEXT_NODE)"
+            ".map(node => node.textContent).join(' ')"
+        )
+        # The number may carry grouping characters when the project localizes it,
+        # which is why the name is required to start with something other than a
+        # digit. Stripping them in `count` is a stopgap until value normalization
+        # exists, at which point the number normalizer should read this instead.
+        match = re.search(r"(?P<number>\d[\d,.\s]*?)\s+[^\d\s].*", " ".join(str(text).split()))
+        assert match is not None, f"unexpected paginator text {text!r}"
+        return match
 
 
 def _token(element: Locator, prefix: str) -> str:

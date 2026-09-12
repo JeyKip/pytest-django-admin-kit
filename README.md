@@ -52,6 +52,18 @@ admin_ui.url.edit(product)
 admin_ui.login(user, password="secret")
 ```
 
+**Opening a changelist and reading how many records it reports.** The count is what the page
+says, not the rows on one page of it, and a refused user gets `denied` rather than a count.
+
+```python
+page = admin_ui.list(Product)
+
+assert page.works
+assert page.count == 3
+assert page.summary == "3 products"
+assert not page.empty
+```
+
 **Knowing what the index shows a user.** Models and apps a user may not see are not listed,
 and the lists come back in the admin's order.
 

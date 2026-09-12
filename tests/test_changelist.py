@@ -1,0 +1,129 @@
+"""What a model's changelist reports to each user, read from the rendered page.
+
+The count is what the page says, which is the total across all of its pages, not
+the number of rows on the one that opened.
+"""
+
+import pytest
+from django.contrib.auth.models import Permission, User
+
+from project.shop.models import Product
+
+
+def grant(user, *codenames):
+    permissions = list(Permission.objects.filter(codename__in=codenames))
+    assert len(permissions) == len(codenames), f"unknown permission among {codenames}"
+    user.user_permissions.add(*permissions)
+
+
+@pytest.fixture
+def superuser(db):
+    return User.objects.create_superuser(username="alice", password="pw")
+
+
+@pytest.fixture
+def viewer(db):
+    user = User.objects.create_user(username="vera", is_staff=True)
+    grant(user, "view_product")
+    return user
+
+
+@pytest.fixture
+def adder(db):
+    """May add products and nothing else, which is not enough to open the changelist."""
+    user = User.objects.create_user(username="adam", is_staff=True)
+    grant(user, "add_product")
+    return user
+
+
+@pytest.fixture
+def customer(db):
+    """Not staff, so the admin must refuse them."""
+    return User.objects.create_user(username="carol", password="pw")
+
+
+@pytest.fixture
+def products(db):
+    return [
+        Product.objects.create(name=name, sku=f"SKU-{name}", price="10.00")
+        for name in ("Bolt", "Nut", "Washer")
+    ]
+
+
+def test_a_viewer_opens_the_changelist_and_reads_the_count(admin_ui, viewer, products):
+    admin_ui.login(viewer)
+
+    page = admin_ui.list(Product)
+
+    assert page.works
+    assert page.destination == admin_ui.url.list(Product)
+    assert page.count == 3
+    assert page.summary == "3 products"
+    assert not page.empty
+
+
+def test_one_record_is_reported_in_the_singular(admin_ui, superuser):
+    Product.objects.create(name="Bolt", sku="SKU-1", price="10.00")
+    admin_ui.login(superuser)
+
+    page = admin_ui.list(Product)
+
+    assert page.count == 1
+    assert page.summary == "1 product"
+
+
+def test_an_empty_changelist_says_so(admin_ui, superuser):
+    admin_ui.login(superuser)
+
+    page = admin_ui.list(Product)
+
+    assert page.works
+    assert page.empty
+    assert page.count == 0
+    assert page.summary == "0 products"
+
+
+def test_the_count_is_the_total_not_the_rows_on_one_page(admin_ui, superuser):
+    """Past the admin's page size the paginator gains page links, which must not
+    leak into either value."""
+    Product.objects.bulk_create(
+        Product(name=f"Product {n}", sku=f"SKU-{n}", price="10.00") for n in range(101)
+    )
+    admin_ui.login(superuser)
+
+    page = admin_ui.list(Product)
+
+    assert page.count == 101
+    assert page.summary == "101 products"
+
+
+def test_a_user_who_may_only_add_is_refused_in_place(admin_ui, adder):
+    """The index lists the model for this user; the changelist still refuses them."""
+    admin_ui.login(adder)
+
+    page = admin_ui.list(Product)
+
+    assert page.denied
+    assert not page.works
+    assert page.status_code == 403
+    assert page.destination == admin_ui.url.list(Product)
+
+
+def test_a_refused_user_is_sent_to_the_login_page(admin_ui, customer):
+    admin_ui.login(customer)
+
+    page = admin_ui.list(Product)
+
+    assert page.denied
+    assert page.destination == admin_ui.url.login()
+
+
+def test_a_changelist_that_did_not_open_has_nothing_to_read(admin_ui, adder):
+    """`assert page.empty` must not pass for a user who never saw the list."""
+    admin_ui.login(adder)
+
+    page = admin_ui.list(Product)
+
+    for name in ("count", "summary", "empty"):
+        with pytest.raises(LookupError, match=r"did not open.*Status 403"):
+            getattr(page, name)

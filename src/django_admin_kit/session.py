@@ -15,7 +15,7 @@ from django.conf import settings
 from django.test import Client
 from playwright.sync_api import BrowserContext
 
-from .pages import AdminPage, IndexPage
+from .pages import AdminPage, ChangelistPage, IndexPage
 from .urls import AdminUrls
 
 _P = TypeVar("_P", bound=AdminPage)
@@ -101,6 +101,10 @@ class AdminSession:
     def index(self) -> IndexPage:
         """Open the admin index."""
         return self._open(self._urls.index(), IndexPage)
+
+    def list(self, model: type[Any]) -> ChangelistPage:
+        """Open a model's changelist."""
+        return self._open(self._urls.list(model), ChangelistPage)
 
     def _open(self, path: str, page_class: type[_P]) -> _P:
         page = self._context.new_page()
