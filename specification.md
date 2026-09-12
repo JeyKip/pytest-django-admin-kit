@@ -377,7 +377,7 @@ See section 24.
 
 ---
 
-# 6. Admin Page Availability
+# 6. Admin Page Availability (done)
 
 The package must provide abstractions for the admin index and for these four standard model
 admin operations:
@@ -446,7 +446,7 @@ which section 6.4 makes part of the contract for exactly this reason.
 
 ---
 
-## 6.2 Page identity
+## 6.2 Page identity (done)
 
 Pages expose the title and subtitle the admin renders for them:
 
@@ -525,7 +525,7 @@ page.native
 
 ---
 
-## 6.5 Arbitrary admin pages
+## 6.5 Arbitrary admin pages (done)
 
 Any admin URL can be opened, including views the package knows nothing about:
 
@@ -533,7 +533,7 @@ Any admin URL can be opened, including views the package knows nothing about:
 page = admin_ui.open(reverse("admin:shop_product_import"))    # done
 
 assert page.works                                             # done
-assert page.title == "Import products"
+assert page.title == "Import products"                        # done
 ```
 
 Everything beyond that is reached through `page.native`.
@@ -541,9 +541,9 @@ Everything beyond that is reached through `page.native`.
 Such a page guarantees what does not depend on knowing the page's shape:
 
 * the access outcome of section 6.1 (done);
-* the page identity of section 6.2;
+* the page identity of section 6.2 (done);
 * the response status of section 6.4 (done);
-* the operation messages of section 22;
+* the operation messages of section 22, once that section is built;
 * a native handle (done).
 
 It does not expose fields or rows. Their shape is unknowable for a page the package has never
@@ -2251,7 +2251,7 @@ supported Django versions:
 3. Log in with an arbitrary user object, including one that has no usable password. (done)
 4. Verify that a page the user may not open is reported as refused. (done)
 5. Verify that model changelist, create, edit, and delete pages work. (done)
-6. Read a page's title and subtitle.
+6. Read a page's title and subtitle. (done)
 7. Read changelist headers, by label and by configured column name. (done)
 8. Read the changelist record count and assert an empty changelist. (done)
 9. Verify changelist rows using:
@@ -2293,7 +2293,7 @@ supported Django versions:
     project, without subclassing package internals.
 35. Reach a native handle from a page and from a field, and drive a project-specific widget
     with it.
-36. Open an arbitrary admin URL and read its access outcome and identity.
+36. Open an arbitrary admin URL and read its access outcome and identity. (done)
 37. Run the test suite in parallel. (done)
 38. Run the same public test syntax starting with Django 3.2.
 

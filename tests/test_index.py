@@ -115,6 +115,21 @@ def test_a_refused_user_has_nothing_to_read(admin_ui, customer):
     page = admin_ui.index()
 
     assert page.denied
-    for read in (lambda: page.apps, lambda: page.models, lambda: page.models_for("Shop")):
+    for read in (
+        lambda: page.apps,
+        lambda: page.models,
+        lambda: page.models_for("Shop"),
+        lambda: page.title,
+        lambda: page.subtitle,
+    ):
         with pytest.raises(LookupError, match=r"did not open.*Status 200, at /admin/login/"):
             read()
+
+
+def test_the_index_says_what_it_is(admin_ui, superuser):
+    admin_ui.login(superuser)
+
+    page = admin_ui.index()
+
+    assert page.title == "Site administration"
+    assert page.subtitle == ""

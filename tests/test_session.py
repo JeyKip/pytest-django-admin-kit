@@ -134,6 +134,24 @@ def test_any_admin_path_can_be_opened(admin_ui, superuser):
     assert page.native.title().startswith("Password change")
 
 
+def test_an_arbitrary_page_has_an_identity(admin_ui, superuser):
+    admin_ui.login(superuser)
+
+    page = admin_ui.open(reverse("admin:password_change"))
+
+    assert page.title == "Password change"
+    assert page.subtitle == ""
+
+
+def test_a_page_the_admin_gives_no_title_reads_as_empty(admin_ui):
+    """The login page sets a title for the window but renders none on the page."""
+    page = admin_ui.open(admin_ui.url.login())
+
+    assert page.works
+    assert page.title == ""
+    assert page.subtitle == ""
+
+
 def test_a_path_the_admin_does_not_serve_is_missing(admin_ui, superuser):
     admin_ui.login(superuser)
 

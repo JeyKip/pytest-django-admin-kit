@@ -1,6 +1,7 @@
 """Whether the delete confirmation opens for each user, and what happens when the
 object is gone."""
 
+import django
 import pytest
 from django.contrib.auth.models import Permission, User
 
@@ -57,6 +58,17 @@ def test_a_superuser_reaches_the_confirmation(admin_ui, superuser, product):
 
     assert page.works
     assert page.destination == admin_ui.url.delete(product)
+
+
+def test_the_confirmation_says_what_it_is(admin_ui, superuser, product):
+    """Django 5.2 changed the title from a question to a verb. The package reports
+    what the admin renders, so the suite proves the reader on both wordings."""
+    admin_ui.login(superuser)
+
+    page = admin_ui.delete(product)
+
+    assert page.title == ("Delete" if django.VERSION >= (5, 2) else "Are you sure?")
+    assert page.subtitle == ""
 
 
 def test_a_viewer_is_refused_in_place(admin_ui, viewer, product):

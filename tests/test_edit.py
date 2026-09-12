@@ -58,13 +58,25 @@ def test_a_superuser_reaches_the_change_page(admin_ui, superuser, product):
     assert page.destination == admin_ui.url.edit(product)
 
 
+def test_the_change_page_names_the_object(admin_ui, superuser, product):
+    admin_ui.login(superuser)
+
+    page = admin_ui.edit(product)
+
+    assert page.title == "Change product"
+    assert page.subtitle == "Widget"
+
+
 def test_a_viewer_gets_the_page_read_only(admin_ui, viewer, product):
+    """The title is how the admin tells the user what they may do here."""
     admin_ui.login(viewer)
 
     page = admin_ui.edit(product)
 
     assert page.works
     assert page.destination == admin_ui.url.edit(product)
+    assert page.title == "View product"
+    assert page.subtitle == "Widget"
 
 
 def test_an_editor_gets_the_page_to_change(admin_ui, editor, product):
@@ -74,6 +86,8 @@ def test_an_editor_gets_the_page_to_change(admin_ui, editor, product):
 
     assert page.works
     assert page.destination == admin_ui.url.edit(product)
+    assert page.title == "Change product"
+    assert page.subtitle == "Widget"
 
 
 def test_a_user_who_may_only_add_is_refused_in_place(admin_ui, adder, product):

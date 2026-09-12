@@ -53,6 +53,15 @@ def test_a_superuser_reaches_the_add_page(admin_ui, superuser):
     assert page.destination == admin_ui.url.create(Product)
 
 
+def test_the_add_page_says_what_it_is(admin_ui, superuser):
+    admin_ui.login(superuser)
+
+    page = admin_ui.create(Product)
+
+    assert page.title == "Add product"
+    assert page.subtitle == ""
+
+
 def test_a_user_who_may_only_add_reaches_the_add_page(admin_ui, adder):
     admin_ui.login(adder)
 

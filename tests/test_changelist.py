@@ -177,6 +177,27 @@ def test_a_changelist_that_did_not_open_has_nothing_to_read(admin_ui, adder):
         lambda: page.columns,
         lambda: page.has_header("Name"),
         lambda: page.has_column("name"),
+        lambda: page.title,
+        lambda: page.subtitle,
     ):
         with pytest.raises(LookupError, match=r"did not open.*Status 403"):
             read()
+
+
+def test_a_changelist_names_its_model(admin_ui, superuser):
+    admin_ui.login(superuser)
+
+    page = admin_ui.list(Product)
+
+    assert page.title == "Select product to change"
+    assert page.subtitle == ""
+
+
+def test_a_viewer_is_told_the_changelist_is_read_only(admin_ui, viewer):
+    """The title is how the admin tells the user what they may do here."""
+    admin_ui.login(viewer)
+
+    page = admin_ui.list(Product)
+
+    assert page.title == "Select product to view"
+    assert page.subtitle == ""
