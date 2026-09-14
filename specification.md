@@ -138,31 +138,28 @@ messages, and status.
 
 ## 3.4 Normalized values
 
-The package compares **meaning**, not markup.
+The package compares **what the user reads**, not markup.
 
 A value read from an admin page is normalized before a test ever sees it:
 
-* a boolean cell normalizes to a boolean, however the admin chooses to draw it;
-* an absent or blank value normalizes to the empty value;
+* a boolean the admin draws as an icon normalizes to a boolean;
 * a value the admin renders as a link normalizes to its text, with the target available
   separately;
-* dates, times, and numbers normalize through the formats and time zone the project has
-  configured;
-* text normalizes from the document's own content, never from its rendered presentation, so
-  styling such as letter-casing never changes a value.
+* everything else is the document's own text, never its rendered presentation, so styling
+  such as letter-casing never changes a value.
 
-A test must never need to know how a value was rendered:
+Text is compared as rendered. A date, a number or an empty value reads as the text the admin
+shows for it, in the locale and time zone the browser is pinned to (sections 28.4 and 31), so
+a test asserts the rendering the user sees:
 
 ```python
 assert page.rows[0]["is_active"].value is True
-assert page.rows[0]["middle_name"].value == ""
+assert page.rows[0]["released_on"].value == "Sept. 12, 2026"
 ```
 
-Tests must not hardcode a rendering format.
-
-Every normalization rule is a package setting with a documented default, and every one of them
-can be replaced by the project. Nothing about normalization is fixed inside the package. See
-section 28.3.
+A project that wants such a value typed replaces the rule that reads it. Every normalization
+rule is a package setting with a documented default, and every one of them can be replaced by
+the project. Nothing about normalization is fixed inside the package. See section 28.3.
 
 ---
 
@@ -726,8 +723,9 @@ An explicitly provided empty value:
 ""
 ```
 
-means that the corresponding cell is expected to be empty after normalization, whatever
-text the admin shows in its place; see section 9.8.
+is a literal like any other: the corresponding cell is expected to show nothing. The text the
+admin shows for a value it has none of, such as `"-"`, is text and is matched as text; see
+section 9.8.
 
 It is distinct from `ANY`.
 
@@ -859,19 +857,19 @@ Booleans normalize to booleans:
 assert page.rows[0]["is_active"].value is True
 ```
 
-An empty cell normalizes to the empty value, whatever the admin shows in its place. The text
-shown stays readable, for a test whose subject is that text:
+A value the admin has none of reads as the text it shows in its place, whether the site's
+default or one the project configured:
 
 ```python
 cell = page.rows[0]["released_on"]
 
-assert cell.is_empty
-assert cell.value == ""
+assert cell.value == "(none)"
 assert cell.text == "(none)"
 ```
 
-`text` is what the document shows in any cell, before normalization: the rendered date
-whose `value` is a `date`, the text of a link, nothing for an icon.
+`text` is what the document shows in any cell, before normalization: the text of a link,
+nothing for an icon. Out of the box `value` differs from it only where the admin drew
+something other than text.
 
 A cell the admin renders as a link keeps its text as its value and exposes the link as a
 `(text, target)` pair; a cell may carry several, so `links` is always a list, empty for a
@@ -2061,28 +2059,22 @@ under test. (done)
 
 All normalization described in section 3.4 is defined by settings, not by package internals.
 
-The package ships a complete default rule set. At minimum it covers:
+The package ships a complete default rule set. It covers:
 
-* booleans;
-* empty and absent values;
+* booleans drawn as icons;
 * links, and their targets;
-* dates and times;
-* numbers;
-* the display value of a choice;
 * surrounding text and whitespace.
 
-Every rule in that set has a documented default and is individually addressable:
+Every rule in that set has a documented default and is individually addressable, and a
+project adds a rule of its own the same way, such as one that reads a date column as a date:
 
 ```python
 DJANGO_ADMIN_KIT = {
     "normalizers": {
         "boolean": ...,
-        "empty": ...,
         "link": ...,
-        "datetime": ...,
-        "number": ...,
-        "choice": ...,
         "text": ...,
+        "datetime": my_datetime_rule,
     },
 }
 ```
@@ -2284,8 +2276,9 @@ Version-specific normalization belongs inside the package. This includes differe
 values are rendered and, where practical, differences in the wording of the admin's own
 built-in messages.
 
-Values render through the formats and time zone the project has configured. Tests must never
-hardcode a rendering format in order to pass.
+Values render through the formats, time zone and locale the project has configured, and a test
+asserts that rendering as the user reads it. A test that covers several locales says which
+locale each expected rendering belongs to.
 
 Results must not depend on the machine a test runs on. The browser carries its own notion of
 locale and time zone, and the package pins both to what the project has configured, so the same
@@ -2313,12 +2306,11 @@ supported Django versions:
 9. Verify changelist rows, one at a time and as a complete ordered set, using:
 
     * exact values;
-    * empty values;
     * `ANY`;
     * callable cell matchers;
     * `ANY_ROW`;
     * column-addressed expected rows.
-10. Read normalized boolean cells, empty cells, and link cells including their targets.
+10. Read normalized boolean cells and link cells including their targets.
 11. Inspect fields on create and edit pages.
 12. Determine required and optional fields.
 13. Read field labels, initial values, choices, and presentation order.
