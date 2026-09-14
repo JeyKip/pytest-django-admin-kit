@@ -485,7 +485,7 @@ admin_ui.url.delete(instance)  # done
 These are the values a test compares a link target against:
 
 ```python
-assert page.rows[0]["customer"].link == admin_ui.url.edit(customer)
+assert page.rows[0]["customer"].links == [("Jane Doe", admin_ui.url.edit(customer))]
 ```
 
 URLs resolve through the admin site under test and its URL prefix. The package never assumes a
@@ -781,7 +781,7 @@ matcher(row, cell)
 It returns a truthy value for a successful match.
 
 `cell` is the cell being matched, as section 9.8 describes it: `cell.value` is its normalized
-meaning, `cell.link` and `cell.links` its targets where it renders any, and `cell.native` the
+meaning, `cell.links` its links where it renders any, and `cell.native` the
 element itself. A cell the admin renders as something other than text, such as an icon, an
 image or a button, is therefore still matchable: by its normalized value where the package
 knows the rendering, and through `cell.native` where it does not.
@@ -836,12 +836,15 @@ constrained:
 assert page.contains({
     "first_name": "Jane",
     "last_name": "Doe",
+    "email": lambda row, cell: cell.value.endswith("@example.com"),
+    "status": ANY,
 })
 ```
 
 This makes it possible to assert a few meaningful columns without enumerating a wide changelist.
-The keys are configured column names, as above. The sentinels and callables of section 9.1
-apply to values here exactly as they do in tuples.
+The keys are configured column names, as above. The values are cell patterns: literals, `ANY`
+and callables, exactly as in a tuple. `ANY` on a listed column says only that the column is
+there, which a dictionary otherwise leaves unsaid.
 
 ---
 
@@ -855,25 +858,24 @@ Booleans normalize to booleans:
 assert page.rows[0]["is_active"].value is True
 ```
 
-A cell the admin renders as a link exposes both its text and its target:
+A cell the admin renders as a link keeps its text as its value and exposes the link as a
+`(text, target)` pair; a cell may carry several, so `links` is always a list, empty for a
+cell with none:
 
 ```python
 cell = page.rows[0]["customer"]
 
 assert cell.value == "Jane Doe"
-assert cell.link == admin_ui.url.edit(customer)
-```
+assert cell.links == [("Jane Doe", admin_ui.url.edit(customer))]
 
-Link targets are compared against the admin URLs of section 6.3.
-
-A cell may contain several links:
-
-```python
 assert page.rows[0]["attachments"].links == [
     ("first.pdf", "/media/first.pdf"),
     ("second.pdf", "/media/second.pdf"),
 ]
 ```
+
+Each pair also exposes its parts by name, `text` and `target`, for a test that wants one of
+them. Targets are compared against the admin URLs of section 6.3.
 
 Whatever the admin renders in a cell, its normalized value is what the user reads there: text
 for text, a boolean for a boolean icon, the text of a link. A rendering the package does not
@@ -891,7 +893,7 @@ Where a target matters, the test addresses the cell that carries it, as above, o
 through a callable:
 
 ```python
-assert page.contains(("Widget", ANY, ANY, lambda row, cell: cell.link == admin_ui.url.edit(product)))
+assert page.contains(("Widget", ANY, ANY, lambda row, cell: cell.links[0].target == admin_ui.url.edit(product)))
 ```
 
 ---
@@ -1073,10 +1075,11 @@ assert not field.editable
 assert field.value == "1 January 2026"
 ```
 
-Where the admin renders such a field as a link, its target is available:
+Where the admin renders such a field as a link, the link is available as on a changelist cell,
+section 9.8:
 
 ```python
-assert page.fields["owner"].link == admin_ui.url.edit(owner)
+assert page.fields["owner"].links == [("Jane Doe", admin_ui.url.edit(owner))]
 ```
 
 Rendered-only fields are never populated by section 14 and never appear in
