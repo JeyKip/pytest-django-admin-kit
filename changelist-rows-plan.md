@@ -18,8 +18,9 @@ Built:
 * `page.rows`: a list of `Row`, in the order shown; `[]` on an empty changelist; raises on a
   changelist that did not open, like every other reader.
 * `Row`: `row["email"]` and `row[2]` give a `Cell`; `row.index`, `row.native`, `row.object`.
-* `Cell`: `value` (typed, per §3.4), `links` (list of `(text, target)` pairs with `.text` and
-  `.target`), `native`.
+* `Cell`: `value` (typed, per §3.4), `text` (what the document shows, before
+  normalization), `is_empty` (the `empty` rule's answer), `links` (list of `(text, target)`
+  pairs with `.text` and `.target`), `native`.
 * Normalization of a cell's value: boolean icon to `True`/`False`/`None`; the empty value
   the admin renders, at whichever of its three levels it was set, to `""`; integer, decimal and float fields to `int`, `Decimal`, `float`; date, time
   and datetime fields to `date`, `time` and an aware `datetime` in the project's time zone,
@@ -172,8 +173,8 @@ every test that reads it, `featured` nullable, default `None`).
 
 ### R1. Read the rows and cells of a changelist as text
 
-`src/django_admin_kit/rows.py` (new): `Cell` (`value` as text for now, `native`, `_name`,
-`_field`), `Row` (`__getitem__` by name or position, `index`, `native`, `_cells` built from
+`src/django_admin_kit/rows.py` (new): `Cell` (`text` as the document's whitespace-collapsed
+text, `value` equal to it for now, `native`, `_name`, `_field`), `Row` (`__getitem__` by name or position, `index`, `native`, `_cells` built from
 `tr > th, tr > td` minus `.action-checkbox` and `page.columns`). A missing name raises
 `KeyError` naming it and listing the row's columns, as `models_for` does.
 
@@ -182,8 +183,8 @@ when there is no table); the page keeps the model it was opened for.
 
 `src/django_admin_kit/session.py`: `list()` hands the model to the page.
 
-`tests/test_rows.py` (new): a viewer reads `page.rows[0]["name"].value == "Bolt"`, by
-position, `row.index`, `len(page.rows) == 3` in the admin's order; an unknown column raises;
+`tests/test_rows.py` (new): a viewer reads `page.rows[0]["name"].value == "Bolt"` and
+`.text == "Bolt"`, by position, `row.index`, `len(page.rows) == 3` in the admin's order; an unknown column raises;
 an empty changelist has `rows == []`; a refused page raises on `rows`; `row.native` and
 `cell.native` are Playwright locators (`cell.native.text_content()`).
 
@@ -200,8 +201,9 @@ Commit: `Read the rows and cells of a changelist by column name and position`.
 
 `src/django_admin_kit/normalize.py` (new): the rule table with `boolean` (icon `alt` to
 `True`/`False`/`None`), `empty` (text equal to the empty value the admin renders for that
-column, resolved per decision 6, to `""`) and `text`; `Cell.value` runs the table; the
-`_model_admin(site, model)` helper of decision 6.
+column, resolved per decision 6, to `""`) and `text`; `Cell.value` runs the table;
+`Cell.is_empty` asks the `empty` rule alone; the `_model_admin(site, model)` helper of
+decision 6.
 
 Test project: `Product.featured = BooleanField(null=True)` in `list_display`; migration.
 `ProductAdmin.empty_value_display = "(none)"`, and a method column
@@ -210,14 +212,14 @@ return product.released_on`, so the suite has the `ModelAdmin` level and the col
 one page; `ops_site` keeps the site default `"-"`.
 
 `tests/test_rows.py`: `is_active` reads `True`/`False`; `featured` reads `None` when unset;
-`released_on` unset reads `""` although the page shows "(none)"; `release` unset reads `""`
-although the page shows "unreleased"; a method column returning a bool without
+`released_on` unset has `is_empty`, `value == ""` and `text == "(none)"`; `release` unset
+likewise with `text == "unreleased"`; a boolean icon has `text == ""` and `is_empty` false; a method column returning a bool without
 `boolean=True` reads `"True"` as text (what the user sees).
 `tests/test_custom_site.py`: on `ops_site` an unset `released_on` reads `""` from the site's
 `"-"`.
 `tests/test_changelist.py`: headers and columns gain `"Release"` / `"release"`.
 
-Spec: §3.4 first two bullets `(done)`; §9.8 boolean example `# done`; §32 item 10's boolean
+Spec: §3.4 first two bullets `(done)`; §9.8 boolean and empty examples `# done`; §9.3 `(done)`; §32 item 10's boolean
 and empty parts noted in the plan, the item marked when links land.
 
 Consistency: text cells are unchanged; only icon and empty cells change value. The

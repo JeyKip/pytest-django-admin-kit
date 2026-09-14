@@ -726,7 +726,8 @@ An explicitly provided empty value:
 ""
 ```
 
-means that the corresponding cell is expected to be empty after normalization.
+means that the corresponding cell is expected to be empty after normalization, whatever
+text the admin shows in its place; see section 9.8.
 
 It is distinct from `ANY`.
 
@@ -857,6 +858,20 @@ Booleans normalize to booleans:
 ```python
 assert page.rows[0]["is_active"].value is True
 ```
+
+An empty cell normalizes to the empty value, whatever the admin shows in its place. The text
+shown stays readable, for a test whose subject is that text:
+
+```python
+cell = page.rows[0]["released_on"]
+
+assert cell.is_empty
+assert cell.value == ""
+assert cell.text == "(none)"
+```
+
+`text` is what the document shows in any cell, before normalization: the rendered date
+whose `value` is a `date`, the text of a link, nothing for an icon.
 
 A cell the admin renders as a link keeps its text as its value and exposes the link as a
 `(text, target)` pair; a cell may carry several, so `links` is always a list, empty for a
