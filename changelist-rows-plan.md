@@ -20,8 +20,8 @@ Built:
 * `Row`: `row["email"]` and `row[2]` give a `Cell`; `row.index`, `row.native`, `row.object`.
 * `Cell`: `value` (typed, per §3.4), `links` (list of `(text, target)` pairs with `.text` and
   `.target`), `native`.
-* Normalization of a cell's value: boolean icon to `True`/`False`/`None`; the site's empty
-  value to `""`; integer, decimal and float fields to `int`, `Decimal`, `float`; date, time
+* Normalization of a cell's value: boolean icon to `True`/`False`/`None`; the empty value
+  the admin renders, at whichever of its three levels it was set, to `""`; integer, decimal and float fields to `int`, `Decimal`, `float`; date, time
   and datetime fields to `date`, `time` and an aware `datetime` in the project's time zone,
   parsed through the project's own format settings; everything else to text. Link targets
   normalized to paths.
@@ -39,8 +39,6 @@ Out of scope:
 * The settings surface of §28.3 (`DJANGO_ADMIN_KIT["normalizers"]`, `admin_ui.normalizer(...)`).
   The rules are built as one replaceable table so that §28.3 only has to read settings into
   it; see decision 4.
-* A `ModelAdmin`-level or field-level `empty_value_display`. The site's value is honoured;
-  see decision 6.
 * `list_editable` cells, and every other changelist interaction of §33 (1.2.0).
 * Form fields (§10 onwards). `links` on a rendered-only field (§13.4) reuses `Cell`'s
   pair type when it is built.
@@ -55,7 +53,7 @@ Out of scope:
 | Normalization | `src/django_admin_kit/normalize.py` (new) | | the rule table and each rule |
 | Date parsing | `src/django_admin_kit/dateformats.py` (new) | | the inverse of Django's date format language |
 | Matching | `src/django_admin_kit/matching.py` (new) | | `ANY`, `ANY_ROW`, pattern matching, the result object |
-| Test project | `tests/project/shop/models.py`, `admin.py` | `Product` with name, sku, price, is_active, released_on; `ProductAdmin` with `price_with_tax` | a `DateTimeField`, a nullable boolean, a two-link column |
+| Test project | `tests/project/shop/models.py`, `admin.py`, `ops.py` | `Product` with name, sku, price, is_active, released_on; `ProductAdmin` with `price_with_tax` | a `DateTimeField`, a nullable boolean, a two-link column, an `empty_value_display` on the admin and on a column |
 
 Reused as is: `_shown()` for the guard, `_text()` for text, `_token()` for the `field-<name>`
 class, `page.columns` for the column order, `AdminUrls` and the `destination` path rule for
@@ -129,9 +127,14 @@ on 3.2, 5.2 and 6.1:
 5. **Numbers are parsed with the project's separators.** The thousand separator is removed
    only when `USE_THOUSAND_SEPARATOR` is on, the decimal separator becomes `.`, and the field
    type decides `int`, `Decimal` or `float`. `page.count` uses the same rule.
-6. **The empty value is the site's.** `site.empty_value_display` is public on every version;
-   the `ModelAdmin`'s is reachable publicly only from 5.1. A project that overrides it on a
-   `ModelAdmin` gets `"-"`-style text back until it replaces the `empty` rule under §28.3.
+6. **The empty value is resolved at all three levels Django resolves it**: the column's
+   own (`@admin.display(empty_value=...)`, an attribute on the method), else the
+   `ModelAdmin`'s (`get_empty_value_display()`), else the site's. That is what
+   `items_for_result` does when rendering, so the rule recognises exactly what the page
+   shows. Reaching the `ModelAdmin` uses `AdminSite.get_model_admin(model)` from Django
+   5.1 and `site._registry[model]` before that, in one private helper with a comment saying
+   why the registry is touched: no public route exists on those versions, and the
+   registry's shape has not changed since Django 1.x.
 7. **A link target is its path.** The `href` is passed through the same rule as
    `destination` (`urlsplit(...).path`), so `?_changelist_filters=...` and an absolute form
    both compare equal to `admin_ui.url.edit(obj)`. That is the §6.3 paragraph.
@@ -196,19 +199,30 @@ Commit: `Read the rows and cells of a changelist by column name and position`.
 ### R2. Normalize boolean icons and the empty value
 
 `src/django_admin_kit/normalize.py` (new): the rule table with `boolean` (icon `alt` to
-`True`/`False`/`None`), `empty` (text equal to the site's `empty_value_display` to `""`) and
-`text`; `Cell.value` runs the table.
+`True`/`False`/`None`), `empty` (text equal to the empty value the admin renders for that
+column, resolved per decision 6, to `""`) and `text`; `Cell.value` runs the table; the
+`_model_admin(site, model)` helper of decision 6.
 
 Test project: `Product.featured = BooleanField(null=True)` in `list_display`; migration.
+`ProductAdmin.empty_value_display = "(none)"`, and a method column
+`@admin.display(description="Release", empty_value="unreleased") def release(self, product):
+return product.released_on`, so the suite has the `ModelAdmin` level and the column level on
+one page; `ops_site` keeps the site default `"-"`.
 
 `tests/test_rows.py`: `is_active` reads `True`/`False`; `featured` reads `None` when unset;
-`released_on` unset reads `""`; a method column returning a bool without `boolean=True` reads
-`"True"` as text (what the user sees).
+`released_on` unset reads `""` although the page shows "(none)"; `release` unset reads `""`
+although the page shows "unreleased"; a method column returning a bool without
+`boolean=True` reads `"True"` as text (what the user sees).
+`tests/test_custom_site.py`: on `ops_site` an unset `released_on` reads `""` from the site's
+`"-"`.
+`tests/test_changelist.py`: headers and columns gain `"Release"` / `"release"`.
 
 Spec: §3.4 first two bullets `(done)`; §9.8 boolean example `# done`; §32 item 10's boolean
 and empty parts noted in the plan, the item marked when links land.
 
-Consistency: text cells are unchanged; only icon and `-` cells change value.
+Consistency: text cells are unchanged; only icon and empty cells change value. The
+`ProductAdmin` override changes what the page shows for an empty date, and the only test
+that could see it is the one written here.
 
 Commit: `Normalize boolean icons and the empty value in changelist cells`.
 
@@ -360,3 +374,6 @@ in one sentence.
 **R6. Where `ANY` and `ANY_ROW` live.** `django_admin_kit.matching`, per §27's rule that
 public names are imported from the module that defines them. Alternative: also re-export
 from the package root; §27 forbids it (startup cost). Recommended: `matching`.
+
+**R7. Resolved:** all three `empty_value_display` levels are honoured (decision 6), through
+a helper that uses `AdminSite.get_model_admin` from Django 5.1 and the registry before it.
