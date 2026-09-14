@@ -890,7 +890,13 @@ assert page.rows[0]["attachments"].links == [
 ```
 
 Each pair also exposes its parts by name, `text` and `target`, for a test that wants one of
-them. Targets are compared against the admin URLs of section 6.3.
+them. `target` is a path, compared against the admin URLs of section 6.3 under that
+section's normalization. The attribute exactly as the admin rendered it, query string and
+all, is `href`, for a test about how the link was built:
+
+```python
+assert "_changelist_filters" in cell.links[0].href
+```
 
 Whatever the admin renders in a cell, its normalized value is what the user reads there: text
 for text, a boolean for a boolean icon, the text of a link. A rendering the package does not

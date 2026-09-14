@@ -19,8 +19,9 @@ Built:
   changelist that did not open, like every other reader.
 * `Row`: `row["email"]` and `row[2]` give a `Cell`; `row.index`, `row.native`, `row.object`.
 * `Cell`: `value` (typed, per §3.4), `text` (what the document shows, before
-  normalization), `is_empty` (the `empty` rule's answer), `links` (list of `(text, target)`
-  pairs with `.text` and `.target`), `native`.
+  normalization), `is_empty` (the `empty` rule's answer), `links` (list of `Link` objects
+  with `.text`, `.target` as a path and `.href` exactly as rendered, each comparing equal to
+  a `(text, target)` pair), `native`.
 * Normalization of a cell's value: boolean icon to `True`/`False`/`None`; the empty value
   the admin renders, at whichever of its three levels it was set, to `""`; integer, decimal and float fields to `int`, `Decimal`, `float`; date, time
   and datetime fields to `date`, `time` and an aware `datetime` in the project's time zone,
@@ -136,9 +137,14 @@ on 3.2, 5.2 and 6.1:
    5.1 and `site._registry[model]` before that, in one private helper with a comment saying
    why the registry is touched: no public route exists on those versions, and the
    registry's shape has not changed since Django 1.x.
-7. **A link target is its path.** The `href` is passed through the same rule as
-   `destination` (`urlsplit(...).path`), so `?_changelist_filters=...` and an absolute form
-   both compare equal to `admin_ui.url.edit(obj)`. That is the §6.3 paragraph.
+7. **A link keeps both forms of its target.** `Link.target` is the path, through the same
+   rule as `destination` (`urlsplit(...).path`), so `?_changelist_filters=...` and an
+   absolute form both compare equal to `admin_ui.url.edit(obj)`; that is the §6.3
+   paragraph. `Link.href` is the attribute exactly as rendered, for a test about how the
+   admin built the link, such as preserved filters. `Link` is a small class, not a tuple,
+   and compares equal to a `(text, target)` pair so the spec's `links == [("Bolt", url)]`
+   holds; it is the one place the package implements comparison behaviour, per §3.1,
+   because a third field would otherwise make every pair comparison carry a query string.
 8. **`row.object` comes from the change link.** `resolve(target)` on the first link whose
    path resolves to the model's change view gives `object_id`; the instance is fetched with
    `model._default_manager.get(pk=...)`. A row without such a link has `object` `None`.
@@ -233,17 +239,18 @@ Commit: `Normalize boolean icons and the empty value in changelist cells`.
 
 ### R3. Links on a cell, targets as paths, and the object behind a row
 
-`src/django_admin_kit/rows.py`: `Link = NamedTuple(text, target)`; `Cell.links` from `a`
-elements, targets through the `destination` path rule; `Row.object` per decision 8.
+`src/django_admin_kit/rows.py`: `Link` (`text`, `target`, `href`; equal to a `(text,
+target)` pair; repr shows all three) per decision 7; `Cell.links` from `a` elements;
+`Row.object` per decision 8.
 
 Test project: `ProductAdmin.documents` renders two links; `list_display` extended;
 `Category` model and `CategoryAdmin(list_display=("name",), list_display_links=None)`;
 migration. `tests/test_index.py`: the superuser's lists gain `Category` before `Product`.
 
 `tests/test_rows.py`: the `name` cell's `links == [("Bolt", admin_ui.url.edit(bolt))]`; a
-plain cell's `links == []`; `documents` gives two pairs and `.target` reads the second; a
-target with `_changelist_filters` (open the list with `?is_active__exact=1`) still compares
-equal; `row.object == bolt`; `row.object is None` on the `Category` changelist, whose admin has
+plain cell's `links == []`; `documents` gives two pairs and `.target` reads the second; with the list opened as
+`?is_active__exact=1`, `links == [("Bolt", admin_ui.url.edit(bolt))]` still holds while
+`links[0].href` carries `_changelist_filters`; `row.object == bolt`; `row.object is None` on the `Category` changelist, whose admin has
 `list_display_links = None`, and its `name` cell has `links == []`.
 
 Spec: §3.4 links bullet `(done)`; §6.3 link paragraph `(done)`; §9.8 links examples `# done`;
@@ -274,11 +281,21 @@ Commit: `Normalize numeric cells through the project's number formats`.
 ### R5. Dates and times
 
 `src/django_admin_kit/dateformats.py` (new): `parse(text, format) -> datetime` (with a
-flag for what was present), the inverse of `django.utils.dateformat` per decision 4.
-`tests/test_dateformats.py` (new, no browser): round trips through `dateformat.format` for
-every shipped locale's `DATE_FORMAT`, `DATETIME_FORMAT`, `TIME_FORMAT` on a few values,
-under `translation.override`; midnight and noon under `P`; an unsupported character raises
-naming it.
+flag for what was present), the inverse of `django.utils.dateformat` per decision 4. The
+month and weekday names it matches are the translated ones for the active language, so the
+same parser serves every locale Django ships.
+
+`tests/test_dateformats.py` (new, no browser): the parser is proved against Django itself,
+locale by locale. One parametrized test walks every `django/conf/locale/*/formats.py` that
+defines `DATE_FORMAT`, `DATETIME_FORMAT` or `TIME_FORMAT` (about ninety languages), and
+under `translation.override(language)` formats a set of values with
+`django.utils.dateformat.format` and parses the result back, asserting equality. The
+values cover day 1 and 31, every month (so every translated name is met, including the AP
+and alternative sets), a year below 2000 for `y`, midnight, noon, 12:00 and 23:59, and a
+time with and without minutes for `P` and `f`. Further tests: an unsupported character
+raises naming it and the format; a text that does not fit the format raises naming both.
+That is the full-matrix proof; the browser tests below then confirm the pipeline end to
+end on a few representative locales.
 
 `src/django_admin_kit/normalize.py`: `datetime` rule: `DateField` to `date`, `TimeField` to
 `time`, `DateTimeField` to an aware datetime in `settings.TIME_ZONE`.
@@ -288,7 +305,12 @@ Test project: `Product.created_at = DateTimeField()` in `list_display`; migratio
 `tests/test_rows.py`: `released_on` reads `date(2026, 1, 1)`; `created_at` created as
 `datetime(2026, 1, 1, 15, 30, tzinfo=utc)` reads equal (project zone is UTC); a second test
 under `override_settings(TIME_ZONE="Europe/Kyiv")` still reads equal (aware comparison) and
-`.hour == 17`.
+`.hour == 17`. A test parametrized over `LANGUAGE_CODE` in `en-us`, `de`, `fr` and `ja`
+(Latin and non-Latin formats, `N j, Y`, `j. F Y`, `j F Y`, `Y年n月j日`), with `USE_L10N`
+set for the Django versions that still read it, opens the changelist in that language and
+reads the same `date` and `datetime` back; the browser locale follows `LANGUAGE_CODE`
+through the fixture, so nothing else changes. The number test of R4 is parametrized the
+same way, so separators are proved in the browser too.
 
 Spec: §3.4 dates/times bullet `(done)`; §31 "Values render through the formats and time zone
 the project has configured" `(done)`.
@@ -297,58 +319,129 @@ Consistency: additive rule; date cells were text before.
 
 Commit: `Normalize date and time cells by inverting the project's date formats`.
 
-### R6. `contains` with one pattern, the sentinels, callables, and the failure text
+### R6. `contains` with one literal row, and the failure text
 
-`src/django_admin_kit/matching.py` (new): `ANY`, `ANY_ROW`; `matches(pattern, row)` for
-tuple/list (length must equal the row's cell count), dict (by column name), `ANY_ROW`;
-cell match: literal `==`, `ANY`, callable `(row, cell)`; `MatchResult` per decision 9 with
-the §30 text. Public names importable from `django_admin_kit.matching`.
+`src/django_admin_kit/matching.py` (new): `matches(pattern, row)` for a tuple or list of
+literals, one per cell, compared with `==` against `cell.value`; a pattern of the wrong
+length is no match. `MatchResult` per decision 9: falsy on failure, and its `repr` is the
+§30 text: the expected row, "No matching row found.", and every actual row as a tuple of
+values. On success it reprs as `Matched row 2` so a passing assertion reads normally.
 
 `src/django_admin_kit/pages.py`: `ChangelistPage.contains(pattern)`.
 
-`tests/test_matching.py` (new, no browser, fake rows): literals, `""`, `ANY`, callables,
-dict with unlisted columns, `ANY_ROW`, a tuple of the wrong length is no match, and the
-failure repr contains "Expected row", the pattern and every actual row.
-`tests/test_rows.py`: `page.contains(("Bolt", "SKU-Bolt", Decimal("10.00"), True, ...))`,
-`page.contains({"name": "Nut"})`, `page.contains(ANY_ROW)`, a failing `contains` on a
-viewer's page; `pytest.raises(AssertionError)` around `assert page.contains(...)` checking
-the message.
+`tests/test_matching.py` (new, no browser, fake rows): a matching literal row; `""` matches
+an empty cell and nothing else; a wrong value, a wrong length; the failure repr contains
+"Expected row", the pattern and every actual row.
+`tests/test_rows.py`: `page.contains(("Bolt", "SKU-Bolt", Decimal("10.00"), True, ...))`;
+`pytest.raises(AssertionError)` around `assert page.contains(("Nobody", ...))` checking the
+message reaches pytest's output.
 
-Spec: §9 intro single-pattern example, §9.1 to §9.7 (dict example), §9.8 pattern examples,
+Spec: §9 intro's first example minus the sentinel and the callable; §9.2 and §9.3 `(done)`;
 §30 changelist part `# done`.
+
+Consistency: additive; nothing else calls `matches`.
+
+Commit: `Match one changelist row against literal values with a readable failure`.
+
+### R7. The sentinels `ANY` and `ANY_ROW`
+
+`src/django_admin_kit/matching.py`: `ANY` (matches any cell) and `ANY_ROW` (matches any row)
+as plain objects whose `repr` is their name, importable from `django_admin_kit.matching`;
+`matches` honours both. The failure text prints them by name.
+
+`tests/test_matching.py`: `ANY` in a tuple; `ANY_ROW` against an empty row list fails and
+against any row passes; the failure repr shows `ANY` in the expected row.
+`tests/test_rows.py`: `page.contains(("Bolt", ANY, ANY, ANY, ...))`, `page.contains(ANY_ROW)`
+on three products, and on an empty changelist it fails.
+
+Spec: §9.4 and §9.6 (single-pattern part) `(done)`; §9.1 sentinels bullet.
+
+Consistency: additive to R6's matcher.
+
+Commit: `Let ANY stand for any cell and ANY_ROW for any row in a changelist pattern`.
+
+### R8. Callable cell matchers
+
+`src/django_admin_kit/matching.py`: a callable in a pattern is called as `matcher(row,
+cell)` and its truthiness decides; an exception inside it propagates unchanged, so a test
+sees its own bug. The failure text shows a callable by its `__name__` (or `<lambda>`).
+
+`tests/test_matching.py`: a callable that passes, one that fails, one that reads
+`row["email"]` and `cell.links`; the failure repr names the callable.
+`tests/test_rows.py`: `page.contains(("Bolt", ANY, lambda row, cell: cell.value > 5, ...))`
+and a callable on `links[0].target`.
+
+Spec: §9.5 `(done)`; §9.1 callables bullet; §9 intro's first example complete `# done`.
 
 Consistency: additive.
 
-Commit: `Match one changelist row against literals, ANY, ANY_ROW and callables`.
+Commit: `Match a changelist cell with a callable that receives the row and the cell`.
 
-### R7. Collections and `match`
+### R9. Column-addressed patterns
 
-`src/django_admin_kit/matching.py`: collection detection (decision 11), backtracking
-assignment for `contains([...])`, positional check for `match([...])`, `match(pattern)` as
-"exactly one row"; `MatchResult` text for "no row for pattern N" and "row N did not match".
+`src/django_admin_kit/matching.py`: a dictionary pattern matches by column name, unlisted
+columns unconstrained, values being the same cell patterns; an unknown column name raises
+`KeyError` naming it and the row's columns rather than silently not matching. The failure
+text prints the dictionary and, for each actual row, the listed columns only.
 
-`src/django_admin_kit/pages.py`: `contains` accepts a collection; `match` added.
+`tests/test_matching.py`: a dict with a literal, `ANY` and a callable; an unknown key raises;
+the failure repr shows the listed columns.
+`tests/test_rows.py`: `page.contains({"name": "Nut", "is_active": True})`.
 
-`tests/test_matching.py`: a collection where greedy assignment would fail, distinctness
-(`[ANY_ROW, ANY_ROW]` against one row fails), `match` with a wrong count, wrong order, and
-`ANY_ROW` holding a position, `match(pattern)` with two rows fails.
+Spec: §9.7 dictionary example `# done`; §9.1 `(done)`.
+
+Consistency: additive.
+
+Commit: `Match a changelist row by a few named columns instead of every cell`.
+
+### R10. `contains` with a collection of rows
+
+`src/django_admin_kit/matching.py`: collection detection per decision 11; each pattern must
+take a different row, in any order, found by backtracking (decision 10). The failure text
+says which pattern found no row of its own and prints the actual rows.
+
+`src/django_admin_kit/pages.py`: `contains` accepts a collection.
+
+`tests/test_matching.py`: two patterns in the wrong order pass; a collection where greedy
+assignment would fail (`[ANY_ROW, ("Jane", ...)]` against `[Jane, John]`) passes;
+`[ANY_ROW, ANY_ROW]` against one row fails; `[]` passes; a list of literals is one row,
+not a collection; the failure repr names the pattern without a row.
+`tests/test_rows.py`: `page.contains([{"name": "Washer"}, ("Bolt", ANY, ...)])`.
+
+Spec: §9 intro collection example `# done`; §9.6 collection sentence.
+
+Consistency: a single pattern behaves as in R6 to R9.
+
+Commit: `Match a collection of changelist rows in any order, each to a row of its own`.
+
+### R11. `match`: the whole changelist in order
+
+`src/django_admin_kit/matching.py`: positional check, count must equal; `ANY_ROW` holds a
+position; a single pattern means exactly one row. The failure text says "expected N rows,
+found M" or "row N did not match" with the pattern and the row.
+
+`src/django_admin_kit/pages.py`: `ChangelistPage.match`.
+
+`tests/test_matching.py`: right order passes, wrong order fails, wrong count fails,
+`ANY_ROW` at a position, `match(pattern)` with two rows fails, `match([])` on no rows
+passes; the failure repr names the position.
 `tests/test_rows.py`: `page.match([...])` on the three products in the admin's order with
-one `ANY_ROW`, `page.contains([...])` in the wrong order passes.
+one `ANY_ROW`.
 
-Spec: §9 heading `(done)` and remaining examples; §9.9 `(done)`; §26 changelist examples
-`# done`; §32 item 9 `(done)`; §1 bullet on row contents; §25 unchanged.
+Spec: §9 heading `(done)` and the `match` examples; §9.9 `(done)`; §26 changelist
+examples `# done`; §32 item 9 `(done)`; §1 bullet on row contents.
 
 README: one entry "Reading and matching changelist rows" with `rows[0]["price"].value`,
 `links`, `contains`, `match`.
 
-Consistency: `contains` with a single pattern behaves as in R6.
+Consistency: additive; `contains` is untouched.
 
-Commit: `Match a collection of rows in any order, and the whole changelist in order`.
+Commit: `Match the whole changelist in order with match()`.
 
 ### After all slices
 
 `pytest -n 4`, `ruff check`, `ruff format --check`, `mypy`, `tox -e 3.8-dj32,3.12-dj61`, and
-because R5 touches locale-sensitive code, `tox -m full` once before the pull request. Verify
+because R4 and R5 touch locale-sensitive code, `tox -m full` once before the pull request. Verify
 every mark, delete this file.
 
 ## 7. Review notes
