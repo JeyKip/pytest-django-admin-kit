@@ -54,7 +54,7 @@ Out of scope:
 | Normalization | `src/django_admin_kit/normalize.py` (new) | | the rule table and each rule |
 | Date parsing | `src/django_admin_kit/dateformats.py` (new) | | the inverse of Django's date format language |
 | Matching | `src/django_admin_kit/matching.py` (new) | | `ANY`, `ANY_ROW`, pattern matching, the result object |
-| Test project | `tests/project/shop/models.py`, `admin.py`, `ops.py` | `Product` with name, sku, price, is_active, released_on; `ProductAdmin` with `price_with_tax` | a `DateTimeField`, a nullable boolean, a two-link column, an `empty_value_display` on the admin and on a column |
+| Test project | `tests/project/shop/models.py`, `admin.py` | `Product` with name, sku, price, is_active, released_on; `ProductAdmin` with `price_with_tax` | a `DateTimeField`, a nullable boolean, a two-link column, an `empty_value_display` on the admin and on a column; a `Category` model whose admin has no change links |
 
 Reused as is: `_shown()` for the guard, `_text()` for text, `_token()` for the `field-<name>`
 class, `page.columns` for the column order, `AdminUrls` and the `destination` path rule for
@@ -156,10 +156,13 @@ on 3.2, 5.2 and 6.1:
 12. **The sentinels are plain objects with a `repr`.** With `.values` gone from the spec they
     never meet `==`, so no `__eq__`.
 13. **The test project gains what the rules need**: `Product.created_at` (`DateTimeField`),
-    `Product.featured` (`BooleanField(null=True)`) for the unknown icon, and a `documents`
-    method column rendering two links. The migration is regenerated with the command in the
-    README. Existing header and column assertions in `tests/test_changelist.py` are extended
-    with the new columns.
+    `Product.featured` (`BooleanField(null=True)`) for the unknown icon, a `documents`
+    method column rendering two links, and a second model, `Category(name)`, registered on
+    the default site with `list_display_links = None`, for a row that links to nothing. The
+    spec's own examples already name `Category` next to `Product`. The migration is
+    regenerated with the command in the README. Existing header and column assertions in
+    `tests/test_changelist.py` are extended with the new columns, and `tests/test_index.py`
+    gains `Category` in the default site's lists.
 14. **Branch:** `feature/changelist-rows`, already holding the spec changes. This plan file
     is committed on the branch while it is being refined and removed once every slice is in.
 
@@ -233,13 +236,15 @@ Commit: `Normalize boolean icons and the empty value in changelist cells`.
 `src/django_admin_kit/rows.py`: `Link = NamedTuple(text, target)`; `Cell.links` from `a`
 elements, targets through the `destination` path rule; `Row.object` per decision 8.
 
-Test project: `ProductAdmin.documents` renders two links; `list_display` extended.
+Test project: `ProductAdmin.documents` renders two links; `list_display` extended;
+`Category` model and `CategoryAdmin(list_display=("name",), list_display_links=None)`;
+migration. `tests/test_index.py`: the superuser's lists gain `Category` before `Product`.
 
 `tests/test_rows.py`: the `name` cell's `links == [("Bolt", admin_ui.url.edit(bolt))]`; a
 plain cell's `links == []`; `documents` gives two pairs and `.target` reads the second; a
 target with `_changelist_filters` (open the list with `?is_active__exact=1`) still compares
-equal; `row.object == bolt`; `row.object is None` on the ops site with `list_display_links =
-None` (add that `ModelAdmin` to `tests/project/ops.py`).
+equal; `row.object == bolt`; `row.object is None` on the `Category` changelist, whose admin has
+`list_display_links = None`, and its `name` cell has `links == []`.
 
 Spec: §3.4 links bullet `(done)`; §6.3 link paragraph `(done)`; §9.8 links examples `# done`;
 §32 item 10 `(done)`.
@@ -348,11 +353,8 @@ every mark, delete this file.
 
 ## 7. Review notes
 
-**R1. `row.object` and the ops site.** Proving `object is None` needs a `ModelAdmin` with
-`list_display_links = None` somewhere; the plan puts it on `ops_site`, whose docstring says
-its job is URL resolution. Alternative: a second `ModelAdmin` for `Product` is impossible on
-one site, so either extend `ops.py`'s stated purpose or skip that one test. Recommended:
-extend `ops.py`, one line in its docstring.
+**R1. Resolved:** the row without a change link comes from a second model, `Category`,
+rather than from touching `ops_site` (decision 13).
 
 **R2. `id` as a typed cell.** `ProductAdmin` does not list `id`; the `int` case is covered by
 the no-browser rule test rather than a page. Adding `id` to `list_display` would show it and
