@@ -179,15 +179,15 @@ section 13.1 for fields. It is never an address, because it is presentation, and
 column or field keeps its name across translations and relabelling.
 
 ```python
-page.rows[0]
-page.rows[0]["email"]
+page.rows[0]             # done
+page.rows[0]["email"]    # done
 page.fields["email"]
 ```
 
 A cell is also addressable by position, where that is the clearer expression:
 
 ```python
-page.rows[0][2]
+page.rows[0][2]    # done
 ```
 
 ---
@@ -222,8 +222,8 @@ Native handles are available at every level of the object model:
 admin_ui.native                        # done
 page.native                            # done
 page.fields["name"].native
-page.rows[0].native
-page.rows[0]["email"].native
+page.rows[0].native                    # done
+page.rows[0]["email"].native           # done
 ```
 
 They are the underlying browser library's own objects. The package does not wrap, restrict, or
@@ -646,7 +646,7 @@ page = admin_ui.list(Product)
 assert page.works         # done
 assert page.empty         # done
 assert page.count == 0    # done
-assert page.rows == []
+assert page.rows == []    # done
 ```
 
 ---

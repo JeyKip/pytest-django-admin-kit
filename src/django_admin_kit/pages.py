@@ -19,6 +19,7 @@ from urllib.parse import urlsplit
 from django.apps import apps
 from playwright.sync_api import Locator, Page
 
+from .rows import Row
 from .urls import AdminUrls
 
 
@@ -172,7 +173,7 @@ class IndexPage(AdminPage):
 
 
 class ChangelistPage(AdminPage):
-    """A model's changelist: its columns, and how many records it reports."""
+    """A model's changelist: its columns, its rows, and how many records it reports."""
 
     @property
     def headers(self) -> list[str]:
@@ -192,6 +193,16 @@ class ChangelistPage(AdminPage):
 
     def has_column(self, name: str) -> bool:
         return name in self.columns
+
+    @cached_property
+    def rows(self) -> list[Row]:
+        """The rows the changelist shows, in order.
+
+        An empty changelist shows no table, so it has no rows either.
+        """
+        columns = self.columns
+        elements = self._shown().locator("#result_list tbody tr").all()
+        return [Row(element, index, columns) for index, element in enumerate(elements)]
 
     @cached_property
     def _header_cells(self) -> list[Locator]:

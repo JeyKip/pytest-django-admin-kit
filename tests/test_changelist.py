@@ -136,6 +136,7 @@ def test_a_changelist_that_did_not_open_has_nothing_to_read(admin_ui, adder):
         lambda: page.columns,
         lambda: page.has_header("Name"),
         lambda: page.has_column("name"),
+        lambda: page.rows,
         lambda: page.title,
         lambda: page.subtitle,
     ):
