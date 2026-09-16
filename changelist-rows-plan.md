@@ -5,7 +5,7 @@ sections without which §9 cannot be marked done:
 
 * §3.4 normalized values for changelist cells: booleans drawn as icons, links, text;
 * §3.5 addressing of rows and cells, and §3.6 native handles on `Row` and `Cell`;
-* §6.3, the paragraph on link targets comparing equal to the package's URLs;
+* §6.3, the paragraph on links read from a page;
 * §8.2, the `page.rows == []` line;
 * §30, the failure output of a row match;
 * §32 criteria 9 and 10.
@@ -18,14 +18,14 @@ Built:
   changelist that did not open, like every other reader.
 * `Row`: `row["email"]` and `row[2]` give a `Cell`; `row.index`, `row.native`, `row.object`.
 * `Cell`: `value` (normalized, per §3.4), `text` (what the document shows, before
-  normalization), `links` (list of `Link` objects with `.text`, `.target` as a path and
-  `.href` exactly as rendered, each comparing equal to a `(text, target)` pair), `native`.
+  normalization), `links` (list of `Link` objects with `.text` and `.href` as a split URL,
+  each comparing equal to a `(text, href)` pair), `native`.
 * Normalization of a cell's value: the boolean icon to `True`/`False`/`None`; everything
   else to the text shown, so a date, a number or the admin's empty value reads exactly as
-  the user sees it in the locale the browser is pinned to. Link targets normalized to paths.
+  the user sees it in the locale the browser is pinned to.
 * `page.contains(pattern)` and `page.contains([patterns])`; `page.match(pattern)` and
   `page.match([patterns])`; the sentinels `ANY` and `ANY_ROW`; callables `matcher(row, cell)`;
-  tuple, list and dictionary patterns.
+  link pairs; tuple, list and dictionary patterns.
 * A failing `assert page.contains(...)` prints the expected pattern and the actual rows, as
   §30 shows, through pytest's ordinary assertion output.
 * `page.count` reads its number through `normalize.integer`, proven against what Django
@@ -47,15 +47,15 @@ Out of scope:
 | Layer | File | What exists | What this adds |
 |---|---|---|---|
 | Session | `src/django_admin_kit/session.py` | `list(model)` via `_open()` | passes the model to the page |
-| Page | `src/django_admin_kit/pages.py` | `ChangelistPage` with `count`, `headers`, `columns`, `_header_cells`, `_shown()`, `_text()`, `_token()` | `rows`, `contains`, `match`; the model behind the page |
-| Rows | `src/django_admin_kit/rows.py` (new) | | `Row`, `Cell`, `Column`, `Link` |
+| Page | `src/django_admin_kit/pages.py` | `ChangelistPage` with `count`, `headers`, `columns`, `_header_cells`, `_shown()`, `_text()`, `_token()` | `rows`, `contains`, `match`; a `ModelPage` base that keeps the model, for every page opened for one |
+| Rows | `src/django_admin_kit/rows.py` (new) | | `Row`, `Cell`, `Link` |
 | Normalization | `src/django_admin_kit/normalize.py` (new) | | the rule table, each rule, `integer` |
 | Matching | `src/django_admin_kit/matching.py` (new) | | `ANY`, `ANY_ROW`, pattern matching, the result object |
 | Test project | `tests/project/shop/models.py`, `admin.py` | `Product` with name, sku, price, is_active, released_on; `ProductAdmin` with `price_with_tax` | a nullable boolean, a bool the admin renders as text, an `empty_value_display` on the admin, a two-link column; a `Category` model whose admin has no change links |
 
 Reused as is: `_shown()` for the guard, `_text()` for text, `_token()` for the `field-<name>`
 class, `page.columns` for the column order, `AdminUrls` and the `destination` path rule for
-link targets, `apps.get_model` style public lookups (`model._meta.get_field`), and the
+links, `apps.get_model` style public lookups (`model._meta.get_field`), and the
 `conftest.py` users and products.
 
 ## 3. Markup and rendering facts the code depends on
@@ -90,7 +90,7 @@ on 3.2, 5.2 and 6.1:
 
 1. **A cell is text unless the admin drew something else.** `value` is the document's text,
    whitespace collapsed, except where the admin rendered an icon (a boolean) or a link (the
-   text, with the target kept separately). A date, a number or the empty value display is
+   text, with the link kept separately). A date, a number or the empty value display is
    text, compared as the user reads it; a test that covers several locales parametrizes the
    locale and the expected rendering. This keeps the package out of the business of parsing
    Django's format language back, and keeps every assertion about what is on the page.
@@ -101,14 +101,15 @@ on 3.2, 5.2 and 6.1:
    `boolean`, `link` (for `links`, not `value`) and `text`. The other slots §28.3 names
    (`empty`, `datetime`, `number`, `choice`) default to the text shown, so they change
    nothing until a project replaces one; they are added by the §28.3 slice together with the
-   settings that replace them, routed by `Column.field` (decision 3) so a project's `datetime`
+   settings that replace them, routed by the model field behind the column (decision 3) so a project's `datetime`
    rule only ever sees the cells of date, time and datetime fields. Until then the table is
    not public.
-3. **`Column` carries the model field, which routes the typed slots.** `Column(name, field)`,
-   with `field` from `model._meta.get_field(name)` or `None` when the column is computed
-   (`FieldDoesNotExist`). The package's own rules do not need it; the `datetime`, `number`
-   and `choice` slots of §28.3 are applied by it, so a rule a project puts there sees only
-   its kind of cell. This needs no `ModelAdmin` and no private attribute.
+3. **The model field behind a column arrives with the slots that need it.** The
+   `datetime`, `number` and `choice` slots of §28.3 are applied by field type, so a rule a
+   project puts there sees only its kind of cell; that takes `model._meta.get_field(name)`
+   (or `None` for a computed column, `FieldDoesNotExist`) on the cell's column. Nothing in
+   this plan reads it, so it is built by the §28.3 slice, not here. `Cell.column` is the
+   configured name until then. This needs no `ModelAdmin` and no private attribute.
 4. **`page.count` is an integer, read the way an integer is grouped.** The locale-aware parse
    of a grouped integer is "remove the grouping separator, then `int()`", and dropping every
    non-digit does exactly that in every locale, including the non-breaking space `fr` uses
@@ -116,16 +117,18 @@ on 3.2, 5.2 and 6.1:
    The parse lives in `normalize.integer`, and its unit tests render their input with
    `django.utils.formats.number_format` under `en` and `fr` with `USE_THOUSAND_SEPARATOR`
    on, so the claim is proven against Django rather than against typed literals.
-5. **A link keeps both forms of its target.** `Link.target` is the path, through the same
-   rule as `destination` (`urlsplit(...).path`), so `?_changelist_filters=...` and an
-   absolute form both compare equal to `admin_ui.url.edit(obj)`; that is the §6.3
-   paragraph. `Link.href` is the attribute exactly as rendered, for a test about how the
-   admin built the link, such as preserved filters. `Link` is a small class, not a tuple,
-   and compares equal to a `(text, target)` pair so the spec's `links == [("Bolt", url)]`
-   holds; it is the one place the package implements comparison behaviour, per §3.1,
-   because a third field would otherwise make every pair comparison carry a query string.
-6. **`row.object` comes from the change link.** `resolve(target)` on the first link whose
-   path resolves to the model's change view gives `object_id`; the instance is fetched with
+5. **A link is its text and its `href` as rendered, split.** `Link(text, href)` accepts
+   `href` as a string or a `SplitResult` and keeps it as a `SplitResult`, so a test reaches
+   `.path`, `.query`, `.netloc` and the rest by their standard names, and compares the path
+   against `admin_ui.url` where that is what it means. Nothing is normalized away: a
+   filtered changelist's `_changelist_filters` is in the query, as the user's browser sees
+   it. `Link` is a small class, not a tuple, and compares equal to another `Link` and to a
+   `(text, href)` pair with either `href` type, so `links == [("Bolt", "/admin/.../change/")]`
+   holds and a pair in a row pattern needs no special handling in the matcher. It is the
+   one place the package implements comparison behaviour, per §3.1. A plain `list[Link]`
+   compares element-wise through it, so no list class is needed.
+6. **`row.object` comes from the change link.** `resolve(href.path)` on the first link
+   whose path resolves to the model's change view gives `object_id`; the instance is fetched with
    `model._default_manager.get(pk=...)`. A row without such a link has `object` `None`.
 7. **`contains` and `match` return a result object, not a bare bool.** It is falsy when the
    match failed and its `repr` is the §30 text (expected pattern, actual rows, and for
@@ -183,7 +186,7 @@ Spec: §8.2 `page.rows == []` `# done`; §3.5 examples `# done` for rows and cel
 
 Commit: `Read the rows and cells of a changelist by column name and position`.
 
-### R2. Normalize boolean icons, and the count through `integer`
+### R2. Normalize boolean icons, and the count through `integer` (done)
 
 `src/django_admin_kit/normalize.py` (new): the rule table with `boolean` (one `img[alt]` in
 a cell with no text, `alt` to `True`/`False`/`None`) and `text`; `normalize(cell, column)`;
@@ -210,29 +213,37 @@ numbers it did.
 
 Commit: `Normalize boolean icons in changelist cells`.
 
-### R3. Links on a cell, targets as paths, and the object behind a row
+### R3. Links on a cell, and the object behind a row
 
-`src/django_admin_kit/rows.py`: `Link` (`text`, `target`, `href`; equal to a `(text,
-target)` pair; repr shows all three) per decision 5; `Cell.links` from `a` elements;
-`Row.object` per decision 6; `Column(name, field)` per decision 3, built by the page from
-the model it was opened for, which `session.list()` hands over.
+`src/django_admin_kit/rows.py`: `Link` (`text`, `href` as a `SplitResult`; equal to a
+`Link` or a `(text, href)` pair with `href` a string or split) per decision 5; `Cell.links`
+from `a` elements;
+`Row.object` per decision 6, which needs the model the page was opened for. `pages.py`
+gains `ModelPage(AdminPage)`, taking the model, as the base of the changelist, create,
+edit and delete pages; `session.py` hands each its model (`type(instance)` for the
+last two).
 
 Test project: `ProductAdmin.documents` renders two links; `list_display` extended;
 `Category` model and `CategoryAdmin(list_display=("name",), list_display_links=None)`;
 migration. `tests/test_index.py`: the superuser's lists gain `Category` before `Product`.
 
-`tests/test_rows.py`: the `name` cell's `links == [("Bolt", admin_ui.url.edit(bolt))]`; a
-plain cell's `links == []`; `documents` gives two pairs and `.target` reads the second; with the list opened as
-`?is_active__exact=1`, `links == [("Bolt", admin_ui.url.edit(bolt))]` still holds while
-`links[0].href` carries `_changelist_filters`; `row.object == bolt`; `row.object is None` on the `Category` changelist, whose admin has
-`list_display_links = None`, and its `name` cell has `links == []`.
+`tests/test_rows.py`: the `name` cell's `links == [("Bolt", admin_ui.url.edit(bolt))]` and
+`links[0].href.path == admin_ui.url.edit(bolt)`; a plain cell's `links == []`; `documents`
+gives two pairs, compared as strings and as split URLs; with the `is_active` filter
+applied, `links[0].href.path` still equals `admin_ui.url.edit(bolt)` while `href.query`
+carries `_changelist_filters` and the pair no longer matches; `row.object == bolt`;
+`row.object is None` on the `Category` changelist, whose admin has `list_display_links =
+None`, and its `name` cell has `links == []`. `tests/test_links.py` (new, no browser):
+`Link` equality with a `Link`, a pair with a string, a pair with a split URL, a different
+href, a different text, a plain string (never equal); a list of links against a list of
+pairs; `repr`.
 
-Spec: §3.4 links bullet `(done)`; §6.3 link paragraph `(done)`; §9.8 links examples `# done`;
-§32 item 10 `(done)`.
+Spec: §3.4 links bullet `(done)`; §6.3 link paragraph and example `(done)`; §9.8 links
+examples `# done`; §32 item 10 `(done)`.
 
 Consistency: additive.
 
-Commit: `Expose a cell's links with normalized targets and the object behind a row`.
+Commit: `Expose a cell's links as rendered and the object behind a row`.
 
 ### R4. `contains` with one literal row, and the failure text
 
@@ -258,7 +269,29 @@ Consistency: additive; nothing else calls `matches`.
 
 Commit: `Match one changelist row against literal values with a readable failure`.
 
-### R5. The sentinels `ANY` and `ANY_ROW`
+### R5. Match a cell by its links
+
+`src/django_admin_kit/matching.py`: a `(text, href)` pair in place of a cell's value
+matches a cell whose `links` is exactly `[that link]`, and a list of pairs a cell whose
+`links` equals it; `href` in a pair is a string or a `SplitResult`, and the comparison is
+`Link.__eq__`'s (decision 5), so the matcher only has to tell a pair from a literal: a
+2-tuple whose first element is a string is a link pair, a list whose elements are all
+such pairs (or `Link`s) is a list of them. The failure text prints a pair as the user
+wrote it and a cell's links as pairs.
+
+`tests/test_matching.py`: a pair against a one-link cell, with a string and with a split
+href; a pair against a plain cell fails; a list of two pairs against a two-link cell, and
+in the wrong order fails; `[]` matches a cell without links.
+`tests/test_rows.py`: `page.contains((("Bolt", admin_ui.url.edit(bolt)), "SKU-Bolt", ...))`
+and a row pattern with `[("Datasheet", ...), ("Manual", ...)]` in the `documents` position.
+
+Spec: §9.1 links bullet `(done)`; §9.8 pattern examples `# done`.
+
+Consistency: additive; a cell pattern that is not a pair matches as in R4.
+
+Commit: `Match a changelist cell by the links it renders`.
+
+### R6. The sentinels `ANY` and `ANY_ROW`
 
 `src/django_admin_kit/matching.py`: `ANY` (matches any cell) and `ANY_ROW` (matches any row)
 as plain objects whose `repr` is their name, importable from `django_admin_kit.matching`;
@@ -271,11 +304,11 @@ on three products, and on an empty changelist it fails.
 
 Spec: §9.4 and §9.6 (single-pattern part) `(done)`; §9.1 sentinels bullet.
 
-Consistency: additive to R6's matcher.
+Consistency: additive to R4's matcher.
 
 Commit: `Let ANY stand for any cell and ANY_ROW for any row in a changelist pattern`.
 
-### R6. Callable cell matchers
+### R7. Callable cell matchers
 
 `src/django_admin_kit/matching.py`: a callable in a pattern is called as `matcher(row,
 cell)` and its truthiness decides; an exception inside it propagates unchanged, so a test
@@ -284,7 +317,7 @@ sees its own bug. The failure text shows a callable by its `__name__` (or `<lamb
 `tests/test_matching.py`: a callable that passes, one that fails, one that reads
 `row["email"]` and `cell.links`; the failure repr names the callable.
 `tests/test_rows.py`: `page.contains(("Bolt", lambda row, cell: cell.value.startswith("SKU-"), ...))`
-and a callable on `links[0].target`.
+and a callable on `links[0].href.path`.
 
 Spec: §9.5 `(done)`; §9.1 callables bullet; §9 intro's first example complete `# done`.
 
@@ -292,7 +325,7 @@ Consistency: additive.
 
 Commit: `Match a changelist cell with a callable that receives the row and the cell`.
 
-### R7. Column-addressed patterns
+### R8. Column-addressed patterns
 
 `src/django_admin_kit/matching.py`: a dictionary pattern matches by column name, unlisted
 columns unconstrained, values being the same cell patterns; an unknown column name raises
@@ -309,7 +342,7 @@ Consistency: additive.
 
 Commit: `Match a changelist row by a few named columns instead of every cell`.
 
-### R8. `contains` with a collection of rows
+### R9. `contains` with a collection of rows
 
 `src/django_admin_kit/matching.py`: collection detection per decision 9; each pattern must
 take a different row, in any order, found by backtracking (decision 8). The failure text
@@ -325,11 +358,11 @@ not a collection; the failure repr names the pattern without a row.
 
 Spec: §9 intro collection example `# done`; §9.6 collection sentence.
 
-Consistency: a single pattern behaves as in R4 to R7.
+Consistency: a single pattern behaves as in R4 to R8.
 
 Commit: `Match a collection of changelist rows in any order, each to a row of its own`.
 
-### R9. `match`: the whole changelist in order
+### R10. `match`: the whole changelist in order
 
 `src/django_admin_kit/matching.py`: positional check, count must equal; `ANY_ROW` holds a
 position; a single pattern means exactly one row. The failure text says "expected N rows,

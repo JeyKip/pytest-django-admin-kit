@@ -1,13 +1,13 @@
 """What the admin index lists for each user, read from the rendered page.
 
-The default site registers Product from the test project and User and Group from
-`django.contrib.auth`, which gives two apps and one app with two models.
+The default site registers Product and Category from the test project and User and
+Group from `django.contrib.auth`, which gives two apps with two models each.
 """
 
 import pytest
 from django.contrib.auth.models import Group, User
 
-from project.shop.models import Product
+from project.shop.models import Category, Product
 
 
 def test_a_superuser_sees_every_app_and_model_in_the_admins_order(admin_ui, superuser):
@@ -17,9 +17,9 @@ def test_a_superuser_sees_every_app_and_model_in_the_admins_order(admin_ui, supe
     page = admin_ui.index()
 
     assert page.apps == ["Authentication and Authorization", "Shop"]
-    assert page.models == [Group, User, Product]
+    assert page.models == [Group, User, Category, Product]
     assert page.models_for("Authentication and Authorization") == [Group, User]
-    assert page.models_for("Shop") == [Product]
+    assert page.models_for("Shop") == [Category, Product]
 
 
 def test_an_app_the_index_does_not_show_is_reported_not_guessed(admin_ui, viewer):

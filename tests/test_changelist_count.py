@@ -13,6 +13,7 @@ from django.utils.formats import number_format
 
 from django_admin_kit.pages import ChangelistPage
 from django_admin_kit.urls import AdminUrls
+from project.shop.models import Product
 
 
 class FakePaginator:
@@ -37,7 +38,9 @@ class FakePage:
 
 
 def changelist(text):
-    return ChangelistPage(FakePage(text), 200, "/admin/shop/product/", AdminUrls(admin.site))
+    return ChangelistPage(
+        FakePage(text), 200, "/admin/shop/product/", AdminUrls(admin.site), Product
+    )
 
 
 @pytest.mark.parametrize(

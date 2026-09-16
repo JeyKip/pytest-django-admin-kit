@@ -17,6 +17,7 @@ from functools import cached_property
 from urllib.parse import urlsplit
 
 from django.apps import apps
+from django.db.models import Model
 from playwright.sync_api import Locator, Page
 
 from .normalize import integer
@@ -173,7 +174,17 @@ class IndexPage(AdminPage):
         return model if self._urls.site.is_registered(model) else None
 
 
-class ChangelistPage(AdminPage):
+class ModelPage(AdminPage):
+    """An admin page about one model, which it keeps for what reads it."""
+
+    def __init__(
+        self, page: Page, status_code: int, requested: str, urls: AdminUrls, model: type[Model]
+    ) -> None:
+        super().__init__(page, status_code, requested, urls)
+        self._model = model
+
+
+class ChangelistPage(ModelPage):
     """A model's changelist: its columns, its rows, and how many records it reports."""
 
     @property
@@ -203,7 +214,10 @@ class ChangelistPage(AdminPage):
         """
         columns = self.columns
         elements = self._shown().locator("#result_list tbody tr").all()
-        return [Row(element, index, columns) for index, element in enumerate(elements)]
+        return [
+            Row(element, index, columns, self._model, self._urls)
+            for index, element in enumerate(elements)
+        ]
 
     @cached_property
     def _header_cells(self) -> list[Locator]:
@@ -246,15 +260,15 @@ class ChangelistPage(AdminPage):
         return match
 
 
-class CreatePage(AdminPage):
+class CreatePage(ModelPage):
     """The page that adds a new instance of a model."""
 
 
-class EditPage(AdminPage):
+class EditPage(ModelPage):
     """The change page of one instance, read only for a user who may only view it."""
 
 
-class DeletePage(AdminPage):
+class DeletePage(ModelPage):
     """The page that asks whether to delete one instance."""
 
 

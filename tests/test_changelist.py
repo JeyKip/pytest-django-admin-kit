@@ -17,6 +17,7 @@ HEADERS = [
     "Released on",
     "Released",
     "Price with tax",
+    "Documents",
 ]
 COLUMNS = [
     "name",
@@ -27,6 +28,7 @@ COLUMNS = [
     "released_on",
     "is_released",
     "price_with_tax",
+    "documents",
 ]
 
 

@@ -143,8 +143,8 @@ The package compares **what the user reads**, not markup.
 A value read from an admin page is normalized before a test ever sees it:
 
 * a boolean the admin draws as an icon normalizes to a boolean; (done)
-* a value the admin renders as a link normalizes to its text, with the target available
-  separately;
+* a value the admin renders as a link normalizes to its text, with the link available
+  separately; (done)
 * everything else is the document's own text, never its rendered presentation, so styling
   such as letter-casing never changes a value.
 
@@ -479,19 +479,19 @@ admin_ui.url.edit(instance)    # done
 admin_ui.url.delete(instance)  # done
 ```
 
-These are the values a test compares a link target against:
+These are the values a test compares the path of a link against:
 
 ```python
-assert page.rows[0]["customer"].links == [("Jane Doe", admin_ui.url.edit(customer))]
+assert page.rows[0]["customer"].links[0].href.path == admin_ui.url.edit(customer)    # done
 ```
 
 URLs resolve through the admin site under test and its URL prefix. The package never assumes a
 location, so a project that mounts its admin elsewhere gets correct URLs without changing its
 tests. See section 28.2. (done)
 
-Link targets read from a page are normalized so that they compare equal to the URL the package
-produces for the same page, whether the page rendered that target in relative or absolute form.
-A test must never need to know which form was rendered.
+A link read from a page keeps its `href` exactly as rendered, split into its parts, so a test
+compares the whole against what it expects to see, or one part against the URL the package
+produces for the same page. See section 9.8. (done)
 
 Resolution does not require the page to exist or to be reachable. Asking for the URL of a page
 the current user may not open still returns that URL; whether the page works is the separate
@@ -693,9 +693,10 @@ one row and it matches.
 
 ## 9.1 Matcher vocabulary
 
-Expected values are matched using three things, and nothing else:
+Expected values are matched using four things, and nothing else:
 
 * literal values, compared for equality;
+* links, as `(text, href)` pairs, compared against the links a cell renders;
 * the sentinels `ANY` and `ANY_ROW`;
 * callables.
 
@@ -871,48 +872,64 @@ assert cell.text == "(none)"     # done
 nothing for an icon. Out of the box `value` differs from it only where the admin drew
 something other than text.
 
-A cell the admin renders as a link keeps its text as its value and exposes the link as a
-`(text, target)` pair; a cell may carry several, so `links` is always a list, empty for a
-cell with none:
+A cell the admin renders as a link keeps its text as its value and exposes the link
+separately as a `Link`, with the text and the `href` exactly as rendered; a cell may carry
+several, so `links` is always a list, empty for a cell with none. A `Link` compares equal to
+a `(text, href)` pair, so a test writes the pair it expects to see:
 
 ```python
 cell = page.rows[0]["customer"]
 
-assert cell.value == "Jane Doe"
-assert cell.links == [("Jane Doe", admin_ui.url.edit(customer))]
+assert cell.value == "Jane Doe"                                          # done
+assert cell.links == [("Jane Doe", "/admin/shop/customer/7/change/")]    # done
 
-assert page.rows[0]["attachments"].links == [
+assert page.rows[0]["attachments"].links == [    # done
     ("first.pdf", "/media/first.pdf"),
     ("second.pdf", "/media/second.pdf"),
 ]
 ```
 
-Each pair also exposes its parts by name, `text` and `target`, for a test that wants one of
-them. `target` is a path, compared against the admin URLs of section 6.3 under that
-section's normalization. The attribute exactly as the admin rendered it, query string and
-all, is `href`, for a test about how the link was built:
+`href` is the standard split URL (`urllib.parse.SplitResult`), so its parts are there by
+name for a test that wants one of them, such as the path compared against the admin URLs of
+section 6.3, or the query string the admin adds to keep a filter across a round trip:
 
 ```python
-assert "_changelist_filters" in cell.links[0].href
+link = cell.links[0]
+
+assert link.text == "Jane Doe"                              # done
+assert link.href.path == admin_ui.url.edit(customer)        # done
+assert "_changelist_filters" in link.href.query             # done
 ```
+
+In a pair, `href` may be given as a string or as a split URL; a string is split before
+comparing.
 
 Whatever the admin renders in a cell, its normalized value is what the user reads there: text
 for text, a boolean for a boolean icon, the text of a link. A rendering the package does not
 know normalizes to the cell's text, and `cell.native` is there for the rest, as section 3.6
 describes. Each of these rules is a normalizer of section 28.3.
 
-A row pattern therefore matches what is read, and never a target. A row whose first column
+A row pattern therefore matches what is read, and never a link. A row whose first column
 links to the change page and whose last is a boolean icon matches plain data:
 
 ```python
 assert page.contains(("Widget", "SKU-1", "10.00", True))
 ```
 
-Where a target matters, the test addresses the cell that carries it, as above, or matches it
-through a callable:
+Where a link matters, a `(text, href)` pair in place of a cell's value matches a cell that
+renders exactly that one link, and a list of pairs a cell that renders exactly those, in
+that order:
 
 ```python
-assert page.contains(("Widget", ANY, ANY, lambda row, cell: cell.links[0].target == admin_ui.url.edit(product)))
+assert page.contains((("Widget", "/admin/shop/product/1/change/"), "SKU-1", "10.00", True))
+assert page.contains({"attachments": [("first.pdf", "/media/first.pdf"), ("second.pdf", "/media/second.pdf")]})
+```
+
+A pair matches the rendered `href` whole; a test on a page where the admin has added to it,
+such as a filtered changelist, matches the part it cares about through a callable:
+
+```python
+assert page.contains((lambda row, cell: cell.links[0].href.path == admin_ui.url.edit(product), "SKU-1", "10.00", True))
 ```
 
 ---
@@ -2320,7 +2337,7 @@ supported Django versions:
     * callable cell matchers;
     * `ANY_ROW`;
     * column-addressed expected rows.
-10. Read normalized boolean cells and link cells including their targets.
+10. Read normalized boolean cells and link cells including their targets. (done)
 11. Inspect fields on create and edit pages.
 12. Determine required and optional fields.
 13. Read field labels, initial values, choices, and presentation order.

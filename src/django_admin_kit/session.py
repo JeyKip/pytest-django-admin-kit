@@ -104,23 +104,23 @@ class AdminSession:
 
     def list(self, model: type[Any]) -> ChangelistPage:
         """Open a model's changelist."""
-        return self._open(self._urls.list(model), ChangelistPage)
+        return self._open(self._urls.list(model), ChangelistPage, model)
 
     def create(self, model: type[Any]) -> CreatePage:
         """Open the page that adds a new instance of ``model``."""
-        return self._open(self._urls.create(model), CreatePage)
+        return self._open(self._urls.create(model), CreatePage, model)
 
     def edit(self, instance: Any) -> EditPage:
         """Open the change page of ``instance``."""
-        return self._open(self._urls.edit(instance), EditPage)
+        return self._open(self._urls.edit(instance), EditPage, type(instance))
 
     def delete(self, instance: Any) -> DeletePage:
         """Open the page that asks whether to delete ``instance``."""
-        return self._open(self._urls.delete(instance), DeletePage)
+        return self._open(self._urls.delete(instance), DeletePage, type(instance))
 
-    def _open(self, path: str, page_class: type[_P]) -> _P:
+    def _open(self, path: str, page_class: type[_P], *args: Any) -> _P:
         page = self._context.new_page()
         response = page.goto(self.absolute(path))
         # `goto` returns None only for same-document navigations, never for a URL.
         assert response is not None
-        return page_class(page, response.status, path, self._urls)
+        return page_class(page, response.status, path, self._urls, *args)

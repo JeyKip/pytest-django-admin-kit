@@ -5,11 +5,13 @@ so a test that reads the first row reads what the admin put there.
 """
 
 import datetime
+from urllib.parse import urlsplit
 
 import pytest
 from playwright.sync_api import Locator
 
-from project.shop.models import Product
+from django_admin_kit.rows import Link
+from project.shop.models import Category, Product
 
 
 def test_a_viewer_reads_a_cell_by_column_name(admin_ui, viewer, products):
@@ -138,3 +140,72 @@ def test_a_date_reads_as_the_text_the_admin_renders(admin_ui, viewer, products):
 
     assert row["released_on"].value == "Jan. 15, 2026"
     assert row["is_released"].value == "True"
+
+
+def test_a_cell_that_links_to_the_change_page_reads_as_a_pair(admin_ui, viewer, products):
+    admin_ui.login(viewer)
+
+    cell = admin_ui.list(Product).rows[0]["name"]
+
+    assert cell.value == "Bolt"
+    assert cell.links == [("Bolt", admin_ui.url.edit(products[0]))]
+    assert cell.links[0].text == "Bolt"
+    assert cell.links[0].href.path == admin_ui.url.edit(products[0])
+
+
+def test_a_cell_without_a_link_has_none(admin_ui, viewer, products):
+    admin_ui.login(viewer)
+
+    assert admin_ui.list(Product).rows[0]["sku"].links == []
+
+
+def test_a_cell_may_carry_several_links(admin_ui, viewer, products):
+    admin_ui.login(viewer)
+
+    cell = admin_ui.list(Product).rows[0]["documents"]
+
+    assert cell.value == "Datasheet Manual"
+    assert cell.links == [
+        ("Datasheet", "/media/SKU-Bolt/datasheet.pdf"),
+        ("Manual", "/media/SKU-Bolt/manual.pdf"),
+    ]
+    assert cell.links == [
+        ("Datasheet", urlsplit("/media/SKU-Bolt/datasheet.pdf")),
+        Link("Manual", "/media/SKU-Bolt/manual.pdf"),
+    ]
+
+
+def test_a_link_keeps_what_the_admin_added_to_it(admin_ui, viewer, products):
+    """With a filter applied the admin adds `_changelist_filters` to every change link
+    so the filter survives a round trip. The href is read as rendered; the path is
+    still the page."""
+    admin_ui.login(viewer)
+    page = admin_ui.list(Product)
+    page.native.click("#changelist-filter a[href*='is_active__exact=1']")
+    page.native.wait_for_load_state()
+
+    link = page.rows[0]["name"].links[0]
+
+    assert link != ("Bolt", admin_ui.url.edit(products[0]))
+    assert link.href.path == admin_ui.url.edit(products[0])
+    assert "_changelist_filters" in link.href.query
+
+
+def test_a_row_knows_the_object_behind_it(admin_ui, viewer, products):
+    admin_ui.login(viewer)
+
+    rows = admin_ui.list(Product).rows
+
+    assert [row.object for row in rows] == products
+
+
+def test_a_row_without_a_change_link_has_no_object(admin_ui, superuser):
+    """`CategoryAdmin` sets `list_display_links = None`, so nothing links anywhere."""
+    Category.objects.create(name="Fasteners")
+    admin_ui.login(superuser)
+
+    row = admin_ui.list(Category).rows[0]
+
+    assert row["name"].value == "Fasteners"
+    assert row["name"].links == []
+    assert row.object is None
