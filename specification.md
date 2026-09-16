@@ -2059,22 +2059,32 @@ under test. (done)
 
 All normalization described in section 3.4 is defined by settings, not by package internals.
 
-The package ships a complete default rule set. It covers:
+The package ships a complete default rule set, one rule per kind of value the admin renders.
+The package decides which cells each rule sees, by the model field behind the column, so a
+rule handles one kind and never has to tell the kinds apart:
 
-* booleans drawn as icons;
+* booleans drawn as icons, to a boolean;
+* empty and absent values, shown as the text the admin renders for them;
 * links, and their targets;
+* dates and times, shown as the text the project's formats render;
+* numbers, shown as the text the project's formats render;
+* the display value of a choice, shown as its label;
 * surrounding text and whitespace.
 
-Every rule in that set has a documented default and is individually addressable, and a
-project adds a rule of its own the same way, such as one that reads a date column as a date:
+Every rule in that set has a documented default and is individually addressable. A project
+that wants a date column read as a date replaces that one rule, and it receives only the
+cells of date, time and datetime fields:
 
 ```python
 DJANGO_ADMIN_KIT = {
     "normalizers": {
         "boolean": ...,
+        "empty": ...,
         "link": ...,
-        "text": ...,
         "datetime": my_datetime_rule,
+        "number": ...,
+        "choice": ...,
+        "text": ...,
     },
 }
 ```

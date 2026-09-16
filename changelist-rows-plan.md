@@ -36,7 +36,8 @@ Out of scope:
 
 * The settings surface of §28.3 (`DJANGO_ADMIN_KIT["normalizers"]`, `admin_ui.normalizer(...)`).
   The rules are built as one replaceable table so that §28.3 only has to read settings into
-  it; see decision 2. Typed dates and numbers are what a project adds there.
+  it; see decision 2. Typed dates and numbers are what a project puts in the `datetime` and
+  `number` slots there.
 * `list_editable` cells, and every other changelist interaction of §33 (1.2.0).
 * Form fields (§10 onwards). `links` on a rendered-only field (§13.4) reuses `Cell`'s
   pair type when it is built.
@@ -93,16 +94,21 @@ on 3.2, 5.2 and 6.1:
    text, compared as the user reads it; a test that covers several locales parametrizes the
    locale and the expected rendering. This keeps the package out of the business of parsing
    Django's format language back, and keeps every assertion about what is on the page.
-2. **Rules are a table, tried in order, first answer wins.** `boolean`, `link` (for
-   `links`, not `value`), `text`. Each rule is a function `(cell, column) -> value` returning
-   a private `NOT_HANDLED` marker to pass. The table is a module-level dict keyed by the
-   names §28.3 lists, so that section can replace entries from settings without
-   restructuring. Until then the table is not public.
-3. **`Column` carries the model field for a project's own rule.** `Column(name, field)`,
+2. **Rules are a table, tried in order, first answer wins.** Each rule is a function
+   `(cell, column) -> value` returning a private `NOT_HANDLED` marker to pass. The table is
+   a module-level dict keyed by the names §28.3 lists, so that section can replace entries
+   from settings without restructuring. This plan builds the entries that do something:
+   `boolean`, `link` (for `links`, not `value`) and `text`. The other slots §28.3 names
+   (`empty`, `datetime`, `number`, `choice`) default to the text shown, so they change
+   nothing until a project replaces one; they are added by the §28.3 slice together with the
+   settings that replace them, routed by `Column.field` (decision 3) so a project's `datetime`
+   rule only ever sees the cells of date, time and datetime fields. Until then the table is
+   not public.
+3. **`Column` carries the model field, which routes the typed slots.** `Column(name, field)`,
    with `field` from `model._meta.get_field(name)` or `None` when the column is computed
-   (`FieldDoesNotExist`). The package's own rules do not need it; a rule a project adds
-   through §28.3 to read a `DateField` as a date does. This needs no `ModelAdmin` and no
-   private attribute.
+   (`FieldDoesNotExist`). The package's own rules do not need it; the `datetime`, `number`
+   and `choice` slots of §28.3 are applied by it, so a rule a project puts there sees only
+   its kind of cell. This needs no `ModelAdmin` and no private attribute.
 4. **`page.count` is an integer, read the way an integer is grouped.** The locale-aware parse
    of a grouped integer is "remove the grouping separator, then `int()`", and dropping every
    non-digit does exactly that in every locale, including the non-breaking space `fr` uses
