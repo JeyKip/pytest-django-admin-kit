@@ -8,15 +8,24 @@ document's own text, so the admin's styling never changes a value.
 from __future__ import annotations
 
 from functools import cached_property
+from typing import Any
 
 from playwright.sync_api import Locator
+
+from . import normalize
 
 
 class Cell:
     """One cell of a changelist row."""
 
-    def __init__(self, element: Locator) -> None:
+    def __init__(self, element: Locator, column: str) -> None:
         self._element = element
+        self._column = column
+
+    @property
+    def column(self) -> str:
+        """The configured name of the column the cell is in."""
+        return self._column
 
     @property
     def native(self) -> Locator:
@@ -28,10 +37,10 @@ class Cell:
         """What the document shows in the cell, with its whitespace collapsed."""
         return " ".join((self._element.text_content() or "").split())
 
-    @property
-    def value(self) -> str:
-        """The cell's meaning, which for now is its text."""
-        return self.text
+    @cached_property
+    def value(self) -> Any:
+        """What the cell shows, normalized: its text, unless the admin drew an icon."""
+        return normalize.normalize(self)
 
 
 class Row:
@@ -69,7 +78,8 @@ class Row:
         # checkbox Django adds for actions is skipped, as the headers skip its
         # header cell.
         cells = self._element.locator(":scope > th, :scope > td").all()
-        return [Cell(cell) for cell in cells if "action-checkbox" not in _classes(cell)]
+        cells = [cell for cell in cells if "action-checkbox" not in _classes(cell)]
+        return [Cell(cell, column) for cell, column in zip(cells, self._columns)]
 
 
 def _classes(element: Locator) -> list[str]:

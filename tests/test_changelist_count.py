@@ -7,6 +7,9 @@ element; these prove what is made of it.
 
 import pytest
 from django.contrib import admin
+from django.test import override_settings
+from django.utils import translation
+from django.utils.formats import number_format
 
 from django_admin_kit.pages import ChangelistPage
 from django_admin_kit.urls import AdminUrls
@@ -60,6 +63,19 @@ def test_the_count_and_its_wording_are_read_from_the_paginator(text, count, summ
     assert page.count == count
     assert page.summary == summary
     assert page.empty is (count == 0)
+
+
+@pytest.mark.parametrize("language", ["en", "fr"])
+def test_a_grouped_count_is_read_as_the_project_renders_it(language):
+    """The text comes from Django's own formatter, under a locale that groups with a
+    comma and one that groups with a non-breaking space."""
+    with override_settings(USE_THOUSAND_SEPARATOR=True), translation.override(language):
+        rendered = number_format(1000, use_l10n=True)
+    assert rendered != "1000"
+
+    page = changelist(f"{rendered} products")
+
+    assert page.count == 1000
 
 
 def test_a_paginator_that_reports_no_count_is_a_loud_failure():

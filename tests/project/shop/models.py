@@ -6,6 +6,7 @@ class Product(models.Model):
     sku = models.CharField(max_length=32, unique=True)
     price = models.DecimalField(max_digits=8, decimal_places=2)
     is_active = models.BooleanField(default=True)
+    featured = models.BooleanField(null=True, blank=True)
     released_on = models.DateField(null=True, blank=True)
 
     class Meta:

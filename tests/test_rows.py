@@ -4,6 +4,8 @@ The products are created in one order and the admin shows them in its own, by na
 so a test that reads the first row reads what the admin put there.
 """
 
+import datetime
+
 import pytest
 from playwright.sync_api import Locator
 
@@ -87,3 +89,52 @@ def test_a_row_and_a_cell_hand_out_their_elements(admin_ui, viewer, products):
     assert isinstance(row.native, Locator)
     assert isinstance(row["name"].native, Locator)
     assert row["name"].native.text_content().strip() == "Bolt"
+
+
+def test_a_boolean_icon_reads_as_a_boolean(admin_ui, viewer, products):
+    products[0].is_active = False
+    products[0].save()
+    admin_ui.login(viewer)
+
+    page = admin_ui.list(Product)
+
+    assert page.rows[0]["is_active"].value is False
+    assert page.rows[1]["is_active"].value is True
+
+
+def test_an_unknown_boolean_reads_as_none(admin_ui, viewer, products):
+    admin_ui.login(viewer)
+
+    cell = admin_ui.list(Product).rows[0]["featured"]
+
+    assert cell.value is None
+    assert cell.text == ""
+
+
+def test_a_bool_the_admin_renders_as_text_reads_as_text(admin_ui, viewer, products):
+    """Only a column that asks for the icon gets one; the rest show the word."""
+    admin_ui.login(viewer)
+
+    assert admin_ui.list(Product).rows[0]["is_released"].value == "False"
+
+
+def test_an_empty_cell_reads_as_the_text_the_admin_shows_for_it(admin_ui, viewer, products):
+    """`ProductAdmin` sets its own empty value, so the site's default never shows."""
+    admin_ui.login(viewer)
+
+    cell = admin_ui.list(Product).rows[0]["released_on"]
+
+    assert cell.value == "(none)"
+    assert cell.text == "(none)"
+
+
+def test_a_date_reads_as_the_text_the_admin_renders(admin_ui, viewer, products):
+    """The project's date format, not a date: the test sees what the user sees."""
+    products[0].released_on = datetime.date(2026, 1, 15)
+    products[0].save()
+    admin_ui.login(viewer)
+
+    row = admin_ui.list(Product).rows[0]
+
+    assert row["released_on"].value == "Jan. 15, 2026"
+    assert row["is_released"].value == "True"

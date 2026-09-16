@@ -142,7 +142,7 @@ The package compares **what the user reads**, not markup.
 
 A value read from an admin page is normalized before a test ever sees it:
 
-* a boolean the admin draws as an icon normalizes to a boolean;
+* a boolean the admin draws as an icon normalizes to a boolean; (done)
 * a value the admin renders as a link normalizes to its text, with the target available
   separately;
 * everything else is the document's own text, never its rendered presentation, so styling
@@ -715,7 +715,7 @@ means that the corresponding cells must contain exactly those expected normalize
 
 ---
 
-## 9.3 Empty value
+## 9.3 Empty value (done)
 
 An explicitly provided empty value:
 
@@ -854,7 +854,7 @@ Cell values follow section 3.4.
 Booleans normalize to booleans:
 
 ```python
-assert page.rows[0]["is_active"].value is True
+assert page.rows[0]["is_active"].value is True    # done
 ```
 
 A value the admin has none of reads as the text it shows in its place, whether the site's
@@ -863,8 +863,8 @@ default or one the project configured:
 ```python
 cell = page.rows[0]["released_on"]
 
-assert cell.value == "(none)"
-assert cell.text == "(none)"
+assert cell.value == "(none)"    # done
+assert cell.text == "(none)"     # done
 ```
 
 `text` is what the document shows in any cell, before normalization: the text of a link,

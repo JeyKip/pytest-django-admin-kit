@@ -19,6 +19,7 @@ from urllib.parse import urlsplit
 from django.apps import apps
 from playwright.sync_api import Locator, Page
 
+from .normalize import integer
 from .rows import Row
 from .urls import AdminUrls
 
@@ -214,8 +215,7 @@ class ChangelistPage(AdminPage):
     @property
     def count(self) -> int:
         """The number of records the changelist reports, across all of its pages."""
-        number = self._count_line.group("number")
-        return int(re.sub(r"\D", "", number))
+        return integer(self._count_line.group("number"))
 
     @property
     def summary(self) -> str:
@@ -240,8 +240,7 @@ class ChangelistPage(AdminPage):
         )
         # The number may carry grouping characters when the project localizes it,
         # which is why the name is required to start with something other than a
-        # digit. Stripping them in `count` is a stopgap until value normalization
-        # exists, at which point the number normalizer should read this instead.
+        # digit.
         match = re.search(r"(?P<number>\d[\d,.\s]*?)\s+[^\d\s].*", " ".join(str(text).split()))
         assert match is not None, f"unexpected paginator text {text!r}"
         return match
