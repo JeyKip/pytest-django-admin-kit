@@ -660,7 +660,7 @@ it. It returns `True`, and when no row matches it raises `AssertionError` with t
 pattern and the rows actually shown, as section 30 describes:
 
 ```python
-assert page.contains((1, "Jane", "Doe", "", ANY, some_callable))
+assert page.contains((1, "Jane", "Doe", "", ANY, some_callable))    # done
 ```
 
 A row pattern is a tuple or a list of cell patterns, one per column in the order shown; a
@@ -696,14 +696,14 @@ assert page.match([
 the positions of the others. Given a single pattern, `match` says the changelist has exactly
 one row and it matches.
 
-## 9.1 Matcher vocabulary
+## 9.1 Matcher vocabulary (done)
 
 Expected values are matched using four things, and nothing else:
 
 * literal values, compared for equality; (done)
 * links, as `(text, href)` pairs, compared against the links a cell renders; (done)
 * the sentinels `ANY` and `ANY_ROW`; (done)
-* callables.
+* callables. (done)
 
 No string value carries matcher meaning. A string in an expected row is always a literal value.
 
@@ -763,7 +763,7 @@ meaning.
 
 ---
 
-## 9.5 Callable matcher
+## 9.5 Callable matcher (done)
 
 A callable may be supplied for a cell.
 
@@ -936,7 +936,7 @@ A pair matches the rendered `href` whole; a test on a page where the admin has a
 such as a filtered changelist, matches the part it cares about through a callable:
 
 ```python
-assert page.contains((lambda row, cell: cell.links[0].href.path == admin_ui.url.edit(product), "SKU-1", "10.00", True))
+assert page.contains((lambda row, cell: cell.links[0].href.path == admin_ui.url.edit(product), "SKU-1", "10.00", True))    # done
 ```
 
 ---

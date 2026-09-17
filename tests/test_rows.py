@@ -275,3 +275,18 @@ def test_any_row_fails_on_an_empty_changelist(admin_ui, superuser):
 
     with pytest.raises(AssertionError, match=r"Actual rows:\n    \(none\)"):
         admin_ui.list(Product).contains(ANY_ROW)
+
+
+def test_a_callable_matches_a_cell_by_whatever_it_reads(admin_ui, viewer, products):
+    admin_ui.login(viewer)
+
+    page = admin_ui.list(Product)
+
+    assert page.contains(("Bolt", lambda row, cell: cell.value.startswith("SKU-"), *NUT[2:]))
+    assert page.contains(
+        (
+            lambda row, cell: cell.links[0].href.path == admin_ui.url.edit(products[1]),
+            "SKU-Nut",
+            *NUT[2:],
+        )
+    )

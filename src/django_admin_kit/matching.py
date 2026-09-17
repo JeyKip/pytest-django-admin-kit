@@ -13,8 +13,8 @@ from urllib.parse import SplitResult
 from .rows import Cell, Link, Row
 
 
-class _Sentinel:
-    """A pattern with one meaning and one spelling, which is how it prints."""
+class _Named:
+    """A value that prints as its name: a sentinel, or a callable shown in a failure."""
 
     def __init__(self, name: str) -> None:
         self._name = name
@@ -23,10 +23,10 @@ class _Sentinel:
         return self._name
 
 
-ANY = _Sentinel("ANY")
+ANY = _Named("ANY")
 """A cell pattern any cell matches: the cell must exist, its contents do not matter."""
 
-ANY_ROW = _Sentinel("ANY_ROW")
+ANY_ROW = _Named("ANY_ROW")
 """A row pattern any row matches."""
 
 
@@ -36,13 +36,16 @@ def matches(pattern: Any, row: Row) -> bool:
     if pattern is ANY_ROW:
         return True
     return len(pattern) == len(row) and all(
-        _cell_matches(expected, cell) for expected, cell in zip(pattern, row)
+        _cell_matches(expected, row, cell) for expected, cell in zip(pattern, row)
     )
 
 
-def _cell_matches(expected: Any, cell: Cell) -> bool:
+def _cell_matches(expected: Any, row: Row, cell: Cell) -> bool:
     if expected is ANY:
         return True
+    if callable(expected):
+        # The test's own code: whatever it raises is its own bug to see.
+        return bool(expected(row, cell))
     # A link pair describes a cell that renders that one link; a list or tuple of
     # pairs, the cell's links exactly. Either may also be the value itself, when a
     # project's own rule produces such a value, so a pair that is no link of the cell
@@ -81,8 +84,19 @@ def contains(rows: Sequence[Row], pattern: Any) -> bool:
 
 def _no_match(pattern: Any, rows: Sequence[Row]) -> str:
     shown = [f"    {_shown(row, pattern)!r}" for row in rows] or ["    (none)"]
-    lines = ["Expected row:", f"    {pattern!r}", "", "No matching row found.", "", "Actual rows:"]
+    expected = f"    {_described(pattern)!r}"
+    lines = ["Expected row:", expected, "", "No matching row found.", "", "Actual rows:"]
     return "\n".join(lines + shown)
+
+
+def _described(pattern: Any) -> Any:
+    # A callable prints as its name, since its repr says nothing a reader can use.
+    if isinstance(pattern, (tuple, list)):
+        return type(pattern)(
+            _Named(getattr(item, "__name__", repr(item))) if callable(item) else item
+            for item in pattern
+        )
+    return pattern
 
 
 def _shown(row: Row, pattern: Any) -> tuple[Any, ...]:

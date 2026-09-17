@@ -30,6 +30,9 @@ class FakeRow:
     def __iter__(self):
         return iter(self._cells)
 
+    def __getitem__(self, index):
+        return self._cells[index]
+
 
 ROWS = [
     FakeRow(1, "Janet", "Doe", "Active"),
@@ -168,3 +171,35 @@ def test_any_row_still_needs_a_row():
 def test_the_sentinels_print_as_their_names():
     with pytest.raises(AssertionError, match=r"Expected row:\n    \(1, 'Jane', 'Doe', ANY\)\n"):
         contains(ROWS, (1, "Jane", "Doe", ANY))
+
+
+def test_a_callable_decides_by_its_truth():
+    assert matches((1, lambda row, cell: cell.value.startswith("Jan"), "Doe", "Active"), ROWS[0])
+    assert not matches((1, lambda row, cell: cell.value.startswith("Jo"), "Doe", "Active"), ROWS[0])
+    assert matches((1, "Janet", "Doe", lambda row, cell: len(cell.value)), ROWS[0])
+    assert not matches((2, "John", "Doe", lambda row, cell: len(cell.value)), ROWS[1])
+
+
+def test_a_callable_sees_the_whole_row_and_the_cell():
+    def first_name_matches_link(row, cell):
+        return cell.links[0].text == row[0].value
+
+    assert matches((first_name_matches_link, "SKU-Bolt", ANY), LINKED)
+
+
+def test_a_callable_that_raises_is_left_to_raise():
+    def broken(row, cell):
+        raise KeyError("the test's own bug")
+
+    with pytest.raises(KeyError, match="own bug"):
+        matches((1, broken, "Doe", "Active"), ROWS[0])
+
+
+def test_a_callable_is_named_in_the_failure():
+    def valid_email(row, cell):
+        return False
+
+    with pytest.raises(
+        AssertionError, match=r"Expected row:\n    \(1, 'Jane', valid_email, <lambda>\)\n"
+    ):
+        contains(ROWS, (1, "Jane", valid_email, lambda row, cell: True))
