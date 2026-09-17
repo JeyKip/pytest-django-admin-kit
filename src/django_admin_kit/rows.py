@@ -8,7 +8,7 @@ document's own text, so the admin's styling never changes a value.
 from __future__ import annotations
 
 from functools import cached_property
-from typing import Any
+from typing import Any, Iterator
 from urllib.parse import SplitResult, urlsplit
 
 from django.contrib.admin.utils import unquote
@@ -139,6 +139,12 @@ class Row:
                 ):
                     return self._model._default_manager.get(pk=unquote(match.kwargs["object_id"]))
         return None
+
+    def __len__(self) -> int:
+        return len(self._cells)
+
+    def __iter__(self) -> Iterator[Cell]:
+        return iter(self._cells)
 
     def __getitem__(self, key: int | str) -> Cell:
         if isinstance(key, int):

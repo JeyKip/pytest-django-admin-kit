@@ -14,12 +14,14 @@ from __future__ import annotations
 
 import re
 from functools import cached_property
+from typing import Any, Sequence
 from urllib.parse import urlsplit
 
 from django.apps import apps
 from django.db.models import Model
 from playwright.sync_api import Locator, Page
 
+from . import matching
 from .normalize import integer
 from .rows import Row
 from .urls import AdminUrls
@@ -218,6 +220,15 @@ class ChangelistPage(ModelPage):
             Row(element, index, columns, self._model, self._urls)
             for index, element in enumerate(elements)
         ]
+
+    def contains(self, pattern: Sequence[Any]) -> bool:
+        """Whether some row matches ``pattern``, a cell pattern per column in order.
+
+        Returns ``True``; when no row matches, raises ``AssertionError`` showing the
+        pattern and every row the changelist has.
+        """
+        __tracebackhide__ = True
+        return matching.contains(self.rows, pattern)
 
     @cached_property
     def _header_cells(self) -> list[Locator]:

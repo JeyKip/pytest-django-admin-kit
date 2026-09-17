@@ -96,7 +96,10 @@ page.assertPageWorks(...)
 ```
 
 Where failure diagnostics require more context, objects returned by the library should implement
-useful comparison behavior and pytest assertion introspection where possible.
+useful comparison behavior and pytest assertion introspection where possible. Where a check
+has a picture to show, such as a row match, it raises `AssertionError` carrying that picture,
+the way `assert_frame_equal` and `assertEqual` do, and pytest prints it line by line; the
+`assert` in front of it then reads as intent and is not what fails.
 
 ---
 
@@ -653,7 +656,8 @@ assert page.rows == []    # done
 One of the main 1.0.0 features is concise verification of rows shown on a changelist.
 
 `contains` takes one row pattern and passes when at least one row of the changelist matches
-it:
+it. It returns `True`, and when no row matches it raises `AssertionError` with the expected
+pattern and the rows actually shown, as section 30 describes:
 
 ```python
 assert page.contains((1, "Jane", "Doe", "", ANY, some_callable))
@@ -704,7 +708,7 @@ No string value carries matcher meaning. A string in an expected row is always a
 
 ---
 
-## 9.2 Literal values
+## 9.2 Literal values (done)
 
 Literal values require equality.
 
@@ -2266,8 +2270,9 @@ Actual:
     required=False
 ```
 
-The library should make normal pytest assertion rewriting useful rather than hiding failures
-behind opaque helper exceptions.
+A row match raises `AssertionError` carrying exactly that text, which pytest prints line by
+line under the failing statement, as it does for any assertion helper. Everything else is a
+plain value, so pytest's own assertion rewriting shows what was compared. (done)
 
 ---
 

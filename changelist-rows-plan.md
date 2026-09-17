@@ -50,7 +50,7 @@ Out of scope:
 | Page | `src/django_admin_kit/pages.py` | `ChangelistPage` with `count`, `headers`, `columns`, `_header_cells`, `_shown()`, `_text()`, `_token()` | `rows`, `contains`, `match`; a `ModelPage` base that keeps the model, for every page opened for one |
 | Rows | `src/django_admin_kit/rows.py` (new) | | `Row`, `Cell`, `Link` |
 | Normalization | `src/django_admin_kit/normalize.py` (new) | | the rule table, each rule, `integer` |
-| Matching | `src/django_admin_kit/matching.py` (new) | | `ANY`, `ANY_ROW`, pattern matching, the result object |
+| Matching | `src/django_admin_kit/matching.py` (new) | | `ANY`, `ANY_ROW`, pattern matching, the failure text |
 | Test project | `tests/project/shop/models.py`, `admin.py` | `Product` with name, sku, price, is_active, released_on; `ProductAdmin` with `price_with_tax` | a nullable boolean, a bool the admin renders as text, an `empty_value_display` on the admin, a two-link column; a `Category` model whose admin has no change links |
 
 Reused as is: `_shown()` for the guard, `_text()` for text, `_token()` for the `field-<name>`
@@ -130,11 +130,14 @@ on 3.2, 5.2 and 6.1:
 6. **`row.object` comes from the change link.** `resolve(href.path)` on the first link
    whose path resolves to the model's change view gives `object_id`; the instance is fetched with
    `model._default_manager.get(pk=...)`. A row without such a link has `object` `None`.
-7. **`contains` and `match` return a result object, not a bare bool.** It is falsy when the
-   match failed and its `repr` is the §30 text (expected pattern, actual rows, and for
-   `match` which position failed). `assert page.contains(...)` then prints that text through
-   pytest's ordinary assertion rewriting, with no hook. A truthy result reprs as `True`-like
-   text so a passing assertion reads normally.
+7. **`contains` and `match` raise on failure and return `True` on success.** Pytest's
+   rewriting has no hook for a bare `assert x`: it passes the value through `saferepr`,
+   which escapes newlines, truncates at 240 characters and prints the repr twice, so a
+   falsy result object cannot produce the §30 text. An `AssertionError` whose message is
+   that text can: pytest prints an exception message line by line, which is how every
+   assertion helper (`assertEqual`, `assert_frame_equal`) shows its picture. `assert
+   page.contains(...)` reads as before; the `assert` is not what fails. The absence of a row
+   is asserted against `page.rows` or `page.count`.
 8. **A collection matches distinct rows, in any order, by backtracking.** Each pattern must
    take a different row; greedy assignment would fail `[ANY_ROW, ("Jane", ...)]` against
    `[Jane, John]`. Changelists are at most one page, so the search is cheap.
@@ -249,18 +252,18 @@ Commit: `Expose a cell's links as rendered and the object behind a row`.
 
 `src/django_admin_kit/matching.py` (new): `matches(pattern, row)` for a tuple or list of
 literals, one per cell, compared with `==` against `cell.value`; a pattern of the wrong
-length is no match. `MatchResult` per decision 7: falsy on failure, and its `repr` is the
-§30 text: the expected row, "No matching row found.", and every actual row as a tuple of
-values. On success it reprs as `Matched row 2` so a passing assertion reads normally.
+length is no match. `contains(rows, pattern)` returns `True` or raises `AssertionError`
+per decision 7 with the §30 text: the expected row, "No matching row found.", and every
+actual row as a tuple of values.
 
 `src/django_admin_kit/pages.py`: `ChangelistPage.contains(pattern)`.
 
 `tests/test_matching.py` (new, no browser, fake rows): a matching literal row; `""` matches
-an empty cell and nothing else; a wrong value, a wrong length; the failure repr contains
-"Expected row", the pattern and every actual row.
+an empty cell and nothing else; a wrong value, a wrong length; the failure message contains
+"Expected row", the pattern and every actual row, on separate lines.
 `tests/test_rows.py`: `page.contains(("Bolt", "SKU-Bolt", "10.00", True, ...))`;
-`pytest.raises(AssertionError)` around `assert page.contains(("Nobody", ...))` checking the
-message reaches pytest's output.
+`pytest.raises(AssertionError)` around `page.contains(("Nobody", ...))` checking the
+message shows the actual rows.
 
 Spec: §9 intro's first example minus the sentinel and the callable; §9.2 and §9.3 `(done)`;
 §30 changelist part `# done`.
@@ -298,7 +301,7 @@ as plain objects whose `repr` is their name, importable from `django_admin_kit.m
 `matches` honours both. The failure text prints them by name.
 
 `tests/test_matching.py`: `ANY` in a tuple; `ANY_ROW` against an empty row list fails and
-against any row passes; the failure repr shows `ANY` in the expected row.
+against any row passes; the failure message shows `ANY` in the expected row.
 `tests/test_rows.py`: `page.contains(("Bolt", ANY, ANY, ANY, ...))`, `page.contains(ANY_ROW)`
 on three products, and on an empty changelist it fails.
 
@@ -315,7 +318,7 @@ cell)` and its truthiness decides; an exception inside it propagates unchanged, 
 sees its own bug. The failure text shows a callable by its `__name__` (or `<lambda>`).
 
 `tests/test_matching.py`: a callable that passes, one that fails, one that reads
-`row["email"]` and `cell.links`; the failure repr names the callable.
+`row["email"]` and `cell.links`; the failure message names the callable.
 `tests/test_rows.py`: `page.contains(("Bolt", lambda row, cell: cell.value.startswith("SKU-"), ...))`
 and a callable on `links[0].href.path`.
 
@@ -333,7 +336,7 @@ columns unconstrained, values being the same cell patterns; an unknown column na
 text prints the dictionary and, for each actual row, the listed columns only.
 
 `tests/test_matching.py`: a dict with a literal, `ANY` and a callable; an unknown key raises;
-the failure repr shows the listed columns.
+the failure message shows the listed columns.
 `tests/test_rows.py`: `page.contains({"name": "Nut", "is_active": True})`.
 
 Spec: §9.7 dictionary example `# done`; §9.1 `(done)`.
@@ -353,7 +356,7 @@ says which pattern found no row of its own and prints the actual rows.
 `tests/test_matching.py`: two patterns in the wrong order pass; a collection where greedy
 assignment would fail (`[ANY_ROW, ("Jane", ...)]` against `[Jane, John]`) passes;
 `[ANY_ROW, ANY_ROW]` against one row fails; `[]` passes; a list of literals is one row,
-not a collection; the failure repr names the pattern without a row.
+not a collection; the failure message names the pattern without a row.
 `tests/test_rows.py`: `page.contains([{"name": "Washer"}, ("Bolt", ANY, ...)])`.
 
 Spec: §9 intro collection example `# done`; §9.6 collection sentence.
@@ -372,7 +375,7 @@ found M" or "row N did not match" with the pattern and the row.
 
 `tests/test_matching.py`: right order passes, wrong order fails, wrong count fails,
 `ANY_ROW` at a position, `match(pattern)` with two rows fails, `match([])` on no rows
-passes; the failure repr names the position.
+passes; the failure message names the position.
 `tests/test_rows.py`: `page.match([...])` on the three products in the admin's order with
 one `ANY_ROW`.
 

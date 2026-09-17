@@ -13,6 +13,9 @@ from playwright.sync_api import Locator
 from django_admin_kit.rows import Link
 from project.shop.models import Category, Product
 
+# The Nut as the viewer's changelist shows it, one value per column.
+NUT = ("Nut", "SKU-Nut", "10.00", True, None, "(none)", "False", "12.000", "Datasheet Manual")
+
 
 def test_a_viewer_reads_a_cell_by_column_name(admin_ui, viewer, products):
     admin_ui.login(viewer)
@@ -209,3 +212,26 @@ def test_a_row_without_a_change_link_has_no_object(admin_ui, superuser):
     assert row["name"].value == "Fasteners"
     assert row["name"].links == []
     assert row.object is None
+
+
+def test_a_changelist_contains_a_row_given_as_literal_values(admin_ui, viewer, products):
+    admin_ui.login(viewer)
+
+    page = admin_ui.list(Product)
+
+    assert page.contains(NUT)
+
+
+def test_a_row_that_is_not_there_is_reported_with_the_rows_that_are(admin_ui, viewer, products):
+    admin_ui.login(viewer)
+    page = admin_ui.list(Product)
+    screw = ("Screw", "SKU-Screw", *NUT[2:])
+
+    with pytest.raises(AssertionError) as error:
+        page.contains(screw)
+
+    message = str(error.value)
+    assert message.startswith(f"Expected row:\n    {screw!r}")
+    assert "No matching row found." in message
+    assert f"    {('Bolt', 'SKU-Bolt', *NUT[2:])!r}" in message
+    assert message.count("\n    ('") == 4
