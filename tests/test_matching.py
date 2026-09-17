@@ -8,7 +8,7 @@ from urllib.parse import urlsplit
 
 import pytest
 
-from django_admin_kit.matching import contains, matches
+from django_admin_kit.matching import ANY, ANY_ROW, contains, matches
 from django_admin_kit.rows import Link
 
 
@@ -147,3 +147,24 @@ def test_a_miss_on_a_link_shows_the_links_the_cell_has():
         "    ([Link('Bolt', '/admin/shop/product/1/change/')], 'SKU-Bolt', "
         "[Link('Datasheet', '/media/a.pdf'), Link('Manual', '/media/b.pdf')])"
     )
+
+
+def test_any_stands_for_one_cell_whatever_it_holds():
+    assert matches((1, ANY, "Doe", ANY), ROWS[0])
+    assert matches((ANY, ANY, ANY, ANY), ROWS[1])
+    assert not matches((1, ANY, "Doe"), ROWS[0])
+
+
+def test_any_row_matches_every_row():
+    assert all(matches(ANY_ROW, row) for row in ROWS)
+    assert contains(ROWS, ANY_ROW) is True
+
+
+def test_any_row_still_needs_a_row():
+    with pytest.raises(AssertionError, match=r"Expected row:\n    ANY_ROW\n"):
+        contains([], ANY_ROW)
+
+
+def test_the_sentinels_print_as_their_names():
+    with pytest.raises(AssertionError, match=r"Expected row:\n    \(1, 'Jane', 'Doe', ANY\)\n"):
+        contains(ROWS, (1, "Jane", "Doe", ANY))

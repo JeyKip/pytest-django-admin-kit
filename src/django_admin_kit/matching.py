@@ -13,14 +13,36 @@ from urllib.parse import SplitResult
 from .rows import Cell, Link, Row
 
 
-def matches(pattern: Sequence[Any], row: Row) -> bool:
-    """Whether one row pattern, a cell pattern per column, describes ``row``."""
+class _Sentinel:
+    """A pattern with one meaning and one spelling, which is how it prints."""
+
+    def __init__(self, name: str) -> None:
+        self._name = name
+
+    def __repr__(self) -> str:
+        return self._name
+
+
+ANY = _Sentinel("ANY")
+"""A cell pattern any cell matches: the cell must exist, its contents do not matter."""
+
+ANY_ROW = _Sentinel("ANY_ROW")
+"""A row pattern any row matches."""
+
+
+def matches(pattern: Any, row: Row) -> bool:
+    """Whether one row pattern describes ``row``: ``ANY_ROW``, or a cell pattern per
+    column."""
+    if pattern is ANY_ROW:
+        return True
     return len(pattern) == len(row) and all(
         _cell_matches(expected, cell) for expected, cell in zip(pattern, row)
     )
 
 
 def _cell_matches(expected: Any, cell: Cell) -> bool:
+    if expected is ANY:
+        return True
     # A link pair describes a cell that renders that one link; a list or tuple of
     # pairs, the cell's links exactly. Either may also be the value itself, when a
     # project's own rule produces such a value, so a pair that is no link of the cell
@@ -49,7 +71,7 @@ def _is_links(pattern: Any) -> bool:
     return isinstance(pattern, (tuple, list)) and all(_is_link(item) for item in pattern)
 
 
-def contains(rows: Sequence[Row], pattern: Sequence[Any]) -> bool:
+def contains(rows: Sequence[Row], pattern: Any) -> bool:
     """``True`` when some row matches ``pattern``; otherwise the failure, raised."""
     __tracebackhide__ = True
     if any(matches(pattern, row) for row in rows):
@@ -57,18 +79,19 @@ def contains(rows: Sequence[Row], pattern: Sequence[Any]) -> bool:
     raise AssertionError(_no_match(pattern, rows))
 
 
-def _no_match(pattern: Sequence[Any], rows: Sequence[Row]) -> str:
+def _no_match(pattern: Any, rows: Sequence[Row]) -> str:
     shown = [f"    {_shown(row, pattern)!r}" for row in rows] or ["    (none)"]
     lines = ["Expected row:", f"    {pattern!r}", "", "No matching row found.", "", "Actual rows:"]
     return "\n".join(lines + shown)
 
 
-def _shown(row: Row, pattern: Sequence[Any]) -> tuple[Any, ...]:
+def _shown(row: Row, pattern: Any) -> tuple[Any, ...]:
     # A row is shown as its values, except where the pattern asked about links: there
     # the cell's links are shown instead, so the two line up.
+    cells = pattern if isinstance(pattern, Sequence) else ()
     shown = []
     for index, cell in enumerate(row):
-        expected = pattern[index] if index < len(pattern) else None
+        expected = cells[index] if index < len(cells) else None
         if _is_link(expected) or _is_links(expected):
             shown.append(cell.links)
         else:

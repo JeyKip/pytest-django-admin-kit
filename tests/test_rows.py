@@ -10,6 +10,7 @@ from urllib.parse import urlsplit
 import pytest
 from playwright.sync_api import Locator
 
+from django_admin_kit.matching import ANY, ANY_ROW
 from django_admin_kit.rows import Link
 from project.shop.models import Category, Product
 
@@ -253,3 +254,24 @@ def test_a_row_pattern_may_ask_for_the_links_a_cell_renders(admin_ui, viewer, pr
             ],
         )
     )
+
+
+def test_a_pattern_may_leave_cells_open_with_any(admin_ui, viewer, products):
+    admin_ui.login(viewer)
+
+    page = admin_ui.list(Product)
+
+    assert page.contains(("Washer", "SKU-Washer", ANY, ANY, ANY, ANY, ANY, ANY, ANY))
+
+
+def test_any_row_passes_when_there_is_a_row(admin_ui, viewer, product):
+    admin_ui.login(viewer)
+
+    assert admin_ui.list(Product).contains(ANY_ROW)
+
+
+def test_any_row_fails_on_an_empty_changelist(admin_ui, superuser):
+    admin_ui.login(superuser)
+
+    with pytest.raises(AssertionError, match=r"Actual rows:\n    \(none\)"):
+        admin_ui.list(Product).contains(ANY_ROW)

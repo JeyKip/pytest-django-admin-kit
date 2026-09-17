@@ -700,9 +700,9 @@ one row and it matches.
 
 Expected values are matched using four things, and nothing else:
 
-* literal values, compared for equality;
+* literal values, compared for equality; (done)
 * links, as `(text, href)` pairs, compared against the links a cell renders; (done)
-* the sentinels `ANY` and `ANY_ROW`;
+* the sentinels `ANY` and `ANY_ROW`; (done)
 * callables.
 
 No string value carries matcher meaning. A string in an expected row is always a literal value.
@@ -737,7 +737,7 @@ It is distinct from `ANY`.
 
 ---
 
-## 9.4 Any-value matcher
+## 9.4 Any-value matcher (done)
 
 The package must expose a sentinel representing:
 
@@ -803,7 +803,7 @@ the model instance behind it, where the changelist links to one.
 `ANY_ROW` is a row pattern that any row matches:
 
 ```python
-assert page.contains(ANY_ROW)
+assert page.contains(ANY_ROW)    # done
 ```
 
 This passes when the changelist has at least one row. It claims no more than `not page.empty`

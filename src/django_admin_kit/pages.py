@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import re
 from functools import cached_property
-from typing import Any, Sequence
+from typing import Any
 from urllib.parse import urlsplit
 
 from django.apps import apps
@@ -221,8 +221,9 @@ class ChangelistPage(ModelPage):
             for index, element in enumerate(elements)
         ]
 
-    def contains(self, pattern: Sequence[Any]) -> bool:
-        """Whether some row matches ``pattern``, a cell pattern per column in order.
+    def contains(self, pattern: Any) -> bool:
+        """Whether some row matches ``pattern``, a cell pattern per column in order,
+        or ``ANY_ROW``.
 
         Returns ``True``; when no row matches, raises ``AssertionError`` showing the
         pattern and every row the changelist has.
