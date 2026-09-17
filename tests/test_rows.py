@@ -235,3 +235,21 @@ def test_a_row_that_is_not_there_is_reported_with_the_rows_that_are(admin_ui, vi
     assert "No matching row found." in message
     assert f"    {('Bolt', 'SKU-Bolt', *NUT[2:])!r}" in message
     assert message.count("\n    ('") == 4
+
+
+def test_a_row_pattern_may_ask_for_the_links_a_cell_renders(admin_ui, viewer, products):
+    admin_ui.login(viewer)
+
+    page = admin_ui.list(Product)
+
+    assert page.contains(
+        (
+            ("Bolt", admin_ui.url.edit(products[0])),
+            "SKU-Bolt",
+            *NUT[2:8],
+            [
+                ("Datasheet", "/media/SKU-Bolt/datasheet.pdf"),
+                Link("Manual", "/media/SKU-Bolt/manual.pdf"),
+            ],
+        )
+    )

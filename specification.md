@@ -677,8 +677,9 @@ assert page.contains([
 ```
 
 A list is read as a collection when every element is itself a row pattern, and as a single
-row otherwise. A cell pattern is never a tuple, a list, a dictionary or `ANY_ROW`, so the two
-cannot be confused.
+row otherwise. Inside a row, a pair or a list of pairs is a link pattern (section 9.8); a
+cell pattern is never a dictionary or `ANY_ROW`. A row made only of link pairs is therefore
+written as a tuple, since as a list it reads as a collection of two-cell rows.
 
 `match` takes the same patterns and describes the whole changelist: there are exactly as many
 rows as patterns, and the pattern at each position matches the row at that position.
@@ -700,7 +701,7 @@ one row and it matches.
 Expected values are matched using four things, and nothing else:
 
 * literal values, compared for equality;
-* links, as `(text, href)` pairs, compared against the links a cell renders;
+* links, as `(text, href)` pairs, compared against the links a cell renders; (done)
 * the sentinels `ANY` and `ANY_ROW`;
 * callables.
 
@@ -921,11 +922,13 @@ assert page.contains(("Widget", "SKU-1", "10.00", True))
 ```
 
 Where a link matters, a `(text, href)` pair in place of a cell's value matches a cell that
-renders exactly that one link, and a list of pairs a cell that renders exactly those, in
-that order:
+renders exactly that one link, and a list or tuple of pairs a cell that renders exactly
+those, in that order. A pair that is no link of the cell is compared to the cell's value
+like any literal, so a project whose own rule (section 28.3) makes a value a pair can still
+match it:
 
 ```python
-assert page.contains((("Widget", "/admin/shop/product/1/change/"), "SKU-1", "10.00", True))
+assert page.contains((("Widget", "/admin/shop/product/1/change/"), "SKU-1", "10.00", True))    # done
 assert page.contains({"attachments": [("first.pdf", "/media/first.pdf"), ("second.pdf", "/media/second.pdf")]})
 ```
 

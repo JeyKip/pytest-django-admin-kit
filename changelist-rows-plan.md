@@ -278,9 +278,10 @@ Commit: `Match one changelist row against literal values with a readable failure
 matches a cell whose `links` is exactly `[that link]`, and a list of pairs a cell whose
 `links` equals it; `href` in a pair is a string or a `SplitResult`, and the comparison is
 `Link.__eq__`'s (decision 5), so the matcher only has to tell a pair from a literal: a
-2-tuple whose first element is a string is a link pair, a list whose elements are all
-such pairs (or `Link`s) is a list of them. The failure text prints a pair as the user
-wrote it and a cell's links as pairs.
+2-tuple whose first element is a string is a link pair, a list or tuple whose elements are
+all such pairs (or `Link`s) is a list of them. A pair that is no link of the cell is then
+compared to the value, so a value a project's own rule made a pair still matches its
+pattern. The failure text prints a pair as the user wrote it and a cell's links as `Link`s.
 
 `tests/test_matching.py`: a pair against a one-link cell, with a string and with a split
 href; a pair against a plain cell fails; a list of two pairs against a two-link cell, and
