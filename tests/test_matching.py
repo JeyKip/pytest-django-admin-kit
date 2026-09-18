@@ -19,10 +19,12 @@ class FakeCell:
 
 
 class FakeRow:
-    """Built from values, or from cells where a cell needs links."""
+    """Built from values, or from cells where a cell needs links; named columns where a
+    pattern addresses them by name."""
 
-    def __init__(self, *cells):
+    def __init__(self, *cells, columns=()):
         self._cells = [cell if isinstance(cell, FakeCell) else FakeCell(cell) for cell in cells]
+        self._columns = list(columns)
 
     def __len__(self):
         return len(self._cells)
@@ -30,14 +32,24 @@ class FakeRow:
     def __iter__(self):
         return iter(self._cells)
 
-    def __getitem__(self, index):
-        return self._cells[index]
+    def __getitem__(self, key):
+        if isinstance(key, str):
+            if key not in self._columns:
+                raise KeyError(f"The row has no column named {key!r}.")
+            key = self._columns.index(key)
+        return self._cells[key]
 
 
 ROWS = [
     FakeRow(1, "Janet", "Doe", "Active"),
     FakeRow(2, "John", "Doe", ""),
     FakeRow(3, "Jane", "Roe", True),
+]
+
+COLUMNS = ("id", "first_name", "last_name", "status")
+NAMED = [
+    FakeRow(*values, columns=COLUMNS)
+    for values in ((1, "Janet", "Doe", "Active"), (2, "John", "Doe", ""))
 ]
 
 EDIT = "/admin/shop/product/1/change/"
@@ -203,3 +215,41 @@ def test_a_callable_is_named_in_the_failure():
         AssertionError, match=r"Expected row:\n    \(1, 'Jane', valid_email, <lambda>\)\n"
     ):
         contains(ROWS, (1, "Jane", valid_email, lambda row, cell: True))
+
+
+def test_a_dictionary_matches_the_columns_it_names_and_leaves_the_rest_open():
+    assert matches({"first_name": "Janet"}, NAMED[0])
+    assert matches(
+        {"last_name": "Doe", "status": ANY, "id": lambda row, cell: cell.value < 2}, NAMED[0]
+    )
+    assert not matches({"first_name": "Janet", "status": ""}, NAMED[0])
+
+
+def test_an_empty_dictionary_matches_any_row():
+    assert matches({}, NAMED[0])
+
+
+def test_a_dictionary_naming_an_unknown_column_is_a_mistake_not_a_miss():
+    with pytest.raises(KeyError, match="no column named 'email'"):
+        matches({"email": "jane@example.com"}, NAMED[0])
+
+
+def test_a_miss_by_columns_shows_only_the_columns_named():
+    def short(row, cell):
+        return len(cell.value) < 3
+
+    with pytest.raises(AssertionError) as error:
+        contains(NAMED, {"first_name": short, "status": "Active"})
+
+    assert str(error.value) == "\n".join(
+        [
+            "Expected row:",
+            "    {'first_name': short, 'status': 'Active'}",
+            "",
+            "No matching row found.",
+            "",
+            "Actual rows:",
+            "    {'first_name': 'Janet', 'status': 'Active'}",
+            "    {'first_name': 'John', 'status': ''}",
+        ]
+    )

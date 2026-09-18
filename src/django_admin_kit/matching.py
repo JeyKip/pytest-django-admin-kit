@@ -31,10 +31,14 @@ ANY_ROW = _Named("ANY_ROW")
 
 
 def matches(pattern: Any, row: Row) -> bool:
-    """Whether one row pattern describes ``row``: ``ANY_ROW``, or a cell pattern per
-    column."""
+    """Whether one row pattern describes ``row``: ``ANY_ROW``, a cell pattern per
+    column, or cell patterns by column name, the columns left out unconstrained."""
     if pattern is ANY_ROW:
         return True
+    if isinstance(pattern, dict):
+        # An unknown name raises from the row, naming its columns: a misspelt
+        # column is a mistake to see, not a row that happens not to match.
+        return all(_cell_matches(expected, row, row[name]) for name, expected in pattern.items())
     return len(pattern) == len(row) and all(
         _cell_matches(expected, row, cell) for expected, cell in zip(pattern, row)
     )
@@ -91,23 +95,33 @@ def _no_match(pattern: Any, rows: Sequence[Row]) -> str:
 
 def _described(pattern: Any) -> Any:
     # A callable prints as its name, since its repr says nothing a reader can use.
+    if isinstance(pattern, dict):
+        return {name: _described_cell(item) for name, item in pattern.items()}
     if isinstance(pattern, (tuple, list)):
-        return type(pattern)(
-            _Named(getattr(item, "__name__", repr(item))) if callable(item) else item
-            for item in pattern
-        )
+        return type(pattern)(_described_cell(item) for item in pattern)
     return pattern
 
 
-def _shown(row: Row, pattern: Any) -> tuple[Any, ...]:
-    # A row is shown as its values, except where the pattern asked about links: there
-    # the cell's links are shown instead, so the two line up.
+def _described_cell(expected: Any) -> Any:
+    if callable(expected):
+        return _Named(getattr(expected, "__name__", repr(expected)))
+    return expected
+
+
+def _shown(row: Row, pattern: Any) -> Any:
+    # A row is shown the way the pattern addressed it: as its values in order, or by
+    # the columns the pattern named; where the pattern asked about links, the cell's
+    # links are shown instead, so the two line up.
+    if isinstance(pattern, dict):
+        return {name: _shown_cell(row[name], expected) for name, expected in pattern.items()}
     cells = pattern if isinstance(pattern, Sequence) else ()
-    shown = []
-    for index, cell in enumerate(row):
-        expected = cells[index] if index < len(cells) else None
-        if _is_link(expected) or _is_links(expected):
-            shown.append(cell.links)
-        else:
-            shown.append(cell.value)
-    return tuple(shown)
+    return tuple(
+        _shown_cell(cell, cells[index] if index < len(cells) else None)
+        for index, cell in enumerate(row)
+    )
+
+
+def _shown_cell(cell: Cell, expected: Any) -> Any:
+    if _is_link(expected) or _is_links(expected):
+        return cell.links
+    return cell.value

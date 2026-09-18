@@ -290,3 +290,21 @@ def test_a_callable_matches_a_cell_by_whatever_it_reads(admin_ui, viewer, produc
             *NUT[2:],
         )
     )
+
+
+def test_a_row_may_be_described_by_a_few_named_columns(admin_ui, viewer, products):
+    admin_ui.login(viewer)
+
+    page = admin_ui.list(Product)
+
+    assert page.contains({"name": "Nut", "is_active": True})
+    assert page.contains({"name": ("Nut", admin_ui.url.edit(products[1])), "featured": None})
+
+
+def test_a_named_column_that_is_not_there_raises(admin_ui, viewer, products):
+    admin_ui.login(viewer)
+
+    page = admin_ui.list(Product)
+
+    with pytest.raises(KeyError, match=r"no column named 'colour'\. Columns: 'name'"):
+        page.contains({"colour": "red"})

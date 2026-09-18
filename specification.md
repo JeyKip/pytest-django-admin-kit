@@ -838,7 +838,7 @@ An expected row may be expressed the same way, in which case unlisted columns ar
 constrained:
 
 ```python
-assert page.contains({
+assert page.contains({    # done
     "first_name": "Jane",
     "last_name": "Doe",
     "email": lambda row, cell: cell.value.endswith("@example.com"),
@@ -929,7 +929,7 @@ match it:
 
 ```python
 assert page.contains((("Widget", "/admin/shop/product/1/change/"), "SKU-1", "10.00", True))    # done
-assert page.contains({"attachments": [("first.pdf", "/media/first.pdf"), ("second.pdf", "/media/second.pdf")]})
+assert page.contains({"attachments": [("first.pdf", "/media/first.pdf"), ("second.pdf", "/media/second.pdf")]})    # done
 ```
 
 A pair matches the rendered `href` whole; a test on a page where the admin has added to it,
