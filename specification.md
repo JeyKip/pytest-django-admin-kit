@@ -149,15 +149,15 @@ A value read from an admin page is normalized before a test ever sees it:
 * a value the admin renders as a link normalizes to its text, with the link available
   separately; (done)
 * everything else is the document's own text, never its rendered presentation, so styling
-  such as letter-casing never changes a value.
+  such as letter-casing never changes a value. (done)
 
 Text is compared as rendered. A date, a number or an empty value reads as the text the admin
 shows for it, in the locale and time zone the browser is pinned to (sections 28.4 and 31), so
 a test asserts the rendering the user sees:
 
 ```python
-assert page.rows[0]["is_active"].value is True
-assert page.rows[0]["released_on"].value == "Sept. 12, 2026"
+assert page.rows[0]["is_active"].value is True                  # done
+assert page.rows[0]["released_on"].value == "Sept. 12, 2026"    # done
 ```
 
 A project that wants such a value typed replaces the rule that reads it. Every normalization
@@ -171,7 +171,7 @@ the project. Nothing about normalization is fixed inside the package. See sectio
 The package uses one coordinate vocabulary everywhere it applies:
 
 * on a changelist, rows are addressed by position, 0-based like any Python sequence, and
-  cells by the name the column is configured with, as section 7.2 lists them;
+  cells by the name the column is configured with, as section 7.2 lists them; (done)
 * on a form, fields are addressed by name.
 
 A label is what the user sees, and a test reads it as data: `page.headers` for columns,
@@ -763,7 +763,7 @@ def valid_email(row, cell):
     return cell.value.endswith("@example.com")
 
 
-assert page.contains((1, "Jane", "Doe", valid_email))
+assert page.contains((1, "Jane", "Doe", valid_email))    # done
 ```
 
 The callable signature is:
@@ -817,9 +817,9 @@ by position in it, and a cell by the configured name of its column or by positio
 as described in section 3.5. What that gives is the cell, whose normalized value is `value`:
 
 ```python
-assert page.rows[0]["first_name"].value == "Jane"
-assert page.rows[0]["email"].value == ""
-assert page.rows[0][1].value == "Jane"
+assert page.rows[0]["first_name"].value == "Jane"    # done
+assert page.rows[0]["email"].value == ""             # done
+assert page.rows[0][1].value == "Jane"               # done
 ```
 
 An expected row may be expressed the same way, in which case unlisted columns are not
@@ -906,7 +906,7 @@ A row pattern therefore matches what is read, and never a link. A row whose firs
 links to the change page and whose last is a boolean icon matches plain data:
 
 ```python
-assert page.contains(("Widget", "SKU-1", "10.00", True))
+assert page.contains(("Widget", "SKU-1", "10.00", True))    # done
 ```
 
 Where a link matters, a link in place of a cell's value matches a cell that renders exactly
@@ -949,8 +949,8 @@ A complete changelist in any order is one `contains` per row together with the c
 
 ```python
 for row in rows:
-    assert page.contains(row)
-assert page.count == len(rows)
+    assert page.contains(row)    # done
+assert page.count == len(rows)   # done
 ```
 
 The sentinels and callables of section 9.1 apply in both methods alike.
