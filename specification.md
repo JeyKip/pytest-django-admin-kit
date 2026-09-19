@@ -9,7 +9,7 @@ It should allow developers to verify:
 * authentication and access with different users (done);
 * availability and basic operation of admin pages;
 * the set of models the admin exposes;
-* changelist columns, record counts, and row contents;
+* changelist columns, record counts, and row contents (done);
 * create and edit form fields, including their labels, initial values, and choices;
 * editable and rendered-only field values;
 * requiredness of create and edit form fields;
@@ -83,9 +83,9 @@ Preferred:
 
 ```python
 assert page.works
-assert page.has_field("first_name")
-assert page.field("email").required
-assert page.contains([...])
+assert "first_name" in page.fields
+assert page.fields["email"].required
+assert page.contains((...))
 ```
 
 Avoid making the primary interface:
@@ -96,7 +96,10 @@ page.assertPageWorks(...)
 ```
 
 Where failure diagnostics require more context, objects returned by the library should implement
-useful comparison behavior and pytest assertion introspection where possible.
+useful comparison behavior and pytest assertion introspection where possible. Where a check
+has a picture to show, such as a row match, it raises `AssertionError` carrying that picture,
+the way `assert_frame_equal` and `assertEqual` do, and pytest prints it line by line; the
+`assert` in front of it then reads as intent and is not what fails.
 
 ---
 
@@ -138,31 +141,28 @@ messages, and status.
 
 ## 3.4 Normalized values
 
-The package compares **meaning**, not markup.
+The package compares **what the user reads**, not markup.
 
 A value read from an admin page is normalized before a test ever sees it:
 
-* a boolean cell normalizes to a boolean, however the admin chooses to draw it;
-* an absent or blank value normalizes to the empty value;
-* a value the admin renders as a link normalizes to its text, with the target available
-  separately;
-* dates, times, and numbers normalize through the formats and time zone the project has
-  configured;
-* text normalizes from the document's own content, never from its rendered presentation, so
-  styling such as letter-casing never changes a value.
+* a boolean the admin draws as an icon normalizes to a boolean; (done)
+* a value the admin renders as a link normalizes to its text, with the link available
+  separately; (done)
+* everything else is the document's own text, never its rendered presentation, so styling
+  such as letter-casing never changes a value. (done)
 
-A test must never need to know how a value was rendered:
+Text is compared as rendered. A date, a number or an empty value reads as the text the admin
+shows for it, in the locale and time zone the browser is pinned to (sections 28.4 and 31), so
+a test asserts the rendering the user sees:
 
 ```python
-assert page.row(1)["Active"] is True
-assert page.row(1)["Middle name"] == ""
+assert page.rows[0]["is_active"].value is True                  # done
+assert page.rows[0]["released_on"].value == "Sept. 12, 2026"    # done
 ```
 
-Tests must not hardcode a rendering format.
-
-Every normalization rule is a package setting with a documented default, and every one of them
-can be replaced by the project. Nothing about normalization is fixed inside the package. See
-section 28.3.
+A project that wants such a value typed replaces the rule that reads it. Every normalization
+rule is a package setting with a documented default, and every one of them can be replaced by
+the project. Nothing about normalization is fixed inside the package. See section 28.3.
 
 ---
 
@@ -170,17 +170,25 @@ section 28.3.
 
 The package uses one coordinate vocabulary everywhere it applies:
 
-* rows are addressed by 1-based position;
-* cells are addressed by column;
-* fields are addressed by name.
+* on a changelist, rows are addressed by position, 0-based like any Python sequence, and
+  cells by the name the column is configured with, as section 7.2 lists them; (done)
+* on a form, fields are addressed by name.
+
+A label is what the user sees, and a test reads it as data: `page.headers` for columns,
+section 13.1 for fields. It is never an address, because it is presentation, and the same
+column or field keeps its name across translations and relabelling.
 
 ```python
-page.row(1)
-page.row(1)["Email"]
-page.field("email")
+page.rows[0]             # done
+page.rows[0]["email"]    # done
+page.fields["email"]
 ```
 
-Positional cell access remains available where a tuple comparison is the clearer expression.
+A cell is also addressable by position, where that is the clearer expression:
+
+```python
+page.rows[0][2]    # done
+```
 
 ---
 
@@ -200,8 +208,8 @@ Both tiers appear in the same test, without leaving the package:
 ```python
 page = admin_ui.edit(product)
 
-assert page.field("name").required            # standard field, package vocabulary
-page.field("colour_picker").native.click()    # the project's own widget, native handle
+assert page.fields["name"].required            # standard field, package vocabulary
+page.fields["colour_picker"].native.click()    # the project's own widget, native handle
 ```
 
 Reaching for a native handle is **expected and supported**, not a failure or a last resort. A
@@ -213,9 +221,9 @@ Native handles are available at every level of the object model:
 ```python
 admin_ui.native                        # done
 page.native                            # done
-page.field("name").native
-page.row(1).native
-page.row(1).cell("Email").native
+page.fields["name"].native
+page.rows[0].native                    # done
+page.rows[0]["email"].native           # done
 ```
 
 They are the underlying browser library's own objects. The package does not wrap, restrict, or
@@ -474,19 +482,19 @@ admin_ui.url.edit(instance)    # done
 admin_ui.url.delete(instance)  # done
 ```
 
-These are the values a test compares a link target against:
+These are the values a test compares the path of a link against:
 
 ```python
-assert page.row(1).cell("Customer").link == admin_ui.url.edit(customer)
+assert page.rows[0]["customer"].links[0].href.path == admin_ui.url.edit(customer)    # done
 ```
 
 URLs resolve through the admin site under test and its URL prefix. The package never assumes a
 location, so a project that mounts its admin elsewhere gets correct URLs without changing its
 tests. See section 28.2. (done)
 
-Link targets read from a page are normalized so that they compare equal to the URL the package
-produces for the same page, whether the page rendered that target in relative or absolute form.
-A test must never need to know which form was rendered.
+A link read from a page keeps its `href` exactly as rendered, split into its parts, so a test
+compares the whole against what it expects to see, or one part against the URL the package
+produces for the same page. See section 9.8. (done)
 
 Resolution does not require the page to exist or to be reachable. Asking for the URL of a page
 the current user may not open still returns that URL; whether the page works is the separate
@@ -600,7 +608,8 @@ assert page.columns == [
 ]
 ```
 
-A test chooses the vocabulary it prefers. Both must address the same columns in the same order.
+Both lists describe the same columns in the same order. Headers are what the user sees and
+are read as data; names are how a test addresses a cell, as sections 3.5 and 9.7 describe.
 
 ---
 
@@ -637,37 +646,59 @@ page = admin_ui.list(Product)
 assert page.works         # done
 assert page.empty         # done
 assert page.count == 0    # done
-assert page.rows == []
+assert page.rows == []    # done
 ```
 
 ---
 
-# 9. Changelist Row Matching
+# 9. Changelist Row Matching (done)
 
 One of the main 1.0.0 features is concise verification of rows shown on a changelist.
 
-Example:
+`contains` takes one row pattern and passes when at least one row of the changelist matches
+it. It returns `True`, and when no row matches it raises `AssertionError` with the expected
+pattern and the rows actually shown, as section 30 describes:
 
 ```python
-assert page.contains([
+assert page.contains((1, "Jane", "Doe", "", ANY, some_callable))    # done
+```
+
+A row pattern is a tuple or a list of cell patterns, one per column in the order shown; a
+dictionary of cell patterns by column, as in section 9.7; or `ANY_ROW`. A cell pattern is a
+value, a link, a list or tuple of links, `ANY` or a callable (section 9.8). `contains` takes
+exactly one row pattern; a test that expects several rows calls it once per row.
+
+`match` takes a list or a tuple of row patterns and describes the whole changelist: there
+are exactly as many rows as patterns, and the pattern at each position matches the row at
+that position.
+
+```python
+assert page.match([    # done
     (1, "Jane", "Doe", "", ANY, some_callable),
     ANY_ROW,
+    {"first_name": "John"},
 ])
 ```
 
-## 9.1 Matcher vocabulary
+`ANY_ROW` then matches whatever row holds its position; it is there to keep the count and
+the positions of the others. A changelist of one row is `match([row])`; `match` always takes
+the list, so that a row of cell patterns is never mistaken for a list of rows.
 
-Expected values are matched using three things, and nothing else:
+## 9.1 Matcher vocabulary (done)
 
-* literal values, compared for equality;
-* the sentinels `ANY` and `ANY_ROW`;
-* callables.
+Expected values are matched using four things, and nothing else:
+
+* literal values, compared for equality; (done)
+* links, as `Link` objects or `(text, href)` pairs, compared against the links a cell
+  renders; (done)
+* the sentinels `ANY` and `ANY_ROW`; (done)
+* callables. (done)
 
 No string value carries matcher meaning. A string in an expected row is always a literal value.
 
 ---
 
-## 9.2 Literal values
+## 9.2 Literal values (done)
 
 Literal values require equality.
 
@@ -679,7 +710,7 @@ means that the corresponding cells must contain exactly those expected normalize
 
 ---
 
-## 9.3 Empty value
+## 9.3 Empty value (done)
 
 An explicitly provided empty value:
 
@@ -687,13 +718,15 @@ An explicitly provided empty value:
 ""
 ```
 
-means that the corresponding cell is expected to be empty after normalization.
+is a literal like any other: the corresponding cell is expected to show nothing. The text the
+admin shows for a value it has none of, such as `"-"`, is text and is matched as text; see
+section 9.8.
 
 It is distinct from `ANY`.
 
 ---
 
-## 9.4 Any-value matcher
+## 9.4 Any-value matcher (done)
 
 The package must expose a sentinel representing:
 
@@ -713,167 +746,214 @@ Example:
 
 `ANY` is the only spelling for this matcher.
 
+
 A literal `"*"` appearing in an expected row is an ordinary literal value and carries no matcher
 meaning.
 
 ---
 
-## 9.5 Callable matcher
+## 9.5 Callable matcher (done)
 
 A callable may be supplied for a cell.
 
 Example:
 
 ```python
-def valid_email(row, column):
-    return column.endswith("@example.com")
+def valid_email(row, cell):
+    return cell.value.endswith("@example.com")
 
 
-assert page.contains([
-    (1, "Jane", "Doe", valid_email),
-])
+assert page.contains((1, "Jane", "Doe", valid_email))    # done
 ```
 
-The callable receives contextual data.
-
-The minimum callable signature should be:
+The callable signature is:
 
 ```python
-matcher(current_row, current_column)
+matcher(row, cell)
 ```
 
 It returns a truthy value for a successful match.
 
-`current_column` represents the normalized value of the current cell.
+`cell` is the cell being matched, as section 9.8 describes it: `cell.value` is its normalized
+meaning, `cell.links` its links where it renders any, and `cell.native` the
+element itself. A cell the admin renders as something other than text, such as an icon, an
+image or a button, is therefore still matchable: by its normalized value where the package
+knows the rendering, and through `cell.native` where it does not.
 
-`current_row` provides access to the complete normalized row.
-
-A richer row object may additionally expose:
-
-```python
-current_row.values
-current_row.index
-current_row.object
-```
-
-where available.
+`row` is the row the cell belongs to, as section 9.7 describes it: `row["email"]` is one cell
+by column and `row[3]` one by position,
+`row.index` is its 0-based position, `row.native` is the element itself, and `row.object` is
+the model instance behind it, where the changelist links to one.
 
 ---
 
-## 9.6 Ignore entire row contents
+## 9.6 Ignore entire row contents (done)
 
-The package must support asserting that a row exists while deliberately ignoring its values.
-
-Sentinel:
+`ANY_ROW` is a row pattern that any row matches:
 
 ```python
-ANY_ROW
+assert page.contains(ANY_ROW)    # done
 ```
 
-Example:
+This passes when the changelist has at least one row. It claims no more than `not page.empty`
+does; on its own it exists so that `ANY_ROW` is a valid pattern wherever a row pattern is
+accepted. In `match` it holds a row's position:
 
 ```python
-assert page.contains([
-    (1, "Jane", "Doe"),
+assert page.match([    # done
+    (1, "Jane", "Doe", ""),
     ANY_ROW,
 ])
 ```
 
-This means:
-
-* one row must match `(1, "Jane", "Doe")`;
-* at least one additional row may contain arbitrary values.
-
-`ANY_ROW` is the only spelling for an ignored row.
+`ANY_ROW` is the only spelling for it.
 
 ---
 
-## 9.7 Cell addressing by column
+## 9.7 Cell addressing by column (done)
 
-Rows are also addressable by column, as described in section 3.5:
+`page.rows` is the list of rows the changelist shows, in the order shown. A row is addressed
+by position in it, and a cell by the configured name of its column or by position in the row,
+as described in section 3.5. What that gives is the cell, whose normalized value is `value`:
 
 ```python
-assert page.row(1)["First name"] == "Jane"
-assert page.row(1)["Email"] == ""
+assert page.rows[0]["first_name"].value == "Jane"    # done
+assert page.rows[0]["email"].value == ""             # done
+assert page.rows[0][1].value == "Jane"               # done
 ```
 
 An expected row may be expressed the same way, in which case unlisted columns are not
 constrained:
 
 ```python
-assert page.contains([
-    {
-        "First name": "Jane",
-        "Last name": "Doe",
-    },
-])
+assert page.contains({    # done
+    "first_name": "Jane",
+    "last_name": "Doe",
+    "email": lambda row, cell: cell.value.endswith("@example.com"),
+    "status": ANY,
+})
 ```
 
 This makes it possible to assert a few meaningful columns without enumerating a wide changelist.
-The sentinels and callables of section 9.1 apply to values here exactly as they do in tuples.
+The keys are configured column names, as above. The values are cell patterns: literals, `ANY`
+and callables, exactly as in a tuple. `ANY` on a listed column says only that the column is
+there, which a dictionary otherwise leaves unsaid.
 
 ---
 
-## 9.8 Normalized cell values
+## 9.8 Normalized cell values (done)
 
 Cell values follow section 3.4.
 
 Booleans normalize to booleans:
 
 ```python
-assert page.row(1)["Active"] is True
+assert page.rows[0]["is_active"].value is True    # done
 ```
 
-A cell the admin renders as a link exposes both its text and its target:
+A value the admin has none of reads as the text it shows in its place, whether the site's
+default or one the project configured:
 
 ```python
-cell = page.row(1).cell("Customer")
+cell = page.rows[0]["released_on"]
 
-assert cell.value == "Jane Doe"
-assert cell.link == admin_ui.url.edit(customer)
+assert cell.value == "(none)"    # done
+assert cell.text == "(none)"     # done
 ```
 
-Link targets are compared against the admin URLs of section 6.3.
+`text` is what the document shows in any cell, before normalization: the text of a link,
+nothing for an icon. Out of the box `value` differs from it only where the admin drew
+something other than text.
 
-A cell may contain several links:
+A cell the admin renders as a link keeps its text as its value and exposes the link
+separately as a `Link`, with the text and the `href` exactly as rendered; a cell may carry
+several, so `links` is always a list, empty for a cell with none. A `Link` compares equal to
+a `(text, href)` pair, so a test writes the pair it expects to see:
 
 ```python
-assert page.row(1).cell("Attachments").links == [
+cell = page.rows[0]["customer"]
+
+assert cell.value == "Jane Doe"                                          # done
+assert cell.links == [("Jane Doe", "/admin/shop/customer/7/change/")]    # done
+
+assert page.rows[0]["attachments"].links == [    # done
     ("first.pdf", "/media/first.pdf"),
     ("second.pdf", "/media/second.pdf"),
 ]
 ```
 
-Comparing a link cell against a plain literal compares its text, so tests that do not care about
-targets stay short.
+`href` is the standard split URL (`urllib.parse.SplitResult`), so its parts are there by
+name for a test that wants one of them, such as the path compared against the admin URLs of
+section 6.3, or the query string the admin adds to keep a filter across a round trip:
+
+```python
+link = cell.links[0]
+
+assert link.text == "Jane Doe"                              # done
+assert link.href.path == admin_ui.url.edit(customer)        # done
+assert "_changelist_filters" in link.href.query             # done
+```
+
+In a pair, `href` may be given as a string or as a split URL; a string is split before
+comparing.
+
+Whatever the admin renders in a cell, its normalized value is what the user reads there: text
+for text, a boolean for a boolean icon, the text of a link. A rendering the package does not
+know normalizes to the cell's text, and `cell.native` is there for the rest, as section 3.6
+describes. Each of these rules is a normalizer of section 28.3.
+
+A row pattern therefore matches what is read, and never a link. A row whose first column
+links to the change page and whose last is a boolean icon matches plain data:
+
+```python
+assert page.contains(("Widget", "SKU-1", "10.00", True))    # done
+```
+
+Where a link matters, a link in place of a cell's value matches a cell that renders exactly
+that one link, and a list or tuple of links a cell that renders exactly those, in that order.
+A link is written as a `(text, href)` pair or as a `Link`, the same two spellings that compare
+equal to `cell.links`. A cell pattern matches when it equals the cell's value or the cell's
+links, so a project whose own rule (section 28.3) puts links into `value` matches them the
+same way:
+
+```python
+assert page.contains((("Widget", "/admin/shop/product/1/change/"), "SKU-1", "10.00", True))    # done
+assert page.contains({"attachments": [("first.pdf", "/media/first.pdf"), Link("second.pdf", "/media/second.pdf")]})    # done
+```
+
+A link matches the rendered `href` whole; a test on a page where the admin has added to it,
+such as a filtered changelist, matches the part it cares about through a callable:
+
+```python
+assert page.contains((lambda row, cell: cell.links[0].href.path == admin_ui.url.edit(product), "SKU-1", "10.00", True))    # done
+```
 
 ---
 
-## 9.9 Row ordering
+## 9.9 Row ordering (done)
 
-The API should support both ordered and unordered comparisons.
+`contains` verifies existence: one row matches the pattern, and it says nothing about the
+rows left over.
 
-Default behavior for:
-
-```python
-page.contains(...)
-```
-
-verifies existence without requiring that the expected rows describe the complete changelist.
-
-A separate API verifies the complete ordered set:
+`match` verifies the complete changelist in order: as many rows as patterns, each at its
+position.
 
 ```python
-assert page.rows == [...]
+assert page.match([    # done
+    (1, "Jane", "Doe", ""),
+    (2, "John", "Doe", "john@example.com"),
+])
 ```
 
-or:
+A complete changelist in any order is one `contains` per row together with the count:
 
 ```python
-assert page.matches([...])
+for row in rows:
+    assert page.contains(row)    # done
+assert page.count == len(rows)   # done
 ```
 
-Exact naming can be finalized during API design.
+The sentinels and callables of section 9.1 apply in both methods alike.
 
 ---
 
@@ -886,7 +966,7 @@ Example:
 ```python
 page = admin_ui.create(Product)
 
-assert page.fields == {
+assert set(page.fields) == {
     "name",
     "price",
     "description",
@@ -894,22 +974,22 @@ assert page.fields == {
 }
 ```
 
-Subset checks should be natural:
+`page.fields` is a mapping from field name to field, in the order the admin presents them, so
+membership and subset checks are plain Python:
 
 ```python
 assert "name" in page.fields
-assert {"name", "price"} <= page.fields
+assert {"name", "price"} <= set(page.fields)
 ```
 
-Individual field access should be possible:
+A field is addressed by name, as section 3.5 says:
 
 ```python
-field = page.field("name")
-
-assert field.exists
+field = page.fields["name"]
 ```
 
-A missing field should produce useful pytest failure output.
+Asking for a field the form does not have raises `KeyError`, naming it and listing the fields
+the form does have, so the failure reads at a glance.
 
 ---
 
@@ -921,13 +1001,13 @@ The edit page must expose the same field-inspection API:
 page = admin_ui.edit(product)
 
 assert "name" in page.fields
-assert page.field("name").required
+assert page.fields["name"].required
 ```
 
 Fields expose their currently rendered value:
 
 ```python
-assert page.field("name").value == "Widget"
+assert page.fields["name"].value == "Widget"
 ```
 
 ---
@@ -941,8 +1021,8 @@ Example:
 ```python
 page = admin_ui.create(Product)
 
-assert page.field("name").required
-assert not page.field("description").required
+assert page.fields["name"].required
+assert not page.fields["description"].required
 ```
 
 Convenience collections should be exposed:
@@ -971,7 +1051,7 @@ Beyond existence and requiredness, a field exposes what the admin says about it.
 ## 13.1 Labels
 
 ```python
-assert page.field("first_name").label == "First name"
+assert page.fields["first_name"].label == "First name"
 ```
 
 Fields are addressed by name; the label is data, not an address.
@@ -985,8 +1065,8 @@ The create page exposes the values the admin starts with:
 ```python
 page = admin_ui.create(Product)
 
-assert page.field("enabled").value is True
-assert page.field("quantity").value == 1
+assert page.fields["enabled"].value is True
+assert page.fields["quantity"].value == 1
 ```
 
 ---
@@ -997,7 +1077,7 @@ A field with a fixed set of options exposes them as value and label pairs, inclu
 option where the admin renders one:
 
 ```python
-field = page.field("category")
+field = page.fields["category"]
 
 assert field.choices == [
     ("", "---------"),
@@ -1021,16 +1101,17 @@ A field is either editable or rendered only.
 A rendered-only field has no input to fill, but still has a value:
 
 ```python
-field = page.field("created_at")
+field = page.fields["created_at"]
 
 assert not field.editable
 assert field.value == "1 January 2026"
 ```
 
-Where the admin renders such a field as a link, its target is available:
+Where the admin renders such a field as a link, the link is available as on a changelist cell,
+section 9.8:
 
 ```python
-assert page.field("owner").link == admin_ui.url.edit(owner)
+assert page.fields["owner"].links == [("Jane Doe", admin_ui.url.edit(owner))]
 ```
 
 Rendered-only fields are never populated by section 14 and never appear in
@@ -1040,10 +1121,10 @@ Rendered-only fields are never populated by section 14 and never appear in
 
 ## 13.5 Field order
 
-Fields are exposed in the order the admin presents them:
+`page.fields` is ordered as the admin presents the fields, so their order is read from it:
 
 ```python
-assert page.field_order == [
+assert list(page.fields) == [
     "name",
     "price",
     "description",
@@ -1373,7 +1454,7 @@ assert not result.changed
 And the form comes back carrying what was submitted:
 
 ```python
-assert result.field("price").value == "19.99"
+assert result.fields["price"].value == "19.99"
 ```
 
 The re-rendered form exposes the full field API of sections 10 to 13, so requiredness, choices,
@@ -1454,7 +1535,7 @@ assert result.errors["email"] == [
 Convenience access may also be provided:
 
 ```python
-assert result.field("email").errors == [
+assert result.fields["email"].errors == [
     "Enter a valid email address.",
 ]
 ```
@@ -1737,21 +1818,9 @@ def test_customer_list(admin_ui, admin_user):
         "Status",
     ]
 
-    assert page.contains([
-        (
-            1,
-            "Jane",
-            "Doe",
-            "",
-            ANY,
-        ),
-        (
-            2,
-            "John",
-            "Doe",
-            lambda row, value: "@" in value,
-            ANY,
-        ),
+    assert page.match([    # done
+        (1, "Jane", "Doe", "", ANY),
+        (2, "John", "Doe", lambda row, cell: "@" in cell.value, ANY),
         ANY_ROW,
     ])
 ```
@@ -1766,12 +1835,10 @@ def test_customer_status(admin_ui, admin_user):
 
     page = admin_ui.list(Customer)
 
-    assert page.contains([
-        {
-            "First name": "Jane",
-            "Active": True,
-        },
-    ])
+    assert page.contains({    # done
+        "first_name": "Jane",
+        "is_active": True,
+    })
 ```
 
 ---
@@ -1799,21 +1866,21 @@ def test_product_create_fields(admin_ui, admin_user):
 
     page = admin_ui.create(Product)
 
-    assert page.fields == {
+    assert set(page.fields) == {
         "name",
         "price",
         "description",
         "enabled",
     }
 
-    assert page.field("name").required
-    assert page.field("price").required
-    assert not page.field("description").required
+    assert page.fields["name"].required
+    assert page.fields["price"].required
+    assert not page.fields["description"].required
 
-    assert page.field("name").label == "Name"
-    assert page.field("enabled").value is True
+    assert page.fields["name"].label == "Name"
+    assert page.fields["enabled"].value is True
 
-    assert page.field("category").choices == [
+    assert page.fields["category"].choices == [
         ("", "---------"),
         ("1", "Tools"),
         ("2", "Toys"),
@@ -1830,7 +1897,7 @@ def test_report_is_read_only(admin_ui, admin_user, report):
 
     page = admin_ui.edit(report)
 
-    assert not page.field("created_at").editable
+    assert not page.fields["created_at"].editable
     assert page.actions == set()
 ```
 
@@ -1904,7 +1971,7 @@ def test_product_form_is_rendered_back(admin_ui, admin_user):
     assert not result.success
     assert not result.created
 
-    assert result.field("price").value == "12.00"
+    assert result.fields["price"].value == "12.00"
 ```
 
 ---
@@ -2005,17 +2072,21 @@ under test. (done)
 
 All normalization described in section 3.4 is defined by settings, not by package internals.
 
-The package ships a complete default rule set. At minimum it covers:
+The package ships a complete default rule set, one rule per kind of value the admin renders.
+The package decides which cells each rule sees, by the model field behind the column, so a
+rule handles one kind and never has to tell the kinds apart:
 
-* booleans;
-* empty and absent values;
+* booleans drawn as icons, to a boolean;
+* empty and absent values, shown as the text the admin renders for them;
 * links, and their targets;
-* dates and times;
-* numbers;
-* the display value of a choice;
+* dates and times, shown as the text the project's formats render;
+* numbers, shown as the text the project's formats render;
+* the display value of a choice, shown as its label;
 * surrounding text and whitespace.
 
-Every rule in that set has a documented default and is individually addressable:
+Every rule in that set has a documented default and is individually addressable. A project
+that wants a date column read as a date replaces that one rule, and it receives only the
+cells of date, time and datetime fields:
 
 ```python
 DJANGO_ADMIN_KIT = {
@@ -2023,7 +2094,7 @@ DJANGO_ADMIN_KIT = {
         "boolean": ...,
         "empty": ...,
         "link": ...,
-        "datetime": ...,
+        "datetime": my_datetime_rule,
         "number": ...,
         "choice": ...,
         "text": ...,
@@ -2173,13 +2244,13 @@ a changelist mismatch should expose information such as:
 
 ```text
 Expected row:
-    [1, "Jane", "Doe", ANY]
+    (1, "Jane", "Doe", ANY)
 
 No matching row found.
 
 Actual rows:
-    [1, "Janet", "Doe", "Active"]
-    [2, "John", "Doe", "Inactive"]
+    (1, "Janet", "Doe", "Active")
+    (2, "John", "Doe", "Inactive")
 ```
 
 A form-field failure should similarly make expected and actual state visible:
@@ -2191,8 +2262,9 @@ Actual:
     required=False
 ```
 
-The library should make normal pytest assertion rewriting useful rather than hiding failures
-behind opaque helper exceptions.
+A row match raises `AssertionError` carrying exactly that text, which pytest prints line by
+line under the failing statement, as it does for any assertion helper. Everything else is a
+plain value, so pytest's own assertion rewriting shows what was compared. (done)
 
 ---
 
@@ -2219,7 +2291,7 @@ assert admin_ui.list(Product).works
 or:
 
 ```python
-assert page.contains([...])
+assert page.contains((...))
 ```
 
 should remain unchanged across supported Django versions.
@@ -2228,8 +2300,9 @@ Version-specific normalization belongs inside the package. This includes differe
 values are rendered and, where practical, differences in the wording of the admin's own
 built-in messages.
 
-Values render through the formats and time zone the project has configured. Tests must never
-hardcode a rendering format in order to pass.
+Values render through the formats, time zone and locale the project has configured, and a test
+asserts that rendering as the user reads it. A test that covers several locales says which
+locale each expected rendering belongs to.
 
 Results must not depend on the machine a test runs on. The browser carries its own notion of
 locale and time zone, and the package pins both to what the project has configured, so the same
@@ -2254,15 +2327,14 @@ supported Django versions:
 6. Read a page's title and subtitle. (done)
 7. Read changelist headers, by label and by configured column name. (done)
 8. Read the changelist record count and assert an empty changelist. (done)
-9. Verify changelist rows using:
+9. Verify changelist rows, one at a time and as a complete ordered set, using: (done)
 
     * exact values;
-    * empty values;
     * `ANY`;
     * callable cell matchers;
     * `ANY_ROW`;
     * column-addressed expected rows.
-10. Read normalized boolean cells, empty cells, and link cells including their targets.
+10. Read normalized boolean cells and link cells including their targets. (done)
 11. Inspect fields on create and edit pages.
 12. Determine required and optional fields.
 13. Read field labels, initial values, choices, and presentation order.

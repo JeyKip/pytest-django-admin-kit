@@ -14,11 +14,16 @@ from __future__ import annotations
 
 import re
 from functools import cached_property
+from typing import Any
 from urllib.parse import urlsplit
 
 from django.apps import apps
+from django.db.models import Model
 from playwright.sync_api import Locator, Page
 
+from . import matching
+from .normalize import integer
+from .rows import Row
 from .urls import AdminUrls
 
 
@@ -171,8 +176,18 @@ class IndexPage(AdminPage):
         return model if self._urls.site.is_registered(model) else None
 
 
-class ChangelistPage(AdminPage):
-    """A model's changelist: its columns, and how many records it reports."""
+class ModelPage(AdminPage):
+    """An admin page about one model, which it keeps for what reads it."""
+
+    def __init__(
+        self, page: Page, status_code: int, requested: str, urls: AdminUrls, model: type[Model]
+    ) -> None:
+        super().__init__(page, status_code, requested, urls)
+        self._model = model
+
+
+class ChangelistPage(ModelPage):
+    """A model's changelist: its columns, its rows, and how many records it reports."""
 
     @property
     def headers(self) -> list[str]:
@@ -194,6 +209,40 @@ class ChangelistPage(AdminPage):
         return name in self.columns
 
     @cached_property
+    def rows(self) -> list[Row]:
+        """The rows the changelist shows, in order.
+
+        An empty changelist shows no table, so it has no rows either.
+        """
+        columns = self.columns
+        elements = self._shown().locator("#result_list tbody tr").all()
+        return [
+            Row(element, index, columns, self._model, self._urls)
+            for index, element in enumerate(elements)
+        ]
+
+    def contains(self, pattern: Any) -> bool:
+        """Whether some row matches ``pattern``, a cell pattern per column in order,
+        or ``ANY_ROW``.
+
+        Returns ``True``; when no row matches, raises ``AssertionError`` showing the
+        pattern and every row the changelist has.
+        """
+        __tracebackhide__ = True
+        return matching.contains(pattern, self.rows)
+
+    def match(self, patterns: Any) -> bool:
+        """Whether the changelist is exactly ``patterns``: as many rows as patterns, in a
+        list or tuple, each row matching the pattern at its position; ``ANY_ROW`` holds
+        a position.
+
+        Returns ``True``; otherwise raises ``AssertionError`` showing the patterns, what
+        went wrong and every row the changelist has.
+        """
+        __tracebackhide__ = True
+        return matching.match(patterns, self.rows)
+
+    @cached_property
     def _header_cells(self) -> list[Locator]:
         # The checkbox Django adds for actions is a column only for users who have an
         # action to run, and it has no label, so it is not one here. The label is read
@@ -203,8 +252,7 @@ class ChangelistPage(AdminPage):
     @property
     def count(self) -> int:
         """The number of records the changelist reports, across all of its pages."""
-        number = self._count_line.group("number")
-        return int(re.sub(r"\D", "", number))
+        return integer(self._count_line.group("number"))
 
     @property
     def summary(self) -> str:
@@ -229,22 +277,21 @@ class ChangelistPage(AdminPage):
         )
         # The number may carry grouping characters when the project localizes it,
         # which is why the name is required to start with something other than a
-        # digit. Stripping them in `count` is a stopgap until value normalization
-        # exists, at which point the number normalizer should read this instead.
+        # digit.
         match = re.search(r"(?P<number>\d[\d,.\s]*?)\s+[^\d\s].*", " ".join(str(text).split()))
         assert match is not None, f"unexpected paginator text {text!r}"
         return match
 
 
-class CreatePage(AdminPage):
+class CreatePage(ModelPage):
     """The page that adds a new instance of a model."""
 
 
-class EditPage(AdminPage):
+class EditPage(ModelPage):
     """The change page of one instance, read only for a user who may only view it."""
 
 
-class DeletePage(AdminPage):
+class DeletePage(ModelPage):
     """The page that asks whether to delete one instance."""
 
 

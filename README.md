@@ -79,6 +79,32 @@ assert page.has_header("Price")
 assert page.has_column("is_active")
 ```
 
+**Reading and matching changelist rows.** A row is addressed by position and a cell by the
+name its column is configured with. A cell's `value` is what the user reads, normalized only
+where the admin drew something other than text; `contains` checks one row is there and
+`match` checks the whole changelist in order, and both print the expected pattern and the
+actual rows when they fail.
+
+```python
+from django_admin_kit.matching import ANY, ANY_ROW
+from django_admin_kit.rows import Link
+
+page = admin_ui.list(Product)
+
+assert page.rows[0]["price"].value == "10.00"
+assert page.rows[0]["is_active"].value is True
+assert page.rows[0]["name"].links == [("Bolt", admin_ui.url.edit(bolt))]
+assert page.rows[0].object == bolt
+
+assert page.contains(("Bolt", "SKU-1", "10.00", True))
+assert page.contains({"name": Link("Bolt", admin_ui.url.edit(bolt)), "is_active": ANY})
+assert page.match([
+    ("Bolt", "SKU-1", "10.00", True),
+    ANY_ROW,
+    {"name": "Washer", "price": lambda row, cell: cell.value.endswith(".00")},
+])
+```
+
 **Knowing what the index shows a user.** Models and apps a user may not see are not listed,
 and the lists come back in the admin's order.
 

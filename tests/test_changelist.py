@@ -8,6 +8,29 @@ import pytest
 
 from project.shop.models import Product
 
+HEADERS = [
+    "Name",
+    "Sku",
+    "Price",
+    "Is active",
+    "Featured",
+    "Released on",
+    "Released",
+    "Price with tax",
+    "Documents",
+]
+COLUMNS = [
+    "name",
+    "sku",
+    "price",
+    "is_active",
+    "featured",
+    "released_on",
+    "is_released",
+    "price_with_tax",
+    "documents",
+]
+
 
 def test_a_viewer_opens_the_changelist_and_reads_the_count(admin_ui, viewer, products):
     admin_ui.login(viewer)
@@ -82,8 +105,8 @@ def test_headers_are_the_labels_shown_in_order(admin_ui, superuser, products):
 
     page = admin_ui.list(Product)
 
-    assert page.headers == ["Name", "Sku", "Price", "Is active", "Released on", "Price with tax"]
-    assert page.columns == ["name", "sku", "price", "is_active", "released_on", "price_with_tax"]
+    assert page.headers == HEADERS
+    assert page.columns == COLUMNS
 
 
 def test_a_column_the_admin_computes_is_read_like_a_field(admin_ui, superuser, products):
@@ -106,8 +129,8 @@ def test_a_user_without_actions_reads_the_same_columns(admin_ui, viewer, product
 
     page = admin_ui.list(Product)
 
-    assert page.headers == ["Name", "Sku", "Price", "Is active", "Released on", "Price with tax"]
-    assert page.columns == ["name", "sku", "price", "is_active", "released_on", "price_with_tax"]
+    assert page.headers == HEADERS
+    assert page.columns == COLUMNS
 
 
 def test_an_empty_changelist_shows_no_columns(admin_ui, superuser):
@@ -136,6 +159,7 @@ def test_a_changelist_that_did_not_open_has_nothing_to_read(admin_ui, adder):
         lambda: page.columns,
         lambda: page.has_header("Name"),
         lambda: page.has_column("name"),
+        lambda: page.rows,
         lambda: page.title,
         lambda: page.subtitle,
     ):
