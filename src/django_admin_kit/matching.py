@@ -8,6 +8,7 @@ way any assertion helper reports.
 from __future__ import annotations
 
 from typing import Any, Sequence
+from urllib.parse import SplitResult
 
 from .rows import Cell, Link, Row
 
@@ -62,7 +63,7 @@ def _cell_matches(expected: Any, row: Row, cell: Cell) -> bool:
     return bool(expected == cell.value)
 
 
-def contains(rows: Sequence[Row], pattern: Any) -> bool:
+def contains(pattern: Any, rows: Sequence[Row]) -> bool:
     """``True`` when some row matches ``pattern``; otherwise the failure, raised."""
     __tracebackhide__ = True
     if any(matches(pattern, row) for row in rows):
@@ -70,11 +71,58 @@ def contains(rows: Sequence[Row], pattern: Any) -> bool:
     raise AssertionError(_no_match(pattern, rows))
 
 
+def match(patterns: Any, rows: Sequence[Row]) -> bool:
+    """``True`` when the rows are exactly ``patterns``, one row per pattern in order;
+    otherwise the failure, raised."""
+    __tracebackhide__ = True
+    if not isinstance(patterns, (tuple, list)):
+        raise TypeError(
+            "match() takes a list or tuple of row patterns, one per row of the changelist; "
+            f"got {patterns!r}. A single row is written as [row]."
+        )
+    if len(patterns) != len(rows):
+        raise AssertionError(_wrong_count(patterns, rows))
+    wrong = [
+        index
+        for index, (pattern, row) in enumerate(zip(patterns, rows))
+        if not matches(pattern, row)
+    ]
+    if wrong:
+        raise AssertionError(_wrong_rows(patterns, wrong, rows))
+    return True
+
+
 def _no_match(pattern: Any, rows: Sequence[Row]) -> str:
-    shown = [f"    {_shown(row, pattern)!r}" for row in rows] or ["    (none)"]
     expected = f"    {_described(pattern)!r}"
     lines = ["Expected row:", expected, "", "No matching row found.", "", "Actual rows:"]
-    return "\n".join(lines + shown)
+    return "\n".join(lines + _shown_rows(rows, pattern))
+
+
+def _wrong_count(patterns: Sequence[Any], rows: Sequence[Row]) -> str:
+    lines = ["Expected rows:", *_described_rows(patterns), ""]
+    lines.append(f"Expected {_count(len(patterns))}, found {len(rows)}.")
+    return "\n".join([*lines, "", "Actual rows:", *_shown_rows(rows, None)])
+
+
+def _wrong_rows(patterns: Sequence[Any], wrong: list[int], rows: Sequence[Row]) -> str:
+    lines = ["Expected rows:", *_described_rows(patterns)]
+    for index in wrong:
+        lines += ["", f"Row {index} did not match:"]
+        lines.append(f"    expected {_described(patterns[index])!r}")
+        lines.append(f"    actual   {_shown(rows[index], patterns[index])!r}")
+    return "\n".join([*lines, "", "Actual rows:", *_shown_rows(rows, None)])
+
+
+def _count(number: int) -> str:
+    return f"{number} row" if number == 1 else f"{number} rows"
+
+
+def _described_rows(patterns: Sequence[Any]) -> list[str]:
+    return [f"    {_described(pattern)!r}" for pattern in patterns] or ["    (none)"]
+
+
+def _shown_rows(rows: Sequence[Row], pattern: Any) -> list[str]:
+    return [f"    {_shown(row, pattern)!r}" for row in rows] or ["    (none)"]
 
 
 def _described(pattern: Any) -> Any:
@@ -112,6 +160,18 @@ def _shown_cell(cell: Cell, expected: Any) -> Any:
 
 
 def _asks_for_links(expected: Any) -> bool:
-    if isinstance(expected, (tuple, list)):
-        return all(isinstance(item, Link) for item in expected)
-    return isinstance(expected, Link)
+    # For display only: a pattern that is a link, a pair, or a list or tuple of them.
+    if _is_link(expected):
+        return True
+    return isinstance(expected, (tuple, list)) and all(_is_link(item) for item in expected)
+
+
+def _is_link(expected: Any) -> bool:
+    if isinstance(expected, Link):
+        return True
+    return (
+        isinstance(expected, (tuple, list))
+        and len(expected) == 2
+        and isinstance(expected[0], str)
+        and isinstance(expected[1], (str, SplitResult))
+    )

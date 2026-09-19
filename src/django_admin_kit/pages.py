@@ -229,7 +229,18 @@ class ChangelistPage(ModelPage):
         pattern and every row the changelist has.
         """
         __tracebackhide__ = True
-        return matching.contains(self.rows, pattern)
+        return matching.contains(pattern, self.rows)
+
+    def match(self, patterns: Any) -> bool:
+        """Whether the changelist is exactly ``patterns``: as many rows as patterns, in a
+        list or tuple, each row matching the pattern at its position; ``ANY_ROW`` holds
+        a position.
+
+        Returns ``True``; otherwise raises ``AssertionError`` showing the patterns, what
+        went wrong and every row the changelist has.
+        """
+        __tracebackhide__ = True
+        return matching.match(patterns, self.rows)
 
     @cached_property
     def _header_cells(self) -> list[Locator]:

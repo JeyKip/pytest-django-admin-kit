@@ -8,7 +8,7 @@ from urllib.parse import urlsplit
 
 import pytest
 
-from django_admin_kit.matching import ANY, ANY_ROW, contains, matches
+from django_admin_kit.matching import ANY, ANY_ROW, contains, match, matches
 from django_admin_kit.rows import Link
 
 
@@ -84,12 +84,12 @@ def test_a_boolean_matches_a_boolean_and_not_its_name():
 
 
 def test_contains_passes_when_any_row_matches():
-    assert contains(ROWS, (2, "John", "Doe", "")) is True
+    assert contains((2, "John", "Doe", ""), ROWS) is True
 
 
 def test_contains_shows_the_pattern_and_every_row_when_none_matches():
     with pytest.raises(AssertionError) as error:
-        contains(ROWS, (1, "Jane", "Doe", "Active"))
+        contains((1, "Jane", "Doe", "Active"), ROWS)
 
     assert str(error.value) == "\n".join(
         [
@@ -108,12 +108,18 @@ def test_contains_shows_the_pattern_and_every_row_when_none_matches():
 
 def test_contains_says_so_when_there_are_no_rows_at_all():
     with pytest.raises(AssertionError, match=r"Actual rows:\n    \(none\)$"):
-        contains([], (1, "Jane", "Doe", "Active"))
+        contains((1, "Jane", "Doe", "Active"), [])
 
 
 def test_a_link_matches_a_cell_that_renders_that_one_link():
     assert matches((Link("Bolt", EDIT), "SKU-Bolt", "Datasheet Manual"), LINKED)
     assert matches((Link("Bolt", urlsplit(EDIT)), "SKU-Bolt", "Datasheet Manual"), LINKED)
+
+
+def test_a_pair_is_a_link_too():
+    assert matches((("Bolt", EDIT), "SKU-Bolt", "Datasheet Manual"), LINKED)
+    assert matches((["Bolt", urlsplit(EDIT)], "SKU-Bolt", "Datasheet Manual"), LINKED)
+    assert not matches((("Nut", EDIT), "SKU-Bolt", "Datasheet Manual"), LINKED)
 
 
 def test_a_link_with_another_href_or_text_is_no_match():
@@ -131,6 +137,7 @@ def test_a_list_of_links_matches_the_links_exactly_and_in_order():
 
     assert matches(("Bolt", "SKU-Bolt", links), LINKED)
     assert matches(("Bolt", "SKU-Bolt", tuple(links)), LINKED)
+    assert matches(("Bolt", "SKU-Bolt", [("Datasheet", "/media/a.pdf"), links[1]]), LINKED)
     assert not matches(("Bolt", "SKU-Bolt", list(reversed(links))), LINKED)
     assert not matches(("Bolt", "SKU-Bolt", links[:1]), LINKED)
 
@@ -152,7 +159,7 @@ def test_a_pattern_matches_the_value_or_the_links_whatever_its_shape():
 
 def test_a_miss_on_a_link_shows_the_links_the_cell_has():
     with pytest.raises(AssertionError) as error:
-        contains([LINKED], (Link("Nut", EDIT), "SKU-Bolt", [Link("Manual", "/media/b.pdf")]))
+        contains((("Nut", EDIT), "SKU-Bolt", [Link("Manual", "/media/b.pdf")]), [LINKED])
 
     assert str(error.value).endswith(
         "Actual rows:\n"
@@ -169,17 +176,17 @@ def test_any_stands_for_one_cell_whatever_it_holds():
 
 def test_any_row_matches_every_row():
     assert all(matches(ANY_ROW, row) for row in ROWS)
-    assert contains(ROWS, ANY_ROW) is True
+    assert contains(ANY_ROW, ROWS) is True
 
 
 def test_any_row_still_needs_a_row():
     with pytest.raises(AssertionError, match=r"Expected row:\n    ANY_ROW\n"):
-        contains([], ANY_ROW)
+        contains(ANY_ROW, [])
 
 
 def test_the_sentinels_print_as_their_names():
     with pytest.raises(AssertionError, match=r"Expected row:\n    \(1, 'Jane', 'Doe', ANY\)\n"):
-        contains(ROWS, (1, "Jane", "Doe", ANY))
+        contains((1, "Jane", "Doe", ANY), ROWS)
 
 
 def test_a_callable_decides_by_its_truth():
@@ -211,7 +218,7 @@ def test_a_callable_is_named_in_the_failure():
     with pytest.raises(
         AssertionError, match=r"Expected row:\n    \(1, 'Jane', valid_email, <lambda>\)\n"
     ):
-        contains(ROWS, (1, "Jane", valid_email, lambda row, cell: True))
+        contains((1, "Jane", valid_email, lambda row, cell: True), ROWS)
 
 
 def test_a_dictionary_matches_the_columns_it_names_and_leaves_the_rest_open():
@@ -236,7 +243,7 @@ def test_a_miss_by_columns_shows_only_the_columns_named():
         return len(cell.value) < 3
 
     with pytest.raises(AssertionError) as error:
-        contains(NAMED, {"first_name": short, "status": "Active"})
+        contains({"first_name": short, "status": "Active"}, NAMED)
 
     assert str(error.value) == "\n".join(
         [
@@ -248,5 +255,168 @@ def test_a_miss_by_columns_shows_only_the_columns_named():
             "Actual rows:",
             "    {'first_name': 'Janet', 'status': 'Active'}",
             "    {'first_name': 'John', 'status': ''}",
+        ]
+    )
+
+
+def test_match_passes_when_every_row_is_where_its_pattern_says():
+    patterns = [(1, "Janet", "Doe", "Active"), (2, "John", ANY, ""), (3, "Jane", "Roe", True)]
+
+    assert match(patterns, ROWS) is True
+    assert match(tuple(patterns), ROWS) is True
+
+
+def test_match_lets_any_row_hold_a_position():
+    assert match([ANY_ROW, (2, "John", "Doe", ""), ANY_ROW], ROWS) is True
+
+
+def test_match_on_no_rows_takes_no_patterns():
+    assert match([], []) is True
+
+
+def test_match_fails_on_the_right_rows_in_the_wrong_order():
+    with pytest.raises(AssertionError, match=r"Row 0 did not match:\n"):
+        match([(2, "John", "Doe", ""), (1, "Janet", "Doe", "Active"), ANY_ROW], ROWS)
+
+
+def test_match_reports_every_row_that_did_not_match():
+    with pytest.raises(AssertionError) as error:
+        match([{"first_name": "Jane"}, {"first_name": "Joan"}], NAMED)
+
+    assert str(error.value) == "\n".join(
+        [
+            "Expected rows:",
+            "    {'first_name': 'Jane'}",
+            "    {'first_name': 'Joan'}",
+            "",
+            "Row 0 did not match:",
+            "    expected {'first_name': 'Jane'}",
+            "    actual   {'first_name': 'Janet'}",
+            "",
+            "Row 1 did not match:",
+            "    expected {'first_name': 'Joan'}",
+            "    actual   {'first_name': 'John'}",
+            "",
+            "Actual rows:",
+            "    (1, 'Janet', 'Doe', 'Active')",
+            "    (2, 'John', 'Doe', '')",
+        ]
+    )
+
+
+def test_match_fails_on_a_different_number_of_rows():
+    with pytest.raises(AssertionError, match=r"Expected 2 rows, found 3\.\n"):
+        match([ANY_ROW, ANY_ROW], ROWS)
+    with pytest.raises(AssertionError, match=r"Expected 1 row, found 0\.\n"):
+        match([ANY_ROW], [])
+
+
+def test_match_takes_a_list_of_rows_not_one_row():
+    with pytest.raises(TypeError, match=r"written as \[row\]"):
+        match(ANY_ROW, ROWS)
+    with pytest.raises(TypeError, match=r"written as \[row\]"):
+        match({"first_name": "Janet"}, NAMED)
+
+
+def test_a_wrong_count_shows_the_patterns_and_the_rows():
+    with pytest.raises(AssertionError) as error:
+        match([{"first_name": "Janet"}], NAMED)
+
+    assert str(error.value) == "\n".join(
+        [
+            "Expected rows:",
+            "    {'first_name': 'Janet'}",
+            "",
+            "Expected 1 row, found 2.",
+            "",
+            "Actual rows:",
+            "    (1, 'Janet', 'Doe', 'Active')",
+            "    (2, 'John', 'Doe', '')",
+        ]
+    )
+
+
+def test_a_wrong_row_shows_its_position_and_both_sides():
+    with pytest.raises(AssertionError) as error:
+        match([ANY_ROW, {"first_name": "Jane", "status": ANY}], NAMED)
+
+    assert str(error.value) == "\n".join(
+        [
+            "Expected rows:",
+            "    ANY_ROW",
+            "    {'first_name': 'Jane', 'status': ANY}",
+            "",
+            "Row 1 did not match:",
+            "    expected {'first_name': 'Jane', 'status': ANY}",
+            "    actual   {'first_name': 'John', 'status': ''}",
+            "",
+            "Actual rows:",
+            "    (1, 'Janet', 'Doe', 'Active')",
+            "    (2, 'John', 'Doe', '')",
+        ]
+    )
+
+
+@pytest.mark.parametrize("pattern", [(1, "Jane", "Doe", "Active"), [1, "Jane", "Doe", "Active"]])
+def test_a_wrong_row_is_shown_as_written_next_to_the_rows_values(pattern):
+    with pytest.raises(AssertionError) as error:
+        match([pattern, ANY_ROW], NAMED)
+
+    assert str(error.value) == "\n".join(
+        [
+            "Expected rows:",
+            f"    {pattern!r}",
+            "    ANY_ROW",
+            "",
+            "Row 0 did not match:",
+            f"    expected {pattern!r}",
+            "    actual   (1, 'Janet', 'Doe', 'Active')",
+            "",
+            "Actual rows:",
+            "    (1, 'Janet', 'Doe', 'Active')",
+            "    (2, 'John', 'Doe', '')",
+        ]
+    )
+
+
+def test_a_wrong_row_asking_for_one_link_shows_the_links_the_cell_has():
+    pattern = (("Nut", EDIT), "SKU-Bolt", "Datasheet Manual")
+
+    with pytest.raises(AssertionError) as error:
+        match([pattern], [LINKED])
+
+    assert str(error.value) == "\n".join(
+        [
+            "Expected rows:",
+            f"    {pattern!r}",
+            "",
+            "Row 0 did not match:",
+            f"    expected {pattern!r}",
+            f"    actual   ([Link('Bolt', {EDIT!r})], 'SKU-Bolt', 'Datasheet Manual')",
+            "",
+            "Actual rows:",
+            "    ('Bolt', 'SKU-Bolt', 'Datasheet Manual')",
+        ]
+    )
+
+
+def test_a_wrong_row_asking_for_two_links_shows_the_links_the_cell_has():
+    pattern = ("Bolt", "SKU-Bolt", [("Manual", "/media/b.pdf"), ("Datasheet", "/media/a.pdf")])
+
+    with pytest.raises(AssertionError) as error:
+        match([pattern], [LINKED])
+
+    assert str(error.value) == "\n".join(
+        [
+            "Expected rows:",
+            f"    {pattern!r}",
+            "",
+            "Row 0 did not match:",
+            f"    expected {pattern!r}",
+            "    actual   ('Bolt', 'SKU-Bolt', "
+            "[Link('Datasheet', '/media/a.pdf'), Link('Manual', '/media/b.pdf')])",
+            "",
+            "Actual rows:",
+            "    ('Bolt', 'SKU-Bolt', 'Datasheet Manual')",
         ]
     )

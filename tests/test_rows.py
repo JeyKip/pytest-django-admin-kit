@@ -245,11 +245,11 @@ def test_a_row_pattern_may_ask_for_the_links_a_cell_renders(admin_ui, viewer, pr
 
     assert page.contains(
         (
-            Link("Bolt", admin_ui.url.edit(products[0])),
+            ("Bolt", admin_ui.url.edit(products[0])),
             "SKU-Bolt",
             *NUT[2:8],
             [
-                Link("Datasheet", "/media/SKU-Bolt/datasheet.pdf"),
+                ("Datasheet", "/media/SKU-Bolt/datasheet.pdf"),
                 Link("Manual", "/media/SKU-Bolt/manual.pdf"),
             ],
         )
@@ -308,3 +308,41 @@ def test_a_named_column_that_is_not_there_raises(admin_ui, viewer, products):
 
     with pytest.raises(KeyError, match=r"no column named 'colour'\. Columns: 'name'"):
         page.contains({"colour": "red"})
+
+
+def test_the_whole_changelist_matches_in_the_admins_order(admin_ui, viewer, products):
+    admin_ui.login(viewer)
+
+    page = admin_ui.list(Product)
+
+    assert page.match(
+        [
+            ("Bolt", "SKU-Bolt", *NUT[2:]),
+            NUT,
+            ANY_ROW,
+        ]
+    )
+
+
+def test_the_whole_changelist_does_not_match_out_of_order(admin_ui, viewer, products):
+    admin_ui.login(viewer)
+    page = admin_ui.list(Product)
+
+    with pytest.raises(
+        AssertionError, match=r"Row 0 did not match:\n    expected \{'name': 'Nut'\}"
+    ):
+        page.match([{"name": "Nut"}, {"name": "Bolt"}, {"name": "Washer"}])
+
+
+def test_the_whole_changelist_does_not_match_with_a_row_missing(admin_ui, viewer, products):
+    admin_ui.login(viewer)
+    page = admin_ui.list(Product)
+
+    with pytest.raises(AssertionError, match=r"Expected 2 rows, found 3\."):
+        page.match([{"name": "Bolt"}, {"name": "Nut"}])
+
+
+def test_an_empty_changelist_matches_no_rows(admin_ui, superuser):
+    admin_ui.login(superuser)
+
+    assert admin_ui.list(Product).match([])

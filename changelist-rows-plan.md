@@ -125,10 +125,12 @@ on 3.2, 5.2 and 6.1:
    it. `Link` is a small class, not a tuple, and compares equal to another `Link` and to a
    `(text, href)` pair with either `href` type, so `links == [("Bolt", "/admin/.../change/")]`
    holds. It is the one place the package implements comparison behaviour, per §3.1. A
-   plain `list[Link]` compares element-wise through it, so no list class is needed. In a
-   pattern a link is spelled `Link(...)`, never guessed from a pair; a cell pattern matches
-   when it equals the cell's value or the cell's links, so a project whose own rule puts
-   links into `value` needs nothing else.
+   plain `list[Link]` compares element-wise through it, so no list class is needed. A cell
+   pattern matches when it equals the cell's value or the cell's links, through that same
+   equality, so a link in a pattern is a pair or a `Link`, whichever the test prefers, and a
+   project whose own rule puts links into `value` needs nothing else. Nothing is read into a
+   pattern's shape: `contains` takes one row and `match` the list of rows, so a tuple or list
+   inside a row is always a cell pattern.
 6. **`row.object` comes from the change link.** `resolve(href.path)` on the first link
    whose path resolves to the model's change view gives `object_id`; the instance is fetched with
    `model._default_manager.get(pk=...)`. A row without such a link has `object` `None`.
@@ -280,16 +282,16 @@ Commit: `Match one changelist row against literal values with a readable failure
 
 `src/django_admin_kit/matching.py`: a cell pattern matches when `cell.links == [it]`, when
 it is a list or tuple and `cell.links == list(it)`, or when it equals `cell.value`; the
-comparison is `Link.__eq__`'s (decision 5), and nothing is guessed from shape. The failure
-text prints the pattern as the user wrote it and, where the pattern is or holds a `Link`,
-a cell's links as `Link`s.
+comparison is `Link.__eq__`'s (decision 5), so a pair and a `Link` both work, and nothing is
+guessed from shape. The failure text prints the pattern as the user wrote it and, where the
+pattern is or holds a link, a cell's links as `Link`s.
 
-`tests/test_matching.py`: a `Link` against a one-link cell, with a string and with a split
-href; a `Link` against a plain cell fails; a list and a tuple of two `Link`s against a
-two-link cell, and in the wrong order fails; `[]` matches a cell without links; a bare pair
-is a literal.
-`tests/test_rows.py`: `page.contains((Link("Bolt", admin_ui.url.edit(bolt)), "SKU-Bolt", ...))`
-and a row pattern with `[Link("Datasheet", ...), Link("Manual", ...)]` in the `documents`
+`tests/test_matching.py`: a `Link` and a pair against a one-link cell, with a string and
+with a split href; a link against a plain cell fails; a list and a tuple of two links,
+as `Link`s and as pairs, against a two-link cell, and in the wrong order fails; `[]` matches
+a cell without links; a pattern matches the value whatever its shape.
+`tests/test_rows.py`: `page.contains((("Bolt", admin_ui.url.edit(bolt)), "SKU-Bolt", ...))`
+and a row pattern with `[("Datasheet", ...), Link("Manual", ...)]` in the `documents`
 position.
 
 Spec: §9.1 links bullet `(done)`; §9.8 pattern examples `# done`.
@@ -353,8 +355,8 @@ Commit: `Match a changelist row by a few named columns instead of every cell`.
 
 `src/django_admin_kit/matching.py`: `match(rows, patterns)`, a list or tuple of row
 patterns; positional check, count must equal; `ANY_ROW` holds a position; a single row
-pattern means exactly one row. The failure text says "expected N rows, found M" or "row N
-did not match" with the pattern and the row.
+pattern means exactly one row. The failure text says "expected N rows, found M", or lists
+every row that did not match with its pattern and the row.
 
 `src/django_admin_kit/pages.py`: `ChangelistPage.match`.
 

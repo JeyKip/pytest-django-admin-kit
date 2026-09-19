@@ -9,7 +9,7 @@ It should allow developers to verify:
 * authentication and access with different users (done);
 * availability and basic operation of admin pages;
 * the set of models the admin exposes;
-* changelist columns, record counts, and row contents;
+* changelist columns, record counts, and row contents (done);
 * create and edit form fields, including their labels, initial values, and choices;
 * editable and rendered-only field values;
 * requiredness of create and edit form fields;
@@ -651,7 +651,7 @@ assert page.rows == []    # done
 
 ---
 
-# 9. Changelist Row Matching
+# 9. Changelist Row Matching (done)
 
 One of the main 1.0.0 features is concise verification of rows shown on a changelist.
 
@@ -665,15 +665,15 @@ assert page.contains((1, "Jane", "Doe", "", ANY, some_callable))    # done
 
 A row pattern is a tuple or a list of cell patterns, one per column in the order shown; a
 dictionary of cell patterns by column, as in section 9.7; or `ANY_ROW`. A cell pattern is a
-value, a `Link`, a list or tuple of `Link`s, `ANY` or a callable (section 9.8). `contains`
-takes exactly one row pattern; a test that expects several rows calls it once per row.
+value, a link, a list or tuple of links, `ANY` or a callable (section 9.8). `contains` takes
+exactly one row pattern; a test that expects several rows calls it once per row.
 
 `match` takes a list or a tuple of row patterns and describes the whole changelist: there
 are exactly as many rows as patterns, and the pattern at each position matches the row at
 that position.
 
 ```python
-assert page.match([
+assert page.match([    # done
     (1, "Jane", "Doe", "", ANY, some_callable),
     ANY_ROW,
     {"first_name": "John"},
@@ -681,15 +681,16 @@ assert page.match([
 ```
 
 `ANY_ROW` then matches whatever row holds its position; it is there to keep the count and
-the positions of the others. Given a single pattern, `match` says the changelist has exactly
-one row and it matches.
+the positions of the others. A changelist of one row is `match([row])`; `match` always takes
+the list, so that a row of cell patterns is never mistaken for a list of rows.
 
 ## 9.1 Matcher vocabulary (done)
 
 Expected values are matched using four things, and nothing else:
 
 * literal values, compared for equality; (done)
-* links, as `Link` objects, compared against the links a cell renders; (done)
+* links, as `Link` objects or `(text, href)` pairs, compared against the links a cell
+  renders; (done)
 * the sentinels `ANY` and `ANY_ROW`; (done)
 * callables. (done)
 
@@ -786,7 +787,7 @@ the model instance behind it, where the changelist links to one.
 
 ---
 
-## 9.6 Ignore entire row contents
+## 9.6 Ignore entire row contents (done)
 
 `ANY_ROW` is a row pattern that any row matches:
 
@@ -799,7 +800,7 @@ does; on its own it exists so that `ANY_ROW` is a valid pattern wherever a row p
 accepted. In `match` it holds a row's position:
 
 ```python
-assert page.match([
+assert page.match([    # done
     (1, "Jane", "Doe", ""),
     ANY_ROW,
 ])
@@ -809,7 +810,7 @@ assert page.match([
 
 ---
 
-## 9.7 Cell addressing by column
+## 9.7 Cell addressing by column (done)
 
 `page.rows` is the list of rows the changelist shows, in the order shown. A row is addressed
 by position in it, and a cell by the configured name of its column or by position in the row,
@@ -840,7 +841,7 @@ there, which a dictionary otherwise leaves unsaid.
 
 ---
 
-## 9.8 Normalized cell values
+## 9.8 Normalized cell values (done)
 
 Cell values follow section 3.4.
 
@@ -908,17 +909,19 @@ links to the change page and whose last is a boolean icon matches plain data:
 assert page.contains(("Widget", "SKU-1", "10.00", True))
 ```
 
-Where a link matters, `Link(text, href)` in place of a cell's value matches a cell that
-renders exactly that one link, and a list or tuple of them a cell that renders exactly those,
-in that order. A cell pattern matches when it equals the cell's value or the cell's links, so
-a project whose own rule (section 28.3) puts links into `value` matches them the same way:
+Where a link matters, a link in place of a cell's value matches a cell that renders exactly
+that one link, and a list or tuple of links a cell that renders exactly those, in that order.
+A link is written as a `(text, href)` pair or as a `Link`, the same two spellings that compare
+equal to `cell.links`. A cell pattern matches when it equals the cell's value or the cell's
+links, so a project whose own rule (section 28.3) puts links into `value` matches them the
+same way:
 
 ```python
-assert page.contains((Link("Widget", "/admin/shop/product/1/change/"), "SKU-1", "10.00", True))    # done
-assert page.contains({"attachments": [Link("first.pdf", "/media/first.pdf"), Link("second.pdf", "/media/second.pdf")]})    # done
+assert page.contains((("Widget", "/admin/shop/product/1/change/"), "SKU-1", "10.00", True))    # done
+assert page.contains({"attachments": [("first.pdf", "/media/first.pdf"), Link("second.pdf", "/media/second.pdf")]})    # done
 ```
 
-A `Link` matches the rendered `href` whole; a test on a page where the admin has added to it,
+A link matches the rendered `href` whole; a test on a page where the admin has added to it,
 such as a filtered changelist, matches the part it cares about through a callable:
 
 ```python
@@ -927,7 +930,7 @@ assert page.contains((lambda row, cell: cell.links[0].href.path == admin_ui.url.
 
 ---
 
-## 9.9 Row ordering
+## 9.9 Row ordering (done)
 
 `contains` verifies existence: one row matches the pattern, and it says nothing about the
 rows left over.
@@ -936,7 +939,7 @@ rows left over.
 position.
 
 ```python
-assert page.match([
+assert page.match([    # done
     (1, "Jane", "Doe", ""),
     (2, "John", "Doe", "john@example.com"),
 ])
@@ -1815,7 +1818,7 @@ def test_customer_list(admin_ui, admin_user):
         "Status",
     ]
 
-    assert page.match([
+    assert page.match([    # done
         (1, "Jane", "Doe", "", ANY),
         (2, "John", "Doe", lambda row, cell: "@" in cell.value, ANY),
         ANY_ROW,
@@ -1832,7 +1835,7 @@ def test_customer_status(admin_ui, admin_user):
 
     page = admin_ui.list(Customer)
 
-    assert page.contains({
+    assert page.contains({    # done
         "first_name": "Jane",
         "is_active": True,
     })
@@ -2324,7 +2327,7 @@ supported Django versions:
 6. Read a page's title and subtitle. (done)
 7. Read changelist headers, by label and by configured column name. (done)
 8. Read the changelist record count and assert an empty changelist. (done)
-9. Verify changelist rows, one at a time and as a complete ordered set, using:
+9. Verify changelist rows, one at a time and as a complete ordered set, using: (done)
 
     * exact values;
     * `ANY`;
