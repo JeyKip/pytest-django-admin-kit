@@ -111,31 +111,28 @@ def test_contains_says_so_when_there_are_no_rows_at_all():
         contains([], (1, "Jane", "Doe", "Active"))
 
 
-def test_a_pair_matches_a_cell_that_renders_that_one_link():
-    assert matches((("Bolt", EDIT), "SKU-Bolt", "Datasheet Manual"), LINKED)
-    assert matches((["Bolt", EDIT], "SKU-Bolt", "Datasheet Manual"), LINKED)
-    assert matches((("Bolt", urlsplit(EDIT)), "SKU-Bolt", "Datasheet Manual"), LINKED)
+def test_a_link_matches_a_cell_that_renders_that_one_link():
     assert matches((Link("Bolt", EDIT), "SKU-Bolt", "Datasheet Manual"), LINKED)
+    assert matches((Link("Bolt", urlsplit(EDIT)), "SKU-Bolt", "Datasheet Manual"), LINKED)
 
 
-def test_a_pair_with_another_href_or_text_is_no_match():
-    assert not matches(
-        (("Bolt", "/admin/shop/product/2/change/"), "SKU-Bolt", "Datasheet Manual"), LINKED
-    )
-    assert not matches((("Nut", EDIT), "SKU-Bolt", "Datasheet Manual"), LINKED)
+def test_a_link_with_another_href_or_text_is_no_match():
+    other = Link("Bolt", "/admin/shop/product/2/change/")
+    assert not matches((other, "SKU-Bolt", "Datasheet Manual"), LINKED)
+    assert not matches((Link("Nut", EDIT), "SKU-Bolt", "Datasheet Manual"), LINKED)
 
 
-def test_a_pair_does_not_match_a_cell_without_a_link():
-    assert not matches(("Bolt", ("SKU-Bolt", "/anywhere/"), "Datasheet Manual"), LINKED)
+def test_a_link_does_not_match_a_cell_without_a_link():
+    assert not matches(("Bolt", Link("SKU-Bolt", "/anywhere/"), "Datasheet Manual"), LINKED)
 
 
-def test_a_list_of_pairs_matches_the_links_exactly_and_in_order():
-    pairs = [("Datasheet", "/media/a.pdf"), ("Manual", "/media/b.pdf")]
+def test_a_list_of_links_matches_the_links_exactly_and_in_order():
+    links = [Link("Datasheet", "/media/a.pdf"), Link("Manual", "/media/b.pdf")]
 
-    assert matches(("Bolt", "SKU-Bolt", pairs), LINKED)
-    assert matches(("Bolt", "SKU-Bolt", tuple(pairs)), LINKED)
-    assert not matches(("Bolt", "SKU-Bolt", list(reversed(pairs))), LINKED)
-    assert not matches(("Bolt", "SKU-Bolt", pairs[:1]), LINKED)
+    assert matches(("Bolt", "SKU-Bolt", links), LINKED)
+    assert matches(("Bolt", "SKU-Bolt", tuple(links)), LINKED)
+    assert not matches(("Bolt", "SKU-Bolt", list(reversed(links))), LINKED)
+    assert not matches(("Bolt", "SKU-Bolt", links[:1]), LINKED)
 
 
 def test_an_empty_list_matches_a_cell_without_links():
@@ -144,18 +141,18 @@ def test_an_empty_list_matches_a_cell_without_links():
     assert not matches(([], "SKU-Bolt", "Datasheet Manual"), LINKED)
 
 
-def test_a_pair_that_is_no_link_is_still_compared_to_the_value():
-    """A project's own rule may make a value a pair; the pattern still reaches it."""
+def test_a_pattern_matches_the_value_or_the_links_whatever_its_shape():
+    """A project's own rule may put a pair or the links themselves into the value."""
     pair = ("Bolt", "SKU-Bolt")
-    row = FakeRow(FakeCell(pair), FakeCell(pair, [Link("x", "/y")]))
+    row = FakeRow(FakeCell(pair), FakeCell(DOCUMENTS), FakeCell(pair, [Link("x", "/y")]))
 
-    assert matches((pair, pair), row)
-    assert not matches((("Bolt", "SKU-Nut"), pair), row)
+    assert matches((pair, DOCUMENTS, pair), row)
+    assert not matches((("Bolt", "SKU-Nut"), DOCUMENTS, pair), row)
 
 
 def test_a_miss_on_a_link_shows_the_links_the_cell_has():
     with pytest.raises(AssertionError) as error:
-        contains([LINKED], (("Nut", EDIT), "SKU-Bolt", [("Manual", "/media/b.pdf")]))
+        contains([LINKED], (Link("Nut", EDIT), "SKU-Bolt", [Link("Manual", "/media/b.pdf")]))
 
     assert str(error.value).endswith(
         "Actual rows:\n"

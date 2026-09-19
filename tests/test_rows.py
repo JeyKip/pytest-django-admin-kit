@@ -245,11 +245,11 @@ def test_a_row_pattern_may_ask_for_the_links_a_cell_renders(admin_ui, viewer, pr
 
     assert page.contains(
         (
-            ("Bolt", admin_ui.url.edit(products[0])),
+            Link("Bolt", admin_ui.url.edit(products[0])),
             "SKU-Bolt",
             *NUT[2:8],
             [
-                ("Datasheet", "/media/SKU-Bolt/datasheet.pdf"),
+                Link("Datasheet", "/media/SKU-Bolt/datasheet.pdf"),
                 Link("Manual", "/media/SKU-Bolt/manual.pdf"),
             ],
         )
@@ -298,7 +298,7 @@ def test_a_row_may_be_described_by_a_few_named_columns(admin_ui, viewer, product
     page = admin_ui.list(Product)
 
     assert page.contains({"name": "Nut", "is_active": True})
-    assert page.contains({"name": ("Nut", admin_ui.url.edit(products[1])), "featured": None})
+    assert page.contains({"name": Link("Nut", admin_ui.url.edit(products[1])), "featured": None})
 
 
 def test_a_named_column_that_is_not_there_raises(admin_ui, viewer, products):

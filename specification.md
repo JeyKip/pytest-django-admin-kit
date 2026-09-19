@@ -664,25 +664,13 @@ assert page.contains((1, "Jane", "Doe", "", ANY, some_callable))    # done
 ```
 
 A row pattern is a tuple or a list of cell patterns, one per column in the order shown; a
-dictionary of cell patterns by column, as in section 9.7; or `ANY_ROW`.
+dictionary of cell patterns by column, as in section 9.7; or `ANY_ROW`. A cell pattern is a
+value, a `Link`, a list or tuple of `Link`s, `ANY` or a callable (section 9.8). `contains`
+takes exactly one row pattern; a test that expects several rows calls it once per row.
 
-`contains` also takes a collection of row patterns. Each must then be matched by a different
-row of the changelist, in any order, and the changelist may hold rows none of them describes:
-
-```python
-assert page.contains([
-    (1, "Jane", "Doe", "", ANY, some_callable),
-    {"first_name": "John"},
-])
-```
-
-A list is read as a collection when every element is itself a row pattern, and as a single
-row otherwise. Inside a row, a pair or a list of pairs is a link pattern (section 9.8); a
-cell pattern is never a dictionary or `ANY_ROW`. A row made only of link pairs is therefore
-written as a tuple, since as a list it reads as a collection of two-cell rows.
-
-`match` takes the same patterns and describes the whole changelist: there are exactly as many
-rows as patterns, and the pattern at each position matches the row at that position.
+`match` takes a list or a tuple of row patterns and describes the whole changelist: there
+are exactly as many rows as patterns, and the pattern at each position matches the row at
+that position.
 
 ```python
 assert page.match([
@@ -701,7 +689,7 @@ one row and it matches.
 Expected values are matched using four things, and nothing else:
 
 * literal values, compared for equality; (done)
-* links, as `(text, href)` pairs, compared against the links a cell renders; (done)
+* links, as `Link` objects, compared against the links a cell renders; (done)
 * the sentinels `ANY` and `ANY_ROW`; (done)
 * callables. (done)
 
@@ -808,8 +796,7 @@ assert page.contains(ANY_ROW)    # done
 
 This passes when the changelist has at least one row. It claims no more than `not page.empty`
 does; on its own it exists so that `ANY_ROW` is a valid pattern wherever a row pattern is
-accepted. In a collection it stands for one row whose contents do not matter, and in `match`
-it holds that row's position:
+accepted. In `match` it holds a row's position:
 
 ```python
 assert page.match([
@@ -921,18 +908,17 @@ links to the change page and whose last is a boolean icon matches plain data:
 assert page.contains(("Widget", "SKU-1", "10.00", True))
 ```
 
-Where a link matters, a `(text, href)` pair in place of a cell's value matches a cell that
-renders exactly that one link, and a list or tuple of pairs a cell that renders exactly
-those, in that order. A pair that is no link of the cell is compared to the cell's value
-like any literal, so a project whose own rule (section 28.3) makes a value a pair can still
-match it:
+Where a link matters, `Link(text, href)` in place of a cell's value matches a cell that
+renders exactly that one link, and a list or tuple of them a cell that renders exactly those,
+in that order. A cell pattern matches when it equals the cell's value or the cell's links, so
+a project whose own rule (section 28.3) puts links into `value` matches them the same way:
 
 ```python
-assert page.contains((("Widget", "/admin/shop/product/1/change/"), "SKU-1", "10.00", True))    # done
-assert page.contains({"attachments": [("first.pdf", "/media/first.pdf"), ("second.pdf", "/media/second.pdf")]})    # done
+assert page.contains((Link("Widget", "/admin/shop/product/1/change/"), "SKU-1", "10.00", True))    # done
+assert page.contains({"attachments": [Link("first.pdf", "/media/first.pdf"), Link("second.pdf", "/media/second.pdf")]})    # done
 ```
 
-A pair matches the rendered `href` whole; a test on a page where the admin has added to it,
+A `Link` matches the rendered `href` whole; a test on a page where the admin has added to it,
 such as a filtered changelist, matches the part it cares about through a callable:
 
 ```python
@@ -943,9 +929,8 @@ assert page.contains((lambda row, cell: cell.links[0].href.path == admin_ui.url.
 
 ## 9.9 Row ordering
 
-`contains` verifies existence. With a single pattern, one row matches it; with a collection,
-each pattern has a row of its own, in any order. Either way it says nothing about the rows
-left over.
+`contains` verifies existence: one row matches the pattern, and it says nothing about the
+rows left over.
 
 `match` verifies the complete changelist in order: as many rows as patterns, each at its
 position.
@@ -957,10 +942,11 @@ assert page.match([
 ])
 ```
 
-A complete changelist in any order is `contains` together with the count:
+A complete changelist in any order is one `contains` per row together with the count:
 
 ```python
-assert page.contains(rows)
+for row in rows:
+    assert page.contains(row)
 assert page.count == len(rows)
 ```
 

@@ -8,7 +8,6 @@ way any assertion helper reports.
 from __future__ import annotations
 
 from typing import Any, Sequence
-from urllib.parse import SplitResult
 
 from .rows import Cell, Link, Row
 
@@ -50,32 +49,17 @@ def _cell_matches(expected: Any, row: Row, cell: Cell) -> bool:
     if callable(expected):
         # The test's own code: whatever it raises is its own bug to see.
         return bool(expected(row, cell))
-    # A link pair describes a cell that renders that one link; a list or tuple of
-    # pairs, the cell's links exactly. Either may also be the value itself, when a
-    # project's own rule produces such a value, so a pair that is no link of the cell
-    # is still compared to what the cell shows.
-    if _is_link(expected) and cell.links == [expected]:
+    # A pattern describes the cell's links or its value, whichever it equals: one link
+    # as the cell's only link, a list or tuple of links as all of them. Nothing is read
+    # into a pattern's shape, so a project whose own rule puts links into the value
+    # matches them the same way.
+    if cell.links == [expected]:
         return True
-    if _is_links(expected) and cell.links == list(expected):
+    if isinstance(expected, (tuple, list)) and cell.links == list(expected):
         return True
     # `==` may return something other than a bool for an arbitrary value; only its
     # truth decides the match.
     return bool(expected == cell.value)
-
-
-def _is_link(pattern: Any) -> bool:
-    if isinstance(pattern, Link):
-        return True
-    return (
-        isinstance(pattern, (tuple, list))
-        and len(pattern) == 2
-        and isinstance(pattern[0], str)
-        and isinstance(pattern[1], (str, SplitResult))
-    )
-
-
-def _is_links(pattern: Any) -> bool:
-    return isinstance(pattern, (tuple, list)) and all(_is_link(item) for item in pattern)
 
 
 def contains(rows: Sequence[Row], pattern: Any) -> bool:
@@ -122,6 +106,12 @@ def _shown(row: Row, pattern: Any) -> Any:
 
 
 def _shown_cell(cell: Cell, expected: Any) -> Any:
-    if _is_link(expected) or _is_links(expected):
+    if _asks_for_links(expected):
         return cell.links
     return cell.value
+
+
+def _asks_for_links(expected: Any) -> bool:
+    if isinstance(expected, (tuple, list)):
+        return all(isinstance(item, Link) for item in expected)
+    return isinstance(expected, Link)

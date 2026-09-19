@@ -23,9 +23,9 @@ Built:
 * Normalization of a cell's value: the boolean icon to `True`/`False`/`None`; everything
   else to the text shown, so a date, a number or the admin's empty value reads exactly as
   the user sees it in the locale the browser is pinned to.
-* `page.contains(pattern)` and `page.contains([patterns])`; `page.match(pattern)` and
-  `page.match([patterns])`; the sentinels `ANY` and `ANY_ROW`; callables `matcher(row, cell)`;
-  link pairs; tuple, list and dictionary patterns.
+* `page.contains(pattern)` for one row and `page.match([patterns])` for the whole
+  changelist; the sentinels `ANY` and `ANY_ROW`; callables `matcher(row, cell)`; `Link`
+  patterns; tuple, list and dictionary patterns.
 * A failing `assert page.contains(...)` prints the expected pattern and the actual rows, as
   §30 shows, through pytest's ordinary assertion output.
 * `page.count` reads its number through `normalize.integer`, proven against what Django
@@ -124,9 +124,11 @@ on 3.2, 5.2 and 6.1:
    filtered changelist's `_changelist_filters` is in the query, as the user's browser sees
    it. `Link` is a small class, not a tuple, and compares equal to another `Link` and to a
    `(text, href)` pair with either `href` type, so `links == [("Bolt", "/admin/.../change/")]`
-   holds and a pair in a row pattern needs no special handling in the matcher. It is the
-   one place the package implements comparison behaviour, per §3.1. A plain `list[Link]`
-   compares element-wise through it, so no list class is needed.
+   holds. It is the one place the package implements comparison behaviour, per §3.1. A
+   plain `list[Link]` compares element-wise through it, so no list class is needed. In a
+   pattern a link is spelled `Link(...)`, never guessed from a pair; a cell pattern matches
+   when it equals the cell's value or the cell's links, so a project whose own rule puts
+   links into `value` needs nothing else.
 6. **`row.object` comes from the change link.** `resolve(href.path)` on the first link
    whose path resolves to the model's change view gives `object_id`; the instance is fetched with
    `model._default_manager.get(pk=...)`. A row without such a link has `object` `None`.
@@ -138,15 +140,17 @@ on 3.2, 5.2 and 6.1:
    assertion helper (`assertEqual`, `assert_frame_equal`) shows its picture. `assert
    page.contains(...)` reads as before; the `assert` is not what fails. The absence of a row
    is asserted against `page.rows` or `page.count`.
-8. **A collection matches distinct rows, in any order, by backtracking.** Each pattern must
-   take a different row; greedy assignment would fail `[ANY_ROW, ("Jane", ...)]` against
-   `[Jane, John]`. Changelists are at most one page, so the search is cheap.
-9. **A list is a collection when every element is a row pattern** (tuple, list, dict,
-   `ANY_ROW`); otherwise it is one row. `[]` is an empty collection: `contains([])` is true,
-   `match([])` means no rows.
-10. **The sentinels are plain objects with a `repr`.** With `.values` gone from the spec they
-    never meet `==`, so no `__eq__`.
-11. **The test project gains what the rules need**: `Product.featured`
+8. **`contains` takes one row; `match` takes the rows.** A collection form of `contains`
+   (several patterns, each on a row of its own, in any order) was built and withdrawn: it
+   needed a rule to tell a collection from a row, and that rule had a corner (a row whose
+   every cell is a list of links) that had to be explained away. One `contains` per
+   expected row is the same number of lines and fails one row at a time; `match` covers
+   "exactly these, in order", with `ANY_ROW` for positions a test does not care about. Any
+   tuple or list given to `contains` is therefore one row, and `match` always receives a
+   list or tuple of rows, `[]` meaning no rows.
+9. **The sentinels are plain objects with a `repr`.** With `.values` gone from the spec they
+   never meet `==`, so no `__eq__`.
+10. **The test project gains what the rules need**: `Product.featured`
     (`BooleanField(null=True, blank=True)`) for the unknown icon, a `ProductAdmin.is_released`
     method returning a bool without `boolean=True`, so the suite shows a bool the admin
     renders as text, `ProductAdmin.empty_value_display = "(none)"`, so an empty cell reads
@@ -157,7 +161,7 @@ on 3.2, 5.2 and 6.1:
     in the README. Existing header and column assertions in `tests/test_changelist.py` are
     extended with the new columns, and `tests/test_index.py` gains `Category` in the default
     site's lists.
-12. **Branch:** `feature/changelist-rows`, already holding the spec changes. This plan file
+11. **Branch:** `feature/changelist-rows`, already holding the spec changes. This plan file
     is committed on the branch while it is being refined and removed once every slice is in.
 
 ## 5. Field validation rules
@@ -198,7 +202,7 @@ column name so a rule can name it. `ChangelistPage.count` calls `integer`; the s
 comment in `_count_line` goes.
 
 Test project: `Product.featured` in `list_display`; migration. `ProductAdmin.is_released`
-and `ProductAdmin.empty_value_display = "(none)"` per decision 11.
+and `ProductAdmin.empty_value_display = "(none)"` per decision 10.
 
 `tests/test_rows.py`: `is_active` reads `True`/`False`; `featured` reads `None` when unset
 and its `text` is `""`; `is_released` reads `"False"` as text (what the user sees) and
@@ -274,20 +278,19 @@ Commit: `Match one changelist row against literal values with a readable failure
 
 ### R5. Match a cell by its links
 
-`src/django_admin_kit/matching.py`: a `(text, href)` pair in place of a cell's value
-matches a cell whose `links` is exactly `[that link]`, and a list of pairs a cell whose
-`links` equals it; `href` in a pair is a string or a `SplitResult`, and the comparison is
-`Link.__eq__`'s (decision 5), so the matcher only has to tell a pair from a literal: a
-2-tuple whose first element is a string is a link pair, a list or tuple whose elements are
-all such pairs (or `Link`s) is a list of them. A pair that is no link of the cell is then
-compared to the value, so a value a project's own rule made a pair still matches its
-pattern. The failure text prints a pair as the user wrote it and a cell's links as `Link`s.
+`src/django_admin_kit/matching.py`: a cell pattern matches when `cell.links == [it]`, when
+it is a list or tuple and `cell.links == list(it)`, or when it equals `cell.value`; the
+comparison is `Link.__eq__`'s (decision 5), and nothing is guessed from shape. The failure
+text prints the pattern as the user wrote it and, where the pattern is or holds a `Link`,
+a cell's links as `Link`s.
 
-`tests/test_matching.py`: a pair against a one-link cell, with a string and with a split
-href; a pair against a plain cell fails; a list of two pairs against a two-link cell, and
-in the wrong order fails; `[]` matches a cell without links.
-`tests/test_rows.py`: `page.contains((("Bolt", admin_ui.url.edit(bolt)), "SKU-Bolt", ...))`
-and a row pattern with `[("Datasheet", ...), ("Manual", ...)]` in the `documents` position.
+`tests/test_matching.py`: a `Link` against a one-link cell, with a string and with a split
+href; a `Link` against a plain cell fails; a list and a tuple of two `Link`s against a
+two-link cell, and in the wrong order fails; `[]` matches a cell without links; a bare pair
+is a literal.
+`tests/test_rows.py`: `page.contains((Link("Bolt", admin_ui.url.edit(bolt)), "SKU-Bolt", ...))`
+and a row pattern with `[Link("Datasheet", ...), Link("Manual", ...)]` in the `documents`
+position.
 
 Spec: §9.1 links bullet `(done)`; §9.8 pattern examples `# done`.
 
@@ -346,31 +349,12 @@ Consistency: additive.
 
 Commit: `Match a changelist row by a few named columns instead of every cell`.
 
-### R9. `contains` with a collection of rows
+### R9. `match`: the whole changelist in order
 
-`src/django_admin_kit/matching.py`: collection detection per decision 9; each pattern must
-take a different row, in any order, found by backtracking (decision 8). The failure text
-says which pattern found no row of its own and prints the actual rows.
-
-`src/django_admin_kit/pages.py`: `contains` accepts a collection.
-
-`tests/test_matching.py`: two patterns in the wrong order pass; a collection where greedy
-assignment would fail (`[ANY_ROW, ("Jane", ...)]` against `[Jane, John]`) passes;
-`[ANY_ROW, ANY_ROW]` against one row fails; `[]` passes; a list of literals is one row,
-not a collection; the failure message names the pattern without a row.
-`tests/test_rows.py`: `page.contains([{"name": "Washer"}, ("Bolt", ANY, ...)])`.
-
-Spec: §9 intro collection example `# done`; §9.6 collection sentence.
-
-Consistency: a single pattern behaves as in R4 to R8.
-
-Commit: `Match a collection of changelist rows in any order, each to a row of its own`.
-
-### R10. `match`: the whole changelist in order
-
-`src/django_admin_kit/matching.py`: positional check, count must equal; `ANY_ROW` holds a
-position; a single pattern means exactly one row. The failure text says "expected N rows,
-found M" or "row N did not match" with the pattern and the row.
+`src/django_admin_kit/matching.py`: `match(rows, patterns)`, a list or tuple of row
+patterns; positional check, count must equal; `ANY_ROW` holds a position; a single row
+pattern means exactly one row. The failure text says "expected N rows, found M" or "row N
+did not match" with the pattern and the row.
 
 `src/django_admin_kit/pages.py`: `ChangelistPage.match`.
 
@@ -398,7 +382,7 @@ Commit: `Match the whole changelist in order with match()`.
 ## 7. Review notes
 
 **R1. Resolved:** the row without a change link comes from a second model, `Category`,
-rather than from touching `ops_site` (decision 11).
+rather than from touching `ops_site` (decision 10).
 
 **R2. Withdrawn:** typed numbers on a real page. Numbers are text (decision 1).
 
