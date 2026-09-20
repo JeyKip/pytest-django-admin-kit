@@ -309,6 +309,21 @@ class FormPage(ModelPage):
                     fields[name] = FormField(box, name)
         return fields
 
+    @property
+    def required_fields(self) -> set[str]:
+        """The names of the fields the form requires."""
+        return {name for name, field in self.fields.items() if field.required}
+
+    @property
+    def optional_fields(self) -> set[str]:
+        """The names of the fields the user may fill or leave alone.
+
+        A field the user may only read is in neither set: there is nothing to fill.
+        """
+        return {
+            name for name, field in self.fields.items() if field.editable and not field.required
+        }
+
 
 class CreatePage(FormPage):
     """The page that adds a new instance of a model."""

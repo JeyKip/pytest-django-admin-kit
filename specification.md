@@ -211,7 +211,7 @@ Both tiers appear in the same test, without leaving the package:
 ```python
 page = admin_ui.edit(product)
 
-assert page.fields["name"].required            # standard field, package vocabulary
+assert page.fields["name"].required            # standard field, package vocabulary (done)
 page.fields["colour_picker"].native.click()    # the project's own widget, native handle
 ```
 
@@ -1019,7 +1019,7 @@ assert page.fields["name"].value == "Widget"
 
 ---
 
-# 12. Required and Optional Fields
+# 12. Required and Optional Fields (done)
 
 The package must distinguish required and non-required admin form fields.
 
@@ -1028,26 +1028,28 @@ Example:
 ```python
 page = admin_ui.create(Product)
 
-assert page.fields["name"].required
-assert not page.fields["description"].required
+assert page.fields["name"].required                 # done
+assert not page.fields["description"].required      # done
 ```
 
 Convenience collections should be exposed:
 
 ```python
-assert page.required_fields == {
+assert page.required_fields == {    # done
     "name",
     "price",
 }
 
-assert page.optional_fields == {
+assert page.optional_fields == {    # done
     "description",
     "enabled",
 }
 ```
 
 The result must reflect the actual admin form, including custom `ModelForm` behavior, rather
-than only the model field definition.
+than only the model field definition. (done)
+
+A field the user may only read is in neither collection: nothing is there to fill. (done)
 
 ---
 
@@ -1124,7 +1126,7 @@ A rendered-only field has no input to fill, but still has a value:
 ```python
 field = page.fields["created_at"]
 
-assert not field.editable
+assert not field.editable    # done
 assert field.value == "1 January 2026"
 ```
 
@@ -1136,7 +1138,7 @@ assert page.fields["owner"].links == [("Jane Doe", admin_ui.url.edit(owner))]
 ```
 
 Rendered-only fields are never populated by section 14 and never appear in
-`page.required_fields`.
+`page.required_fields` (done).
 
 ---
 
@@ -2274,13 +2276,13 @@ Actual rows:
     (2, "John", "Doe", "Inactive")
 ```
 
-A form-field failure should similarly make expected and actual state visible:
+A form-field failure names the field and the property it was asked about, through pytest's
+own rewriting of the assertion: (done)
 
 ```text
-Expected field "email" to be required.
-
-Actual:
-    required=False
+assert page.fields["email"].required
+assert False
+ +  where False = FormField('email').required
 ```
 
 A row match raises `AssertionError` carrying exactly that text, which pytest prints line by
@@ -2356,8 +2358,8 @@ supported Django versions:
     * `ANY_ROW`;
     * column-addressed expected rows.
 10. Read normalized boolean cells and link cells including their targets. (done)
-11. Inspect fields on create and edit pages.
-12. Determine required and optional fields.
+11. Inspect fields on create and edit pages. (done)
+12. Determine required and optional fields. (done)
 13. Read field labels, initial values, choices, and presentation order.
 14. Distinguish editable from rendered-only fields and read a rendered-only value.
 15. Populate required fields only.

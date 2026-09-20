@@ -7,6 +7,7 @@ every field has whether the user may fill it or only read it.
 
 from __future__ import annotations
 
+from functools import cached_property
 from typing import Dict
 
 from playwright.sync_api import Locator
@@ -28,6 +29,24 @@ class FormField:
     def native(self) -> Locator:
         """The field's box, unwrapped, for anything the package does not model."""
         return self._element
+
+    @cached_property
+    def required(self) -> bool:
+        """Whether the form requires a value, as the admin tells the user.
+
+        The admin marks a required field on its label, from the form field as the form
+        finally has it, so a ``ModelForm`` that changes what the model says is read the
+        way the user sees it. A field the user may only read is never required.
+        """
+        # Django labels most fields with `label` and, from 6.0, a widget that groups
+        # several inputs with `legend`; either carries the `required` class.
+        label = self._element.locator("label, legend").first
+        return "required" in (label.get_attribute("class") or "").split()
+
+    @cached_property
+    def editable(self) -> bool:
+        """Whether the field has a control to fill, rather than a value to read."""
+        return self._element.locator("div.readonly").count() == 0
 
     def __repr__(self) -> str:
         return f"FormField({self._name!r})"

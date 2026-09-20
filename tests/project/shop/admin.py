@@ -16,6 +16,15 @@ class ProductForm(forms.ModelForm):
         model = Product
         fields = "__all__"
 
+    # The model lets the release date be blank; the form requires it. That gives the
+    # suite a field whose requiredness only the rendered form can tell. Set here rather
+    # than by redeclaring the field, so the admin's date widget stays. A user who may
+    # only view gets a form with no fields at all, hence the check.
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if "released_on" in self.fields:
+            self.fields["released_on"].required = True
+
 
 @admin.register(Product)
 class ProductAdmin(admin.ModelAdmin):

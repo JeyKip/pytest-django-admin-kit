@@ -236,11 +236,16 @@ viewer's change page on 5.2:
       changes; `0001_initial.py` is regenerated as before.
     * `readonly_fields = ("price_with_tax",)` gives every user's page one rendered-only field
       next to editable ones, and one named after a callable.
-    * A `ProductForm` that sets `self.fields["released_on"].required = True` in `__init__`
-      gives §12 its "custom `ModelForm` behaviour": the model says optional, the form says
-      required. Setting it in `__init__` rather than redeclaring the field keeps the admin's
-      date widget. Later slices that populate required fields will type a date, which is a
-      good thing to cover.
+    * `ProductForm.__init__` sets `self.fields["released_on"].required = True`. The model
+      declares `released_on` with `blank=True`, so the model says optional and the form says
+      required: the one case §12 asks for, where the actual form and not the model decides.
+      Django puts the `required` class on the label from the form field at render time, after
+      `__init__` has run, so the package reads `required` as `True`, `required_fields` lists
+      the field and §15's required mode will fill it. The change is made in `__init__` rather
+      than by redeclaring `released_on = forms.DateField(required=True)` on the form, because a
+      redeclared field replaces the one the admin builds and loses the admin's date widget;
+      the tweak keeps the form as the admin renders it and flips only `required`. A side
+      benefit: every later test that populates required fields has to type a date.
 
 ## 5. Commit plan
 

@@ -107,13 +107,18 @@ assert page.match([
 
 **Reading form fields.** The create and edit pages list their fields by name, in the order the
 admin presents them, whether the user may fill them or only read them. A field the admin renders
-hidden is not shown, so it is not listed.
+hidden is not shown, so it is not listed. Whether a field is required is read the way the user
+sees it, from the form the admin renders, so a `ModelForm` that disagrees with the model wins.
 
 ```python
 page = admin_ui.create(Product)
 
-assert list(page.fields) == ["name", "sku", "price", "is_active", "category"]
+assert list(page.fields) == ["name", "sku", "price", "is_active", "category", "created_at"]
 assert "name" in page.fields
+assert page.fields["name"].required
+assert not page.fields["created_at"].editable
+assert page.required_fields == {"name", "sku", "price"}
+assert page.optional_fields == {"is_active", "category"}
 page.fields["name"].native.locator("input").fill("Widget")
 ```
 

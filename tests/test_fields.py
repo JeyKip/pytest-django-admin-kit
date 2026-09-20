@@ -119,3 +119,81 @@ def test_the_native_handle_is_the_field_box_with_its_control_inside(admin_ui, su
     assert isinstance(native, Locator)
     assert native.locator("input[name='name']").count() == 1
     assert native.locator("label").count() == 1
+
+
+def test_a_required_field_reads_as_required(admin_ui, superuser):
+    admin_ui.login(superuser)
+
+    page = admin_ui.create(Product)
+
+    assert page.fields["name"].required
+
+
+def test_an_optional_field_reads_as_not_required(admin_ui, superuser):
+    admin_ui.login(superuser)
+
+    page = admin_ui.create(Product)
+
+    assert not page.fields["is_active"].required
+
+
+def test_requiredness_is_the_forms_word_not_the_models(admin_ui, superuser):
+    """The model lets the release date be blank; the admin's form requires it."""
+    admin_ui.login(superuser)
+
+    page = admin_ui.create(Product)
+
+    assert Product._meta.get_field("released_on").blank
+    assert page.fields["released_on"].required
+
+
+def test_a_field_with_a_control_is_editable(admin_ui, superuser):
+    admin_ui.login(superuser)
+
+    page = admin_ui.create(Product)
+
+    assert page.fields["name"].editable
+
+
+def test_a_field_rendered_only_is_not_editable(admin_ui, superuser):
+    admin_ui.login(superuser)
+
+    page = admin_ui.create(Product)
+
+    assert not page.fields["price_with_tax"].editable
+
+
+def test_a_rendered_only_field_is_never_required(admin_ui, superuser):
+    admin_ui.login(superuser)
+
+    page = admin_ui.create(Product)
+
+    assert not page.fields["price_with_tax"].required
+
+
+def test_the_required_fields_are_named_as_a_set(admin_ui, superuser):
+    admin_ui.login(superuser)
+
+    page = admin_ui.create(Product)
+
+    assert page.required_fields == {"name", "sku", "price", "released_on"}
+
+
+def test_the_optional_fields_leave_out_what_cannot_be_filled(admin_ui, superuser):
+    admin_ui.login(superuser)
+
+    page = admin_ui.create(Product)
+
+    assert page.optional_fields == {"is_active", "featured", "category"}
+
+
+def test_a_viewer_has_nothing_to_fill(admin_ui, viewer, product):
+    """Every field is rendered only for a viewer, so none is required and none is optional."""
+    admin_ui.login(viewer)
+
+    page = admin_ui.edit(product)
+
+    assert not page.fields["name"].editable
+    assert not page.fields["name"].required
+    assert page.required_fields == set()
+    assert page.optional_fields == set()
