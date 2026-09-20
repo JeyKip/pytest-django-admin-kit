@@ -11,7 +11,7 @@ import pytest
 from playwright.sync_api import Locator
 
 from django_admin_kit.matching import ANY, ANY_ROW
-from django_admin_kit.rows import Link
+from django_admin_kit.rendered import Link
 from project.shop.models import Category, Product
 
 # The Nut as the viewer's changelist shows it, one value per column.

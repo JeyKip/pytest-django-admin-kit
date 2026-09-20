@@ -5,7 +5,7 @@ A test writes the pair it expects to see; the link decides whether it is that pa
 
 from urllib.parse import urlsplit
 
-from django_admin_kit.rows import Link
+from django_admin_kit.rendered import Link
 
 HREF = "/admin/shop/product/1/change/?_changelist_filters=is_active__exact%3D1"
 SPLIT = urlsplit(HREF)

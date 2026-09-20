@@ -1,96 +1,35 @@
 """The rows of a changelist and the cells in them.
 
 A cell is addressed by the name its column is configured with, never by the label
-shown over it, and a row by its position. What a cell holds is read from the
-document's own text, so the admin's styling never changes a value.
+shown over it, and a row by its position. A cell is a rendered value, as the
+``rendered`` module reads one, that also knows its column.
 """
 
 from __future__ import annotations
 
 from functools import cached_property
 from typing import Any, Iterator
-from urllib.parse import SplitResult, urlsplit
 
 from django.contrib.admin.utils import unquote
 from django.db.models import Model
 from django.urls import Resolver404, resolve
 from playwright.sync_api import Locator
 
-from . import normalize
+from .rendered import RenderedValue
 from .urls import AdminUrls
 
 
-class Link:
-    """One link in a cell: its text, and its ``href`` exactly as rendered, split.
-
-    ``href`` is a ``SplitResult``, so its parts are there by name: ``path`` to compare
-    against ``admin_ui.url``, ``query`` for what the admin added to keep a filter. A
-    link compares equal to another link and to a ``(text, href)`` pair, as a tuple or a
-    list, with ``href`` given either as a string or already split.
-    """
-
-    def __init__(self, text: str, href: str | SplitResult) -> None:
-        self._text = text
-        self._href = urlsplit(href) if isinstance(href, str) else href
-
-    @property
-    def text(self) -> str:
-        return self._text
-
-    @property
-    def href(self) -> SplitResult:
-        return self._href
-
-    def __eq__(self, other: object) -> bool:
-        if isinstance(other, Link):
-            return (self._text, self._href) == (other._text, other._href)
-        if isinstance(other, (tuple, list)) and len(other) == 2:
-            text, href = other
-            if isinstance(text, str) and isinstance(href, (str, SplitResult)):
-                return self == Link(text, href)
-        return NotImplemented
-
-    def __hash__(self) -> int:
-        return hash((self._text, self._href))
-
-    def __repr__(self) -> str:
-        return f"Link({self._text!r}, {self._href.geturl()!r})"
-
-
-class Cell:
+class Cell(RenderedValue):
     """One cell of a changelist row."""
 
     def __init__(self, element: Locator, column: str) -> None:
-        self._element = element
+        super().__init__(element)
         self._column = column
 
     @property
     def column(self) -> str:
         """The configured name of the column the cell is in."""
         return self._column
-
-    @property
-    def native(self) -> Locator:
-        """The cell element, unwrapped, for anything the package does not model."""
-        return self._element
-
-    @cached_property
-    def text(self) -> str:
-        """What the document shows in the cell, with its whitespace collapsed."""
-        return " ".join((self._element.text_content() or "").split())
-
-    @cached_property
-    def value(self) -> Any:
-        """What the cell shows, normalized: its text, unless the admin drew an icon."""
-        return normalize.normalize(self)
-
-    @cached_property
-    def links(self) -> list[Link]:
-        """The links the cell renders, in order; ``[]`` for a cell without one."""
-        return [
-            Link(" ".join((a.text_content() or "").split()), a.get_attribute("href") or "")
-            for a in self._element.locator("a[href]").all()
-        ]
 
 
 class Row:

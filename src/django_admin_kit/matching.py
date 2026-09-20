@@ -10,7 +10,8 @@ from __future__ import annotations
 from typing import Any, Sequence
 from urllib.parse import SplitResult
 
-from .rows import Cell, Link, Row
+from .rendered import Link
+from .rows import Cell, Row
 
 
 class _Named:
