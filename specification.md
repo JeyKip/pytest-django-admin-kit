@@ -175,7 +175,7 @@ The package uses one coordinate vocabulary everywhere it applies:
 
 * on a changelist, rows are addressed by position, 0-based like any Python sequence, and
   cells by the name the column is configured with, as section 7.2 lists them; (done)
-* on a form, fields are addressed by name.
+* on a form, fields are addressed by name. (done)
 
 A label is what the user sees, and a test reads it as data: `page.headers` for columns,
 section 13.1 for fields. It is never an address, because it is presentation, and the same
@@ -184,7 +184,7 @@ column or field keeps its name across translations and relabelling.
 ```python
 page.rows[0]             # done
 page.rows[0]["email"]    # done
-page.fields["email"]
+page.fields["email"]     # done
 ```
 
 A cell is also addressable by position, where that is the clearer expression:
@@ -224,7 +224,7 @@ Native handles are available at every level of the object model:
 ```python
 admin_ui.native                        # done
 page.native                            # done
-page.fields["name"].native
+page.fields["name"].native             # done
 page.rows[0].native                    # done
 page.rows[0]["email"].native           # done
 ```
@@ -960,7 +960,7 @@ The sentinels and callables of section 9.1 apply in both methods alike.
 
 ---
 
-# 10. Create Page Fields
+# 10. Create Page Fields (done)
 
 The package must expose the fields present on the create page.
 
@@ -969,7 +969,7 @@ Example:
 ```python
 page = admin_ui.create(Product)
 
-assert set(page.fields) == {
+assert set(page.fields) == {    # done
     "name",
     "price",
     "description",
@@ -978,25 +978,25 @@ assert set(page.fields) == {
 ```
 
 `page.fields` is a mapping from field name to field, in the order the admin presents them, so
-membership and subset checks are plain Python:
+membership and subset checks are plain Python: (done)
 
 ```python
-assert "name" in page.fields
-assert {"name", "price"} <= set(page.fields)
+assert "name" in page.fields                     # done
+assert {"name", "price"} <= set(page.fields)     # done
 ```
 
 A field is addressed by name, as section 3.5 says:
 
 ```python
-field = page.fields["name"]
+field = page.fields["name"]    # done
 ```
 
 Asking for a field the form does not have raises `KeyError`, naming it and listing the fields
-the form does have, so the failure reads at a glance.
+the form does have, so the failure reads at a glance. (done)
 
 A field the admin renders hidden, through a `HiddenInput` widget, is not shown to the user and
 is not in `page.fields`. The browser posts it with the form as it is, and `page.native` reaches
-it when a test has to.
+it when a test has to. (done)
 
 ---
 
@@ -1140,12 +1140,12 @@ Rendered-only fields are never populated by section 14 and never appear in
 
 ---
 
-## 13.5 Field order
+## 13.5 Field order (done)
 
 `page.fields` is ordered as the admin presents the fields, so their order is read from it:
 
 ```python
-assert list(page.fields) == [
+assert list(page.fields) == [    # done
     "name",
     "price",
     "description",

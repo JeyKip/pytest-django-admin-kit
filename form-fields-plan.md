@@ -280,13 +280,17 @@ Files:
   token is; skip `hidden` elements and rows without a token; build `Fields` in document
   order. `CreatePage(FormPage)`, `EditPage(FormPage)`.
 * `tests/project/shop/models.py`: `Product.category`; `migrations/0001_initial.py`
-  regenerated. `tests/project/shop/admin.py`: `readonly_fields = ("price_with_tax",)`.
+  regenerated. `tests/project/shop/admin.py`: `readonly_fields = ("price_with_tax",)`, with
+  `price_with_tax` answering `None` for the unsaved product the add page hands it; a
+  `ProductForm` declaring `source = CharField(widget=HiddenInput, required=False)`, the
+  hidden field decision 3 skips, set as `ProductAdmin.form` (F2 adds its `__init__`).
 * `tests/test_fields.py` (new), with the expected field list as a module constant:
   superuser's add page lists `name, sku, price, is_active, featured, released_on, category,
-  price_with_tax` in order; membership and subset; `page.fields["name"].name == "name"`;
-  an editor's edit page lists the same; a viewer's edit page lists the same (all rendered
-  only, still fields); the unknown name's exact message; a viewer's add page (403) raises
-  `LookupError` from `fields`; `native` is a `Locator` holding the `name` input.
+  price_with_tax` in order; membership and subset; `page.fields["name"].name == "name"` and
+  its repr; an editor's edit page lists the same; a viewer's edit page lists the same (all
+  rendered only, still fields); `source` is on the page but not in `fields`; the unknown
+  name's exact message; a viewer's add page (403) raises `LookupError` from `fields`;
+  `native` is a `Locator` holding the `name` input and its label.
 * `specification.md`: §10 done marks on every example and paragraph, including the new
   sentence on hidden fields; §3.5 the "on a form" bullet and `page.fields["email"]`; §3.6
   `page.fields["name"].native`; §13.5 the example.
@@ -305,8 +309,8 @@ Files:
   `cached_property`.
 * `src/django_admin_kit/pages.py`: `FormPage.required_fields` and `optional_fields` as
   properties returning `set[str]`.
-* `tests/project/shop/admin.py`: `ProductForm` (decision 13), `ProductAdmin.form = ProductForm`,
-  with a comment saying why the form disagrees with the model.
+* `tests/project/shop/admin.py`: `ProductForm.__init__` (decision 13), with a comment saying
+  why the form disagrees with the model.
 * `tests/test_fields.py`: `name` is required; `is_active` is not; `released_on` is required
   though the model allows blank (the §12 sentence); `price_with_tax` is not editable and the
   rest are; `required_fields == {"name", "sku", "price", "released_on"}`;

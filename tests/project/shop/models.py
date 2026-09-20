@@ -8,6 +8,9 @@ class Product(models.Model):
     is_active = models.BooleanField(default=True)
     featured = models.BooleanField(null=True, blank=True)
     released_on = models.DateField(null=True, blank=True)
+    # A foreign key the form shows as a select with a blank option, and a change page
+    # for a viewer renders as a link.
+    category = models.ForeignKey("Category", null=True, blank=True, on_delete=models.SET_NULL)
 
     class Meta:
         ordering = ("name",)

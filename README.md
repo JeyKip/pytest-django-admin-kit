@@ -105,6 +105,18 @@ assert page.match([
 ])
 ```
 
+**Reading form fields.** The create and edit pages list their fields by name, in the order the
+admin presents them, whether the user may fill them or only read them. A field the admin renders
+hidden is not shown, so it is not listed.
+
+```python
+page = admin_ui.create(Product)
+
+assert list(page.fields) == ["name", "sku", "price", "is_active", "category"]
+assert "name" in page.fields
+page.fields["name"].native.locator("input").fill("Widget")
+```
+
 **Knowing what the index shows a user.** Models and apps a user may not see are not listed,
 and the lists come back in the admin's order.
 
