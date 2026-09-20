@@ -160,6 +160,9 @@ assert page.rows[0]["is_active"].value is True                  # done
 assert page.rows[0]["released_on"].value == "Sept. 12, 2026"    # done
 ```
 
+One value on a form is not text: an option chosen from a fixed set is a pair of the value the
+form posts and the label the user reads, each read by name (section 13.3).
+
 A project that wants such a value typed replaces the rule that reads it. Every normalization
 rule is a package setting with a documented default, and every one of them can be replaced by
 the project. Nothing about normalization is fixed inside the package. See section 28.3.
@@ -991,6 +994,10 @@ field = page.fields["name"]
 Asking for a field the form does not have raises `KeyError`, naming it and listing the fields
 the form does have, so the failure reads at a glance.
 
+A field the admin renders hidden, through a `HiddenInput` widget, is not shown to the user and
+is not in `page.fields`. The browser posts it with the form as it is, and `page.native` reaches
+it when a test has to.
+
 ---
 
 # 11. Edit Page Fields
@@ -1066,7 +1073,7 @@ The create page exposes the values the admin starts with:
 page = admin_ui.create(Product)
 
 assert page.fields["enabled"].value is True
-assert page.fields["quantity"].value == 1
+assert page.fields["quantity"].value == "1"
 ```
 
 ---
@@ -1090,6 +1097,20 @@ Subset checks should be natural:
 
 ```python
 assert ("2", "Toys") in field.choices
+```
+
+Each option is a `FieldChoice` with a `value`, what the form posts, and a `label`, what the user
+reads. The `value` of a field with options is the `FieldChoice` chosen. A choice compares equal
+to another choice and to a `(value, label)` pair written as a tuple or a list, never to a bare
+string, so a test says which part it means:
+
+```python
+field = page.fields["category"]
+
+assert field.value == ("2", "Toys")
+assert field.value.value == "2"
+assert field.value.label == "Toys"
+assert field.value in field.choices
 ```
 
 ---
@@ -2406,6 +2427,8 @@ supported Django versions:
 * autocomplete fields;
 * raw-ID fields;
 * horizontal and vertical selectors;
+* form controls that render several inputs under one name: radio buttons (`radio_fields`),
+  groups of checkboxes, multiple selects and split date-times, with their value and choices;
 * date hierarchy;
 * file and image upload fields;
 * custom and rich field representations;
