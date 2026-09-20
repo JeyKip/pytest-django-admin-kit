@@ -129,7 +129,10 @@ viewer's change page on 5.2:
 8. A foreign key select is wrapped in `div.related-widget-wrapper` together with
    `a.related-widget-wrapper-link` icons for adding, changing, viewing and deleting the
    related object. The select itself is still the one element named after the field. Its
-   first option is `<option value="">---------</option>` when the field is not required.
+   first option, when the field is not required, is `<option value="">` labelled
+   `---------` up to Django 6.0 and `- Select an option -` from 6.1 (`BLANK_CHOICE_LABEL`);
+   the suite carries the label in a version-aware module constant, as `test_delete.py` does
+   for the delete page's title.
 9. A viewer (view permission only) gets every field rendered only. `readonly_fields` are
    rendered only for everyone, and, with no `fields` or `fieldsets` set, come after the
    form's fields, in the order declared.
@@ -336,6 +339,11 @@ value.
 Files:
 
 * `src/django_admin_kit/fields.py`: `FieldChoice` (decision 8); `value` (decisions 6 and 7).
+* `src/django_admin_kit/rendered.py`: the whitespace-collapsing read becomes `text_of`, shared
+  with the option label.
+* `tests/project/shop/models.py`: `Product.quantity = PositiveIntegerField(default=1)`, so the
+  add page has a number input with an initial value, as §13.2's example has; the migration is
+  regenerated and the field joins `FIELDS` and `required_fields`.
 * `tests/conftest.py`: `category` fixture, `Category(name="Tools")`.
 * `tests/test_fields.py`, with a product that has `released_on=datetime.date(2026, 1, 15)`
   and the category: on an editor's edit page `name == "Widget"`, `price == "10.00"`,

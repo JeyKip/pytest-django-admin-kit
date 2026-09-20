@@ -11,7 +11,7 @@ from django.contrib import admin
 from django.contrib.auth.models import Permission, User
 
 from django_admin_kit.urls import AdminUrls
-from project.shop.models import Product
+from project.shop.models import Category, Product
 
 
 def grant(user, *codenames):
@@ -74,6 +74,11 @@ def passwordless_staff(db):
     user.set_unusable_password()
     user.save()
     return user
+
+
+@pytest.fixture
+def category(db):
+    return Category.objects.create(name="Tools")
 
 
 @pytest.fixture

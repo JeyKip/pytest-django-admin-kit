@@ -1000,21 +1000,21 @@ it when a test has to. (done)
 
 ---
 
-# 11. Edit Page Fields
+# 11. Edit Page Fields (done)
 
 The edit page must expose the same field-inspection API:
 
 ```python
 page = admin_ui.edit(product)
 
-assert "name" in page.fields
-assert page.fields["name"].required
+assert "name" in page.fields             # done
+assert page.fields["name"].required      # done
 ```
 
 Fields expose their currently rendered value:
 
 ```python
-assert page.fields["name"].value == "Widget"
+assert page.fields["name"].value == "Widget"    # done
 ```
 
 ---
@@ -1067,15 +1067,15 @@ Fields are addressed by name; the label is data, not an address.
 
 ---
 
-## 13.2 Initial values
+## 13.2 Initial values (done)
 
 The create page exposes the values the admin starts with:
 
 ```python
 page = admin_ui.create(Product)
 
-assert page.fields["enabled"].value is True
-assert page.fields["quantity"].value == "1"
+assert page.fields["enabled"].value is True     # done
+assert page.fields["quantity"].value == "1"     # done
 ```
 
 ---
@@ -1104,14 +1104,14 @@ assert ("2", "Toys") in field.choices
 Each option is a `FieldChoice` with a `value`, what the form posts, and a `label`, what the user
 reads. The `value` of a field with options is the `FieldChoice` chosen. A choice compares equal
 to another choice and to a `(value, label)` pair written as a tuple or a list, never to a bare
-string, so a test says which part it means:
+string, so a test says which part it means: (done)
 
 ```python
 field = page.fields["category"]
 
-assert field.value == ("2", "Toys")
-assert field.value.value == "2"
-assert field.value.label == "Toys"
+assert field.value == ("2", "Toys")     # done
+assert field.value.value == "2"         # done
+assert field.value.label == "Toys"      # done
 assert field.value in field.choices
 ```
 
@@ -1126,8 +1126,8 @@ A rendered-only field has no input to fill, but still has a value:
 ```python
 field = page.fields["created_at"]
 
-assert not field.editable    # done
-assert field.value == "1 January 2026"
+assert not field.editable                 # done
+assert field.value == "1 January 2026"    # done
 ```
 
 Where the admin renders such a field as a link, the link is available as on a changelist cell,

@@ -67,7 +67,7 @@ class RenderedValue:
     @cached_property
     def text(self) -> str:
         """What the document shows, with its whitespace collapsed."""
-        return " ".join((self._element.text_content() or "").split())
+        return text_of(self._element)
 
     @cached_property
     def value(self) -> Any:
@@ -78,6 +78,11 @@ class RenderedValue:
     def links(self) -> list[Link]:
         """The links rendered, in order; ``[]`` when there is none."""
         return [
-            Link(" ".join((a.text_content() or "").split()), a.get_attribute("href") or "")
+            Link(text_of(a), a.get_attribute("href") or "")
             for a in self._element.locator("a[href]").all()
         ]
+
+
+def text_of(element: Locator) -> str:
+    """The document's text inside ``element``, with its whitespace collapsed."""
+    return " ".join((element.text_content() or "").split())

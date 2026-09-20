@@ -51,6 +51,7 @@ class ProductAdmin(admin.ModelAdmin):
     fields = (
         "name",
         ("sku", "price"),
+        "quantity",
         "is_active",
         "featured",
         "released_on",
@@ -67,11 +68,11 @@ class ProductAdmin(admin.ModelAdmin):
 
     # A column that is no model field and cannot be sorted, so the suite has one the
     # admin renders differently from the rest. On the add page it sees a product with
-    # no price yet, and answers with nothing.
+    # no price yet, and shows the empty value the way the admin would for a field.
     @admin.display(description="Price with tax")
     def price_with_tax(self, product):
         if product.price is None:
-            return None
+            return self.get_empty_value_display()
         return product.price * Decimal("1.2")
 
     # A cell with more than one link, to files rather than admin pages.
