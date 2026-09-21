@@ -109,9 +109,10 @@ assert page.match([
 admin presents them, whether the user may fill them or only read them. A field the admin renders
 hidden is not shown, so it is not listed. Whether a field is required is read the way the user
 sees it, from the form the admin renders, so a `ModelForm` that disagrees with the model wins.
-A field's `value` is what its control holds: text as typed, a checkbox as a boolean, a select as
-the choice made, with the value the form posts and the label the user reads; a rendered-only
-field reads as a changelist cell does.
+A field's `label` is what the user sees next to it, without the colon. Its `value` is what its
+control holds: text as typed, a checkbox as a boolean, a select as the choice made, with the
+value the form posts and the label the user reads; a rendered-only field reads as a changelist
+cell does.
 
 ```python
 page = admin_ui.edit(product)
@@ -123,6 +124,7 @@ assert not page.fields["created_at"].editable
 assert page.required_fields == {"name", "sku", "price"}
 assert page.optional_fields == {"is_active", "category"}
 
+assert page.fields["name"].label == "Name"
 assert page.fields["name"].value == "Widget"
 assert page.fields["is_active"].value is True
 assert page.fields["category"].value == (str(tools.pk), "Tools")

@@ -373,6 +373,11 @@ Files:
 
 * `src/django_admin_kit/fields.py`: `label` (decision 9), `cached_property`; the page's
   language is read once per page (`html[lang]`) and handed to each field with its element.
+  The suffix is collapsed the way the label's text is before the comparison, because French
+  renders it as a non-breaking space and a colon and the collapse turns that into a plain
+  space; the space left in front of it is dropped with the suffix. Of Django's locales only
+  French and Traditional Chinese (`：`) change the suffix, so the test that the page's
+  language wins over the test thread's activates `zh-hant` in the thread.
 * `tests/test_fields.py`: `page.fields["released_on"].label == "Released on"` (suffix
   removed); `is_active` reads `"Is active"` (checkbox, no suffix to remove); a rendered-only
   `price_with_tax` reads `"Price with tax"`; the viewer's rendered-only `name` reads

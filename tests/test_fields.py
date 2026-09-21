@@ -5,6 +5,7 @@ import datetime
 
 import django
 import pytest
+from django.utils import translation
 from playwright.sync_api import Locator
 
 from django_admin_kit.fields import FieldChoice
@@ -336,3 +337,71 @@ def test_the_add_page_starts_with_the_initial_values(admin_ui, superuser):
     assert page.fields["released_on"].value == ""
     assert page.fields["category"].value == BLANK
     assert page.fields["price_with_tax"].value == "(none)"
+
+
+def test_a_label_is_read_without_the_suffix_after_it(admin_ui, superuser):
+    admin_ui.login(superuser)
+
+    page = admin_ui.create(Product)
+
+    assert page.fields["released_on"].label == "Released on"
+
+
+def test_a_checkbox_label_has_no_suffix_to_take_off(admin_ui, superuser):
+    admin_ui.login(superuser)
+
+    page = admin_ui.create(Product)
+
+    assert page.fields["is_active"].label == "Is active"
+
+
+def test_a_rendered_only_field_has_a_label_too(admin_ui, superuser):
+    admin_ui.login(superuser)
+
+    page = admin_ui.create(Product)
+
+    assert page.fields["price_with_tax"].label == "Price with tax"
+
+
+def test_a_viewer_reads_the_same_labels(admin_ui, viewer, product):
+    admin_ui.login(viewer)
+
+    page = admin_ui.edit(product)
+
+    assert page.fields["name"].label == "Name"
+    assert page.fields["is_active"].label == "Is active"
+
+
+@pytest.mark.parametrize(
+    ("language", "shown"),
+    [
+        ("en", "Name:"),
+        ("fr", "Name\xa0:"),  # a non-breaking space before the colon
+        ("zh-hant", "Name\uff1a"),  # a full-width colon
+    ],
+)
+def test_the_suffix_is_the_one_of_the_language_the_page_was_rendered_in(
+    admin_ui, superuser, settings, language, shown
+):
+    """The test project's own labels are not translated, so only the suffix changes
+    with the language, and whatever it is, it is taken off."""
+    settings.LANGUAGE_CODE = language
+    admin_ui.login(superuser)
+
+    page = admin_ui.create(Product)
+
+    assert page.fields["name"].native.locator("label").text_content() == shown
+    assert page.fields["name"].label == "Name"
+
+
+def test_the_suffix_follows_the_page_not_the_test_process(admin_ui, superuser):
+    """The page is rendered in the project's language whatever the test thread has
+    activated; the label is read with the page's suffix, not the thread's. Traditional
+    Chinese is the one locale whose suffix is not a colon at all."""
+    admin_ui.login(superuser)
+
+    page = admin_ui.create(Product)
+
+    with translation.override("zh-hant"):
+        assert page.fields["name"].native.locator("label").text_content() == "Name:"
+        assert page.fields["name"].label == "Name"

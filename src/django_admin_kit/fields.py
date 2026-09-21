@@ -10,6 +10,7 @@ from __future__ import annotations
 from functools import cached_property
 from typing import Any, Dict
 
+from django.utils import translation
 from playwright.sync_api import Locator
 
 from .rendered import RenderedValue, text_of
@@ -51,11 +52,16 @@ class FieldChoice:
 
 
 class FormField:
-    """One field of an admin form."""
+    """One field of an admin form.
 
-    def __init__(self, element: Locator, name: str) -> None:
+    ``language`` is the one the page was rendered in, which decides what the admin put
+    after the label.
+    """
+
+    def __init__(self, element: Locator, name: str, language: str) -> None:
         self._element = element
         self._name = name
+        self._language = language
 
     @property
     def name(self) -> str:
@@ -75,10 +81,26 @@ class FormField:
         finally has it, so a ``ModelForm`` that changes what the model says is read the
         way the user sees it. A field the user may only read is never required.
         """
-        # Django labels most fields with `label` and, from 6.0, a widget that groups
-        # several inputs with `legend`; either carries the `required` class.
-        label = self._element.locator("label, legend").first
-        return "required" in (label.get_attribute("class") or "").split()
+        return "required" in (self._label.get_attribute("class") or "").split()
+
+    @cached_property
+    def label(self) -> str:
+        """The label the admin shows next to the field, as data and never as an address.
+
+        The suffix the form puts after every label, ``:`` in English and whatever the
+        page's language makes of it, is not part of the label and is taken off.
+        """
+        label = text_of(self._label)
+        # The suffix is Django's own translated ":", so the catalog says what the page
+        # ends each label with: "Name:" in English, "Name\xa0:" in French, a full-width
+        # colon in Traditional Chinese. It is looked up in the page's language, not the
+        # test's: a project that picks the language per request renders the page in
+        # one while the test thread is in another. Collapsing the suffix as the label
+        # was collapsed turns the French "\xa0:" into ":", so "Name :" ends with it
+        # and the space left over is dropped too.
+        with translation.override(self._language):
+            suffix = " ".join(translation.gettext(":").split())
+        return label[: -len(suffix)].rstrip() if label.endswith(suffix) else label
 
     @cached_property
     def editable(self) -> bool:
@@ -108,6 +130,12 @@ class FormField:
 
     def _control(self, kind: str) -> Locator:
         return self._element.locator(f'{kind}[name="{self._name}"]')
+
+    @cached_property
+    def _label(self) -> Locator:
+        # Django labels most fields with `label` and, from 6.0, a widget that groups
+        # several inputs with `legend`.
+        return self._element.locator("label, legend").first
 
     @cached_property
     def _rendered(self) -> RenderedValue:

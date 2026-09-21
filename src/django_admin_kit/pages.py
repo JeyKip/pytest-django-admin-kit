@@ -298,15 +298,19 @@ class FormPage(ModelPage):
         # leaves out the inline formsets next to them. Each line of a fieldset is a
         # `form-row` carrying a `field-<name>` class per field on it: a line with one
         # field is that field's box, a line with several holds a `fieldBox` per field.
+        page = self._shown()
+        # The admin says which language it rendered the page in, and the fields need
+        # it to know what the form put after each label.
+        language = page.locator("html").get_attribute("lang") or ""
         fields = Fields()
-        for row in self._shown().locator("form > div > fieldset.module .form-row").all():
+        for row in page.locator("form > div > fieldset.module .form-row").all():
             boxes = [row] if len(_field_names(row)) == 1 else row.locator(".fieldBox").all()
             for box in boxes:
                 classes = (box.get_attribute("class") or "").split()
                 if "hidden" in classes:
                     continue
                 for name in _field_names(box):
-                    fields[name] = FormField(box, name)
+                    fields[name] = FormField(box, name, language)
         return fields
 
     @property

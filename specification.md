@@ -1057,13 +1057,15 @@ A field the user may only read is in neither collection: nothing is there to fil
 
 Beyond existence and requiredness, a field exposes what the admin says about it.
 
-## 13.1 Labels
+## 13.1 Labels (done)
 
 ```python
-assert page.fields["first_name"].label == "First name"
+assert page.fields["first_name"].label == "First name"    # done
 ```
 
-Fields are addressed by name; the label is data, not an address.
+Fields are addressed by name; the label is data, not an address. The suffix the form puts
+after every label, `:` in English, is not part of it, whatever the page's language makes of
+it. (done)
 
 ---
 
