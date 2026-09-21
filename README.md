@@ -129,6 +129,7 @@ assert page.fields["name"].value == "Widget"
 assert page.fields["is_active"].value is True
 assert page.fields["category"].value == (str(tools.pk), "Tools")
 assert page.fields["category"].value.label == "Tools"
+assert page.fields["category"].choices == [("", "---------"), (str(tools.pk), "Tools")]
 assert page.fields["created_at"].value == "Jan. 15, 2026"
 page.fields["name"].native.locator("input").fill("Gadget")
 ```

@@ -128,6 +128,18 @@ class FormField:
             return FieldChoice(option.get_attribute("value") or "", text_of(option))
         return self._control("").input_value()
 
+    @cached_property
+    def choices(self) -> list[FieldChoice]:
+        """The options a select offers, in order, the blank one included.
+
+        ``[]`` for any other field: a text input has no fixed set of options, and a
+        field the user may only read offers none.
+        """
+        return [
+            FieldChoice(option.get_attribute("value") or "", text_of(option))
+            for option in self._control("select").locator("option").all()
+        ]
+
     def _control(self, kind: str) -> Locator:
         return self._element.locator(f'{kind}[name="{self._name}"]')
 

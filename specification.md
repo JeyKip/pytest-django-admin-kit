@@ -1082,15 +1082,15 @@ assert page.fields["quantity"].value == "1"     # done
 
 ---
 
-## 13.3 Choices
+## 13.3 Choices (done)
 
 A field with a fixed set of options exposes them as value and label pairs, including the blank
-option where the admin renders one:
+option where the admin renders one; a field without options exposes `[]`:
 
 ```python
 field = page.fields["category"]
 
-assert field.choices == [
+assert field.choices == [    # done
     ("", "---------"),
     ("1", "Tools"),
     ("2", "Toys"),
@@ -1100,7 +1100,7 @@ assert field.choices == [
 Subset checks should be natural:
 
 ```python
-assert ("2", "Toys") in field.choices
+assert ("2", "Toys") in field.choices    # done
 ```
 
 Each option is a `FieldChoice` with a `value`, what the form posts, and a `label`, what the user
@@ -1114,7 +1114,7 @@ field = page.fields["category"]
 assert field.value == ("2", "Toys")     # done
 assert field.value.value == "2"         # done
 assert field.value.label == "Toys"      # done
-assert field.value in field.choices
+assert field.value in field.choices     # done
 ```
 
 ---
@@ -2362,7 +2362,7 @@ supported Django versions:
 10. Read normalized boolean cells and link cells including their targets. (done)
 11. Inspect fields on create and edit pages. (done)
 12. Determine required and optional fields. (done)
-13. Read field labels, initial values, choices, and presentation order.
+13. Read field labels, initial values, choices, and presentation order. (done)
 14. Distinguish editable from rendered-only fields and read a rendered-only value.
 15. Populate required fields only.
 16. Populate optional fields only.

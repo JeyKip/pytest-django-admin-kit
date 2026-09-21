@@ -405,3 +405,57 @@ def test_the_suffix_follows_the_page_not_the_test_process(admin_ui, superuser):
     with translation.override("zh-hant"):
         assert page.fields["name"].native.locator("label").text_content() == "Name:"
         assert page.fields["name"].label == "Name"
+
+
+def test_a_select_offers_its_choices_in_order_with_the_blank_one(admin_ui, superuser, category):
+    admin_ui.login(superuser)
+
+    page = admin_ui.create(Product)
+
+    assert page.fields["category"].choices == [BLANK, (str(category.pk), "Tools")]
+
+
+def test_a_nullable_boolean_offers_its_three_choices(admin_ui, superuser):
+    admin_ui.login(superuser)
+
+    page = admin_ui.create(Product)
+
+    assert page.fields["featured"].choices == [
+        ("unknown", "Unknown"),
+        ("true", "Yes"),
+        ("false", "No"),
+    ]
+
+
+def test_a_choice_is_looked_up_among_the_choices_as_a_pair(admin_ui, superuser, category):
+    admin_ui.login(superuser)
+
+    page = admin_ui.create(Product)
+
+    assert (str(category.pk), "Tools") in page.fields["category"].choices
+
+
+def test_the_choice_made_is_one_of_the_choices(admin_ui, editor, released):
+    admin_ui.login(editor)
+
+    page = admin_ui.edit(released)
+
+    field = page.fields["category"]
+    assert field.value in field.choices
+
+
+def test_a_field_without_options_offers_no_choices(admin_ui, superuser):
+    admin_ui.login(superuser)
+
+    page = admin_ui.create(Product)
+
+    assert page.fields["name"].choices == []
+    assert page.fields["is_active"].choices == []
+
+
+def test_a_rendered_only_field_offers_no_choices(admin_ui, viewer, released):
+    admin_ui.login(viewer)
+
+    page = admin_ui.edit(released)
+
+    assert page.fields["category"].choices == []
