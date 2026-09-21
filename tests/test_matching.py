@@ -9,7 +9,7 @@ from urllib.parse import urlsplit
 import pytest
 
 from django_admin_kit.matching import ANY, ANY_ROW, contains, match, matches
-from django_admin_kit.rows import Link
+from django_admin_kit.rendered import Link
 
 
 class FakeCell:

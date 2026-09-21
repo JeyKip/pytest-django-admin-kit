@@ -87,7 +87,7 @@ actual rows when they fail.
 
 ```python
 from django_admin_kit.matching import ANY, ANY_ROW
-from django_admin_kit.rows import Link
+from django_admin_kit.rendered import Link
 
 page = admin_ui.list(Product)
 
@@ -103,6 +103,51 @@ assert page.match([
     ANY_ROW,
     {"name": "Washer", "price": lambda row, cell: cell.value.endswith(".00")},
 ])
+```
+
+**Reading form fields.** The create and edit pages list their fields by name, in the order the
+admin presents them, whether the user may fill them or only read them. A field the admin renders
+hidden is not shown, so it is not listed. Whether a field is required is read the way the user
+sees it, from the form the admin renders, so a `ModelForm` that disagrees with the model wins.
+A field's `label` is what the user sees next to it, without the colon. Its `value` is what its
+control holds: text as typed, a checkbox as a boolean, a select as the choice made, with the
+value the form posts and the label the user reads; a rendered-only field reads as a changelist
+cell does.
+
+```python
+page = admin_ui.edit(product)
+
+assert list(page.fields) == [
+    "name",
+    "sku",
+    "price",
+    "quantity",
+    "is_active",
+    "featured",
+    "released_on",
+    "category",
+    "price_with_tax",
+]
+assert "name" in page.fields
+assert page.fields["name"].required
+assert not page.fields["price_with_tax"].editable
+assert page.required_fields == {"name", "sku", "price", "quantity", "released_on"}
+assert page.optional_fields == {"is_active", "featured", "category"}
+
+assert page.fields["name"].label == "Name"
+assert page.fields["name"].value == "Widget"
+assert page.fields["is_active"].value is True
+assert page.fields["category"].value == (str(tools.pk), "Tools")
+assert page.fields["category"].value.label == "Tools"
+assert page.fields["category"].choices == [("", "---------"), (str(tools.pk), "Tools")]
+assert page.fields["price_with_tax"].value == "12.000"
+page.fields["name"].native.locator("input").fill("Gadget")
+
+admin_ui.login(viewer)    # may only view, so every field is rendered only
+page = admin_ui.edit(product)
+
+assert page.fields["released_on"].value == "Jan. 15, 2026"
+assert page.fields["category"].links == [("Tools", admin_ui.url.edit(tools))]
 ```
 
 **Knowing what the index shows a user.** Models and apps a user may not see are not listed,

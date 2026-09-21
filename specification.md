@@ -10,9 +10,9 @@ It should allow developers to verify:
 * availability and basic operation of admin pages;
 * the set of models the admin exposes;
 * changelist columns, record counts, and row contents (done);
-* create and edit form fields, including their labels, initial values, and choices;
-* editable and rendered-only field values;
-* requiredness of create and edit form fields;
+* create and edit form fields, including their labels, initial values, and choices (done);
+* editable and rendered-only field values (done);
+* requiredness of create and edit form fields (done);
 * automatic population of form fields;
 * submit actions and where the admin navigates after an operation;
 * validation errors displayed by Django Admin;
@@ -75,17 +75,17 @@ The ordered roadmap is defined in section 33.
 
 # 3. Design Principles
 
-## 3.1 Pytest-style assertions
+## 3.1 Pytest-style assertions (done)
 
 Tests should look like ordinary pytest tests.
 
 Preferred:
 
 ```python
-assert page.works
-assert "first_name" in page.fields
-assert page.fields["email"].required
-assert page.contains((...))
+assert page.works                          # done
+assert "first_name" in page.fields         # done
+assert page.fields["email"].required       # done
+assert page.contains((...))                # done
 ```
 
 Avoid making the primary interface:
@@ -160,6 +160,9 @@ assert page.rows[0]["is_active"].value is True                  # done
 assert page.rows[0]["released_on"].value == "Sept. 12, 2026"    # done
 ```
 
+One value on a form is not text: an option chosen from a fixed set is a pair of the value the
+form posts and the label the user reads, each read by name (section 13.3).
+
 A project that wants such a value typed replaces the rule that reads it. Every normalization
 rule is a package setting with a documented default, and every one of them can be replaced by
 the project. Nothing about normalization is fixed inside the package. See section 28.3.
@@ -172,7 +175,7 @@ The package uses one coordinate vocabulary everywhere it applies:
 
 * on a changelist, rows are addressed by position, 0-based like any Python sequence, and
   cells by the name the column is configured with, as section 7.2 lists them; (done)
-* on a form, fields are addressed by name.
+* on a form, fields are addressed by name. (done)
 
 A label is what the user sees, and a test reads it as data: `page.headers` for columns,
 section 13.1 for fields. It is never an address, because it is presentation, and the same
@@ -181,7 +184,7 @@ column or field keeps its name across translations and relabelling.
 ```python
 page.rows[0]             # done
 page.rows[0]["email"]    # done
-page.fields["email"]
+page.fields["email"]     # done
 ```
 
 A cell is also addressable by position, where that is the clearer expression:
@@ -208,8 +211,8 @@ Both tiers appear in the same test, without leaving the package:
 ```python
 page = admin_ui.edit(product)
 
-assert page.fields["name"].required            # standard field, package vocabulary
-page.fields["colour_picker"].native.click()    # the project's own widget, native handle
+assert page.fields["name"].required            # standard field, package vocabulary (done)
+page.fields["colour_picker"].native.click()    # the project's own widget, native handle (done)
 ```
 
 Reaching for a native handle is **expected and supported**, not a failure or a last resort. A
@@ -221,7 +224,7 @@ Native handles are available at every level of the object model:
 ```python
 admin_ui.native                        # done
 page.native                            # done
-page.fields["name"].native
+page.fields["name"].native             # done
 page.rows[0].native                    # done
 page.rows[0]["email"].native           # done
 ```
@@ -957,7 +960,7 @@ The sentinels and callables of section 9.1 apply in both methods alike.
 
 ---
 
-# 10. Create Page Fields
+# 10. Create Page Fields (done)
 
 The package must expose the fields present on the create page.
 
@@ -966,7 +969,7 @@ Example:
 ```python
 page = admin_ui.create(Product)
 
-assert set(page.fields) == {
+assert set(page.fields) == {    # done
     "name",
     "price",
     "description",
@@ -975,44 +978,48 @@ assert set(page.fields) == {
 ```
 
 `page.fields` is a mapping from field name to field, in the order the admin presents them, so
-membership and subset checks are plain Python:
+membership and subset checks are plain Python: (done)
 
 ```python
-assert "name" in page.fields
-assert {"name", "price"} <= set(page.fields)
+assert "name" in page.fields                     # done
+assert {"name", "price"} <= set(page.fields)     # done
 ```
 
 A field is addressed by name, as section 3.5 says:
 
 ```python
-field = page.fields["name"]
+field = page.fields["name"]    # done
 ```
 
 Asking for a field the form does not have raises `KeyError`, naming it and listing the fields
-the form does have, so the failure reads at a glance.
+the form does have, so the failure reads at a glance. (done)
+
+A field the admin renders hidden, through a `HiddenInput` widget, is not shown to the user and
+is not in `page.fields`. The browser posts it with the form as it is, and `page.native` reaches
+it when a test has to. (done)
 
 ---
 
-# 11. Edit Page Fields
+# 11. Edit Page Fields (done)
 
 The edit page must expose the same field-inspection API:
 
 ```python
 page = admin_ui.edit(product)
 
-assert "name" in page.fields
-assert page.fields["name"].required
+assert "name" in page.fields             # done
+assert page.fields["name"].required      # done
 ```
 
 Fields expose their currently rendered value:
 
 ```python
-assert page.fields["name"].value == "Widget"
+assert page.fields["name"].value == "Widget"    # done
 ```
 
 ---
 
-# 12. Required and Optional Fields
+# 12. Required and Optional Fields (done)
 
 The package must distinguish required and non-required admin form fields.
 
@@ -1021,65 +1028,69 @@ Example:
 ```python
 page = admin_ui.create(Product)
 
-assert page.fields["name"].required
-assert not page.fields["description"].required
+assert page.fields["name"].required                 # done
+assert not page.fields["description"].required      # done
 ```
 
 Convenience collections should be exposed:
 
 ```python
-assert page.required_fields == {
+assert page.required_fields == {    # done
     "name",
     "price",
 }
 
-assert page.optional_fields == {
+assert page.optional_fields == {    # done
     "description",
     "enabled",
 }
 ```
 
 The result must reflect the actual admin form, including custom `ModelForm` behavior, rather
-than only the model field definition.
+than only the model field definition. (done)
+
+A field the user may only read is in neither collection: nothing is there to fill. (done)
 
 ---
 
-# 13. Field Metadata
+# 13. Field Metadata (done)
 
 Beyond existence and requiredness, a field exposes what the admin says about it.
 
-## 13.1 Labels
+## 13.1 Labels (done)
 
 ```python
-assert page.fields["first_name"].label == "First name"
+assert page.fields["first_name"].label == "First name"    # done
 ```
 
-Fields are addressed by name; the label is data, not an address.
+Fields are addressed by name; the label is data, not an address. The suffix the form puts
+after every label, `:` in English, is not part of it, whatever the page's language makes of
+it. (done)
 
 ---
 
-## 13.2 Initial values
+## 13.2 Initial values (done)
 
 The create page exposes the values the admin starts with:
 
 ```python
 page = admin_ui.create(Product)
 
-assert page.fields["enabled"].value is True
-assert page.fields["quantity"].value == 1
+assert page.fields["enabled"].value is True     # done
+assert page.fields["quantity"].value == "1"     # done
 ```
 
 ---
 
-## 13.3 Choices
+## 13.3 Choices (done)
 
 A field with a fixed set of options exposes them as value and label pairs, including the blank
-option where the admin renders one:
+option where the admin renders one; a field without options exposes `[]`:
 
 ```python
 field = page.fields["category"]
 
-assert field.choices == [
+assert field.choices == [    # done
     ("", "---------"),
     ("1", "Tools"),
     ("2", "Toys"),
@@ -1089,12 +1100,26 @@ assert field.choices == [
 Subset checks should be natural:
 
 ```python
-assert ("2", "Toys") in field.choices
+assert ("2", "Toys") in field.choices    # done
+```
+
+Each option is a `FieldChoice` with a `value`, what the form posts, and a `label`, what the user
+reads. The `value` of a field with options is the `FieldChoice` chosen. A choice compares equal
+to another choice and to a `(value, label)` pair written as a tuple or a list, never to a bare
+string, so a test says which part it means: (done)
+
+```python
+field = page.fields["category"]
+
+assert field.value == ("2", "Toys")     # done
+assert field.value.value == "2"         # done
+assert field.value.label == "Toys"      # done
+assert field.value in field.choices     # done
 ```
 
 ---
 
-## 13.4 Rendered-only fields
+## 13.4 Rendered-only fields (done)
 
 A field is either editable or rendered only.
 
@@ -1103,28 +1128,28 @@ A rendered-only field has no input to fill, but still has a value:
 ```python
 field = page.fields["created_at"]
 
-assert not field.editable
-assert field.value == "1 January 2026"
+assert not field.editable                 # done
+assert field.value == "1 January 2026"    # done
 ```
 
 Where the admin renders such a field as a link, the link is available as on a changelist cell,
 section 9.8:
 
 ```python
-assert page.fields["owner"].links == [("Jane Doe", admin_ui.url.edit(owner))]
+assert page.fields["owner"].links == [("Jane Doe", admin_ui.url.edit(owner))]    # done
 ```
 
-Rendered-only fields are never populated by section 14 and never appear in
-`page.required_fields`.
+Rendered-only fields are never populated by section 14 (marked with that section) and never
+appear in `page.required_fields` (done).
 
 ---
 
-## 13.5 Field order
+## 13.5 Field order (done)
 
 `page.fields` is ordered as the admin presents the fields, so their order is read from it:
 
 ```python
-assert list(page.fields) == [
+assert list(page.fields) == [    # done
     "name",
     "price",
     "description",
@@ -1866,21 +1891,21 @@ def test_product_create_fields(admin_ui, admin_user):
 
     page = admin_ui.create(Product)
 
-    assert set(page.fields) == {
+    assert set(page.fields) == {    # done
         "name",
         "price",
         "description",
         "enabled",
     }
 
-    assert page.fields["name"].required
-    assert page.fields["price"].required
-    assert not page.fields["description"].required
+    assert page.fields["name"].required                 # done
+    assert page.fields["price"].required                # done
+    assert not page.fields["description"].required      # done
 
-    assert page.fields["name"].label == "Name"
-    assert page.fields["enabled"].value is True
+    assert page.fields["name"].label == "Name"          # done
+    assert page.fields["enabled"].value is True         # done
 
-    assert page.fields["category"].choices == [
+    assert page.fields["category"].choices == [    # done
         ("", "---------"),
         ("1", "Tools"),
         ("2", "Toys"),
@@ -1897,7 +1922,7 @@ def test_report_is_read_only(admin_ui, admin_user, report):
 
     page = admin_ui.edit(report)
 
-    assert not page.fields["created_at"].editable
+    assert not page.fields["created_at"].editable    # done
     assert page.actions == set()
 ```
 
@@ -2253,13 +2278,13 @@ Actual rows:
     (2, "John", "Doe", "Inactive")
 ```
 
-A form-field failure should similarly make expected and actual state visible:
+A form-field failure names the field and the property it was asked about, through pytest's
+own rewriting of the assertion: (done)
 
 ```text
-Expected field "email" to be required.
-
-Actual:
-    required=False
+assert page.fields["email"].required
+assert False
+ +  where False = FormField('email').required
 ```
 
 A row match raises `AssertionError` carrying exactly that text, which pytest prints line by
@@ -2335,10 +2360,10 @@ supported Django versions:
     * `ANY_ROW`;
     * column-addressed expected rows.
 10. Read normalized boolean cells and link cells including their targets. (done)
-11. Inspect fields on create and edit pages.
-12. Determine required and optional fields.
-13. Read field labels, initial values, choices, and presentation order.
-14. Distinguish editable from rendered-only fields and read a rendered-only value.
+11. Inspect fields on create and edit pages. (done)
+12. Determine required and optional fields. (done)
+13. Read field labels, initial values, choices, and presentation order. (done)
+14. Distinguish editable from rendered-only fields and read a rendered-only value. (done)
 15. Populate required fields only.
 16. Populate optional fields only.
 17. Populate all supported fields.
@@ -2406,6 +2431,8 @@ supported Django versions:
 * autocomplete fields;
 * raw-ID fields;
 * horizontal and vertical selectors;
+* form controls that render several inputs under one name: radio buttons (`radio_fields`),
+  groups of checkboxes, multiple selects and split date-times, with their value and choices;
 * date hierarchy;
 * file and image upload fields;
 * custom and rich field representations;

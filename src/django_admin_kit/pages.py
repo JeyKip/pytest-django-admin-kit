@@ -22,6 +22,7 @@ from django.db.models import Model
 from playwright.sync_api import Locator, Page
 
 from . import matching
+from .fields import Fields, FormField
 from .normalize import integer
 from .rows import Row
 from .urls import AdminUrls
@@ -283,11 +284,56 @@ class ChangelistPage(ModelPage):
         return match
 
 
-class CreatePage(ModelPage):
+class FormPage(ModelPage):
+    """An admin page with the model's form on it: which fields the form shows."""
+
+    @cached_property
+    def fields(self) -> Fields:
+        """The fields the form shows, by name, in the order the admin presents them.
+
+        A field the admin renders hidden is not shown to the user, so it is not here
+        either; the browser posts it with the form all the same.
+        """
+        # The form's own fieldsets are direct children of the form's one div, which
+        # leaves out the inline formsets next to them. Each line of a fieldset is a
+        # `form-row` carrying a `field-<name>` class per field on it: a line with one
+        # field is that field's box, a line with several holds a `fieldBox` per field.
+        page = self._shown()
+        # The admin says which language it rendered the page in, and the fields need
+        # it to know what the form put after each label.
+        language = page.locator("html").get_attribute("lang") or ""
+        fields = Fields()
+        for row in page.locator("form > div > fieldset.module .form-row").all():
+            boxes = [row] if len(_field_names(row)) == 1 else row.locator(".fieldBox").all()
+            for box in boxes:
+                classes = (box.get_attribute("class") or "").split()
+                if "hidden" in classes:
+                    continue
+                for name in _field_names(box):
+                    fields[name] = FormField(box, name, language)
+        return fields
+
+    @property
+    def required_fields(self) -> set[str]:
+        """The names of the fields the form requires."""
+        return {name for name, field in self.fields.items() if field.required}
+
+    @property
+    def optional_fields(self) -> set[str]:
+        """The names of the fields the user may fill or leave alone.
+
+        A field the user may only read is in neither set: there is nothing to fill.
+        """
+        return {
+            name for name, field in self.fields.items() if field.editable and not field.required
+        }
+
+
+class CreatePage(FormPage):
     """The page that adds a new instance of a model."""
 
 
-class EditPage(ModelPage):
+class EditPage(FormPage):
     """The change page of one instance, read only for a user who may only view it."""
 
 
@@ -302,3 +348,10 @@ def _text(element: Locator) -> str:
 def _token(element: Locator, prefix: str) -> str:
     classes = (element.get_attribute("class") or "").split()
     return next(c[len(prefix) :] for c in classes if c.startswith(prefix))
+
+
+def _field_names(element: Locator) -> list[str]:
+    # A field's box carries one `field-<name>` class; a line with several fields
+    # carries all of theirs. For example, class="form-row field-sku field-price".
+    classes = (element.get_attribute("class") or "").split()
+    return [c[len("field-") :] for c in classes if c.startswith("field-")]
