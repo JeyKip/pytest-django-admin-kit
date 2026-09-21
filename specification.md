@@ -10,9 +10,9 @@ It should allow developers to verify:
 * availability and basic operation of admin pages;
 * the set of models the admin exposes;
 * changelist columns, record counts, and row contents (done);
-* create and edit form fields, including their labels, initial values, and choices;
-* editable and rendered-only field values;
-* requiredness of create and edit form fields;
+* create and edit form fields, including their labels, initial values, and choices (done);
+* editable and rendered-only field values (done);
+* requiredness of create and edit form fields (done);
 * automatic population of form fields;
 * submit actions and where the admin navigates after an operation;
 * validation errors displayed by Django Admin;
@@ -75,17 +75,17 @@ The ordered roadmap is defined in section 33.
 
 # 3. Design Principles
 
-## 3.1 Pytest-style assertions
+## 3.1 Pytest-style assertions (done)
 
 Tests should look like ordinary pytest tests.
 
 Preferred:
 
 ```python
-assert page.works
-assert "first_name" in page.fields
-assert page.fields["email"].required
-assert page.contains((...))
+assert page.works                          # done
+assert "first_name" in page.fields         # done
+assert page.fields["email"].required       # done
+assert page.contains((...))                # done
 ```
 
 Avoid making the primary interface:
@@ -212,7 +212,7 @@ Both tiers appear in the same test, without leaving the package:
 page = admin_ui.edit(product)
 
 assert page.fields["name"].required            # standard field, package vocabulary (done)
-page.fields["colour_picker"].native.click()    # the project's own widget, native handle
+page.fields["colour_picker"].native.click()    # the project's own widget, native handle (done)
 ```
 
 Reaching for a native handle is **expected and supported**, not a failure or a last resort. A
@@ -1891,21 +1891,21 @@ def test_product_create_fields(admin_ui, admin_user):
 
     page = admin_ui.create(Product)
 
-    assert set(page.fields) == {
+    assert set(page.fields) == {    # done
         "name",
         "price",
         "description",
         "enabled",
     }
 
-    assert page.fields["name"].required
-    assert page.fields["price"].required
-    assert not page.fields["description"].required
+    assert page.fields["name"].required                 # done
+    assert page.fields["price"].required                # done
+    assert not page.fields["description"].required      # done
 
-    assert page.fields["name"].label == "Name"
-    assert page.fields["enabled"].value is True
+    assert page.fields["name"].label == "Name"          # done
+    assert page.fields["enabled"].value is True         # done
 
-    assert page.fields["category"].choices == [
+    assert page.fields["category"].choices == [    # done
         ("", "---------"),
         ("1", "Tools"),
         ("2", "Toys"),
@@ -1922,7 +1922,7 @@ def test_report_is_read_only(admin_ui, admin_user, report):
 
     page = admin_ui.edit(report)
 
-    assert not page.fields["created_at"].editable
+    assert not page.fields["created_at"].editable    # done
     assert page.actions == set()
 ```
 
