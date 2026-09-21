@@ -131,6 +131,7 @@ assert page.fields["category"].value == (str(tools.pk), "Tools")
 assert page.fields["category"].value.label == "Tools"
 assert page.fields["category"].choices == [("", "---------"), (str(tools.pk), "Tools")]
 assert page.fields["created_at"].value == "Jan. 15, 2026"
+assert page.fields["owner"].links == [("Jane Doe", admin_ui.url.edit(owner))]
 page.fields["name"].native.locator("input").fill("Gadget")
 ```
 

@@ -459,3 +459,34 @@ def test_a_rendered_only_field_offers_no_choices(admin_ui, viewer, released):
     page = admin_ui.edit(released)
 
     assert page.fields["category"].choices == []
+
+
+def test_a_rendered_only_foreign_key_links_to_the_object(admin_ui, viewer, released, category):
+    admin_ui.login(viewer)
+
+    page = admin_ui.edit(released)
+
+    assert page.fields["category"].links == [("Tools", admin_ui.url.edit(category))]
+
+
+def test_a_rendered_only_field_without_a_link_has_none(admin_ui, viewer, released):
+    admin_ui.login(viewer)
+
+    page = admin_ui.edit(released)
+
+    assert page.fields["name"].links == []
+
+
+def test_the_icons_next_to_a_select_are_not_the_fields_links(admin_ui, superuser, released):
+    """Next to a foreign key select the admin draws icons to add, change, view and
+    delete the related object, as links, for a user who may do those things. They are
+    controls, not part of the field's value, so they are not its links."""
+    admin_ui.login(superuser)
+
+    page = admin_ui.edit(released)
+
+    field = page.fields["category"]
+    icons = field.native.locator("a.related-widget-wrapper-link")
+    drawn = {icon.get_attribute("id") for icon in icons.all()}
+    assert {"add_id_category", "change_id_category", "delete_id_category"} <= drawn
+    assert field.links == []

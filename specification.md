@@ -1053,7 +1053,7 @@ A field the user may only read is in neither collection: nothing is there to fil
 
 ---
 
-# 13. Field Metadata
+# 13. Field Metadata (done)
 
 Beyond existence and requiredness, a field exposes what the admin says about it.
 
@@ -1119,7 +1119,7 @@ assert field.value in field.choices     # done
 
 ---
 
-## 13.4 Rendered-only fields
+## 13.4 Rendered-only fields (done)
 
 A field is either editable or rendered only.
 
@@ -1136,11 +1136,11 @@ Where the admin renders such a field as a link, the link is available as on a ch
 section 9.8:
 
 ```python
-assert page.fields["owner"].links == [("Jane Doe", admin_ui.url.edit(owner))]
+assert page.fields["owner"].links == [("Jane Doe", admin_ui.url.edit(owner))]    # done
 ```
 
-Rendered-only fields are never populated by section 14 and never appear in
-`page.required_fields` (done).
+Rendered-only fields are never populated by section 14 (marked with that section) and never
+appear in `page.required_fields` (done).
 
 ---
 
@@ -2363,7 +2363,7 @@ supported Django versions:
 11. Inspect fields on create and edit pages. (done)
 12. Determine required and optional fields. (done)
 13. Read field labels, initial values, choices, and presentation order. (done)
-14. Distinguish editable from rendered-only fields and read a rendered-only value.
+14. Distinguish editable from rendered-only fields and read a rendered-only value. (done)
 15. Populate required fields only.
 16. Populate optional fields only.
 17. Populate all supported fields.

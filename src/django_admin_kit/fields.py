@@ -13,7 +13,7 @@ from typing import Any, Dict
 from django.utils import translation
 from playwright.sync_api import Locator
 
-from .rendered import RenderedValue, text_of
+from .rendered import Link, RenderedValue, text_of
 
 
 class FieldChoice:
@@ -127,6 +127,15 @@ class FormField:
             option = select.locator("option:checked")
             return FieldChoice(option.get_attribute("value") or "", text_of(option))
         return self._control("").input_value()
+
+    @property
+    def links(self) -> list[Link]:
+        """The links in a rendered-only field's value, in order, like ``Cell.links``.
+
+        ``[]`` for an editable field: its value is what the control holds, and the
+        icons the admin may draw next to a select are not part of it.
+        """
+        return [] if self.editable else self._rendered.links
 
     @cached_property
     def choices(self) -> list[FieldChoice]:
