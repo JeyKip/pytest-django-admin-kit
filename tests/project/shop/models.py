@@ -21,6 +21,21 @@ class Product(models.Model):
         return self.name
 
 
+class Feed(models.Model):
+    """A model whose own fields are named after the arguments `populate` takes, so the
+    suite proves a project is not kept from filling them."""
+
+    source = models.CharField(max_length=100)
+    mode = models.CharField(
+        max_length=20,
+        choices=(("append", "Append"), ("replace", "Replace")),
+        default="append",
+    )
+
+    def __str__(self):
+        return self.source
+
+
 class Category(models.Model):
     name = models.CharField(max_length=100)
 

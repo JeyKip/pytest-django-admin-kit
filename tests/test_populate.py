@@ -9,7 +9,7 @@ import pytest
 
 from django_admin_kit.fields import FieldChoice
 from django_admin_kit.pages import PagePopulationMode
-from project.shop.models import Product
+from project.shop.models import Feed, Product
 
 # The option a select shows for no choice. Django 6.1 reworded it; the package works from
 # the option's value, which is `""` on every version, so the suite proves both wordings.
@@ -516,3 +516,15 @@ def test_a_word_that_names_no_mode_is_reported(admin_ui, superuser, data):
     with pytest.raises(ValueError) as failure:
         page.populate(data, "sometimes")
     assert str(failure.value) == "'sometimes' is not a valid PagePopulationMode"
+
+
+def test_a_field_named_after_an_argument_is_filled_by_keyword(admin_ui, superuser):
+    """The source and the mode are positional, so neither name is taken from the form:
+    `Feed` has a field called each, and both are filled like any other."""
+    admin_ui.login(superuser)
+
+    page = admin_ui.create(Feed)
+    page.populate(source="catalogue.csv", mode="replace")
+
+    assert page.fields["source"].value == "catalogue.csv"
+    assert page.fields["mode"].value == ("replace", "Replace")
