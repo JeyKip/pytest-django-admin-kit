@@ -1188,8 +1188,8 @@ page.populate(data)
 
 Only fields represented on the current admin form should be considered.
 
-Unrelated dictionary keys should not automatically cause a failure unless strict behavior is
-explicitly requested.
+Unrelated dictionary keys are ignored. A key that names no field of the form populates
+nothing, and the test that relied on it fails on what it asserts next.
 
 ---
 
@@ -1223,6 +1223,22 @@ This does not imply that related objects or object graphs must automatically be 
 
 ---
 
+## 14.3 Keyword values
+
+Values may also be given as keyword arguments, on their own or next to a source. A keyword
+adds a field the source lacks or overrides the value the source has for it:
+
+```python
+page.populate(product, name="Renamed", category=None)
+
+page.populate(name="Widget", price="19.99")
+```
+
+The source and the mode of section 15 are positional, never keywords, so every keyword is a
+field's value and a form field named `source` or `mode` is given like any other.
+
+---
+
 # 15. Population Modes
 
 Three population modes are required.
@@ -1230,10 +1246,7 @@ Three population modes are required.
 ## Required fields only
 
 ```python
-page.populate(
-    data,
-    fields="required",
-)
+page.populate(data, "required")
 ```
 
 Only required fields are populated.
@@ -1243,10 +1256,7 @@ Only required fields are populated.
 ## Optional fields only
 
 ```python
-page.populate(
-    data,
-    fields="optional",
-)
+page.populate(data, "optional")
 ```
 
 Only non-required fields are populated.
@@ -1256,27 +1266,22 @@ Only non-required fields are populated.
 ## All fields
 
 ```python
-page.populate(
-    data,
-    fields="all",
-)
+page.populate(data, "all")
 ```
 
 All supported fields for which values are available are populated.
 
-Recommended constants may additionally be provided:
+The modes are the members of one enum, `PagePopulationMode`, so neither the package nor a
+project spells them out by hand:
 
 ```python
-REQUIRED
-OPTIONAL
-ALL
+from django_admin_kit.pages import PagePopulationMode
+
+page.populate(data, PagePopulationMode.REQUIRED)
 ```
 
-Example:
-
-```python
-page.populate(data, fields=REQUIRED)
-```
+A plain string is accepted and converted, so `PagePopulationMode.REQUIRED` and `"required"`
+are the same call; a string that is no mode fails on the enum's own `ValueError`.
 
 ---
 
@@ -1289,7 +1294,7 @@ Example:
 ```python
 page = admin_ui.create(Product)
 
-page.populate(data, fields="required")
+page.populate(data, PagePopulationMode.REQUIRED)
 
 result = page.submit()
 
@@ -1940,7 +1945,7 @@ def test_create_product(admin_ui, admin_user):
         "name": "Widget",
         "price": "12.00",
         "description": "Ignored",
-    }, fields="required")
+    }, PagePopulationMode.REQUIRED)
 
     result = page.submit()
 
