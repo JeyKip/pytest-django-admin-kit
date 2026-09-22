@@ -1,4 +1,4 @@
-"""Putting values into the fields of a create or edit page, one field at a time."""
+"""Putting values into the fields of a create or edit page, one at a time or in one call."""
 
 import datetime
 from decimal import Decimal
@@ -159,3 +159,151 @@ def test_a_viewer_has_no_field_to_fill(admin_ui, viewer, product):
     for name in page.fields:
         with pytest.raises(LookupError, match="is rendered only"):
             page.fields[name].fill("Gadget")
+
+
+def test_a_dictionary_fills_the_fields_it_names(admin_ui, superuser, category):
+    admin_ui.login(superuser)
+
+    page = admin_ui.create(Product)
+    page.populate(
+        {
+            "name": "Widget",
+            "sku": "SKU-1",
+            "price": "19.99",
+            "quantity": 3,
+            "is_active": False,
+            "featured": True,
+            "released_on": datetime.date(2026, 1, 15),
+            "category": str(category.pk),
+        }
+    )
+
+    assert page.fields["name"].value == "Widget"
+    assert page.fields["sku"].value == "SKU-1"
+    assert page.fields["price"].value == "19.99"
+    assert page.fields["quantity"].value == "3"
+    assert page.fields["is_active"].value is False
+    assert page.fields["featured"].value == YES
+    assert page.fields["released_on"].value == "2026-01-15"
+    assert page.fields["category"].value == (str(category.pk), "Tools")
+
+
+def test_a_change_page_takes_a_new_value_for_every_field(admin_ui, editor, product, category):
+    """The form comes with the record's own values, and populating replaces each one it
+    names rather than adding to it."""
+    admin_ui.login(editor)
+
+    page = admin_ui.edit(product)
+    page.populate(
+        {
+            "name": "Gadget",
+            "sku": "SKU-2",
+            "price": "24.50",
+            "quantity": 7,
+            "is_active": False,
+            "featured": True,
+            "released_on": datetime.date(2026, 3, 1),
+            "category": str(category.pk),
+        }
+    )
+
+    assert page.fields["name"].value == "Gadget"
+    assert page.fields["sku"].value == "SKU-2"
+    assert page.fields["price"].value == "24.50"
+    assert page.fields["quantity"].value == "7"
+    assert page.fields["is_active"].value is False
+    assert page.fields["featured"].value == YES
+    assert page.fields["released_on"].value == "2026-03-01"
+    assert page.fields["category"].value == (str(category.pk), "Tools")
+
+
+def test_a_field_the_dictionary_does_not_name_stays_as_the_page_rendered_it(admin_ui, superuser):
+    admin_ui.login(superuser)
+
+    page = admin_ui.create(Product)
+    page.populate({"name": "Widget"})
+
+    assert page.fields["quantity"].value == "1"
+    assert page.fields["is_active"].value is True
+    assert page.fields["featured"].value == UNKNOWN
+    assert page.fields["released_on"].value == ""
+    assert page.fields["category"].value == BLANK
+
+
+def test_a_key_the_form_has_no_field_for_is_ignored(admin_ui, superuser):
+    """A misspelt name fills nothing; the test fails on what it asserts next."""
+    admin_ui.login(superuser)
+
+    page = admin_ui.create(Product)
+    page.populate({"colour": "red", "name": "Widget"})
+
+    assert page.fields["name"].value == "Widget"
+    assert "colour" not in page.fields
+
+
+def test_a_rendered_only_field_is_passed_over(admin_ui, superuser):
+    admin_ui.login(superuser)
+
+    page = admin_ui.create(Product)
+    page.populate({"price_with_tax": "99.00", "name": "Widget"})
+
+    assert page.fields["price_with_tax"].value == "(none)"
+    assert page.fields["name"].value == "Widget"
+
+
+def test_keywords_alone_fill_the_fields_they_name(admin_ui, superuser):
+    admin_ui.login(superuser)
+
+    page = admin_ui.create(Product)
+    page.populate(name="Widget", quantity=3)
+
+    assert page.fields["name"].value == "Widget"
+    assert page.fields["quantity"].value == "3"
+
+
+def test_a_keyword_wins_over_the_dictionary_for_the_same_field(admin_ui, superuser):
+    admin_ui.login(superuser)
+
+    page = admin_ui.create(Product)
+    page.populate({"name": "Widget", "sku": "SKU-1"}, name="Gadget")
+
+    assert page.fields["name"].value == "Gadget"
+    assert page.fields["sku"].value == "SKU-1"
+
+
+def test_a_keyword_adds_a_field_the_dictionary_lacks(admin_ui, superuser):
+    admin_ui.login(superuser)
+
+    page = admin_ui.create(Product)
+    page.populate({"name": "Widget"}, is_active=False)
+
+    assert page.fields["name"].value == "Widget"
+    assert page.fields["is_active"].value is False
+
+
+def test_a_keyword_the_form_has_no_field_for_is_ignored(admin_ui, superuser):
+    admin_ui.login(superuser)
+
+    page = admin_ui.create(Product)
+    page.populate(colour="red", name="Widget")
+
+    assert page.fields["name"].value == "Widget"
+    assert "colour" not in page.fields
+
+
+def test_a_viewer_has_nothing_to_populate(admin_ui, viewer, product):
+    admin_ui.login(viewer)
+
+    page = admin_ui.edit(product)
+    page.populate({"name": "Gadget"})
+
+    assert page.fields["name"].value == "Widget"
+
+
+def test_a_form_that_did_not_open_has_nothing_to_populate(admin_ui, viewer):
+    admin_ui.login(viewer)
+
+    page = admin_ui.create(Product)
+
+    with pytest.raises(LookupError, match=r"did not open.*Status 403"):
+        page.populate({"name": "Widget"})

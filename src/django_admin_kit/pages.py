@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import re
 from functools import cached_property
-from typing import Any
+from typing import Any, Mapping
 from urllib.parse import urlsplit
 
 from django.apps import apps
@@ -327,6 +327,26 @@ class FormPage(ModelPage):
         return {
             name for name, field in self.fields.items() if field.editable and not field.required
         }
+
+    def populate(self, source: Mapping[str, Any] | None = None, /, **values: Any) -> None:
+        """Fill the form from ``source``, from ``values``, or from both.
+
+        ``source`` is a dictionary read by field name. A keyword adds a field the
+        dictionary lacks or overrides what it holds for one, so a test states the value
+        it cares about next to the data it reuses. A field neither names is left as the
+        page rendered it, and a name the form does not have fills nothing.
+
+        The form decides what may be filled, not the source: the fields are filled in
+        the order the form shows them, and a field the user may only read is passed
+        over, as is one the admin renders hidden.
+        """
+        for name, field in self.fields.items():
+            if not field.editable:
+                continue
+            if name in values:
+                field.fill(values[name])
+            elif source is not None and name in source:
+                field.fill(source[name])
 
 
 class CreatePage(FormPage):

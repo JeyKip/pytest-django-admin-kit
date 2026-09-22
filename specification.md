@@ -1172,7 +1172,7 @@ The package must support automatic form population.
 
 The caller may provide values from either:
 
-1. a dictionary;
+1. a dictionary; (done)
 2. an object.
 
 A single field is filled on its own, in the terms it is read back in: a checkbox by the
@@ -1193,7 +1193,7 @@ the options it offers. (done)
 
 ---
 
-## 14.1 Dictionary source
+## 14.1 Dictionary source (done)
 
 Example:
 
@@ -1207,10 +1207,12 @@ data = {
 page.populate(data)
 ```
 
-Only fields represented on the current admin form should be considered.
+Only fields represented on the current admin form should be considered. A field the source
+says nothing about is left as the page rendered it, and one the user may only read is passed
+over. (done)
 
 Unrelated dictionary keys are ignored. A key that names no field of the form populates
-nothing, and the test that relied on it fails on what it asserts next.
+nothing, and the test that relied on it fails on what it asserts next. (done)
 
 ---
 
@@ -1252,7 +1254,8 @@ adds a field the source lacks or overrides the value the source has for it:
 ```python
 page.populate(product, name="Renamed", category=None)
 
-page.populate(name="Widget", price="19.99")
+page.populate(name="Widget", price="19.99")    # done
+page.populate(data, name="Renamed")            # done
 ```
 
 The source and the mode of section 15 are positional, never keywords, so every keyword is a

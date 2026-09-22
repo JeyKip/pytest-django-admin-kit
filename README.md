@@ -172,6 +172,27 @@ A select takes back a choice it offered, `page.fields["category"].fill(choice)`,
 puts it on its blank option. A value no option has raises `ValueError` naming the options
 there are, and a field the user may only read raises `LookupError`.
 
+**Filling a whole form in one call.** A dictionary carries the shared data and keywords carry
+the values this one test is about. Fields that are named nowhere keep the values the admin
+rendered them with.
+
+```python
+page = admin_ui.create(Product)
+
+page.populate({
+    "name": "Widget",
+    "sku": "SKU-1",
+    "price": "19.99",
+})
+page.populate(name="Gadget", is_active=False)
+
+assert page.fields["name"].value == "Gadget"
+assert page.fields["quantity"].value == "1"    # untouched, as the admin rendered it
+```
+
+Only the form's own fields are filled, so a key the form has no field for changes nothing,
+and `price_with_tax`, which the admin renders read-only, is passed over.
+
 **Knowing what the index shows a user.** Models and apps a user may not see are not listed,
 and the lists come back in the admin's order.
 
