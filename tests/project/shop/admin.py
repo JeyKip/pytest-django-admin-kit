@@ -4,7 +4,7 @@ from django import forms
 from django.contrib import admin
 from django.utils.html import format_html
 
-from .models import Category, Product
+from .models import Category, Feed, Product
 
 
 class ProductForm(forms.ModelForm):
@@ -90,6 +90,9 @@ class ProductAdmin(admin.ModelAdmin):
         if obj is not None and obj.released_on is not None:
             return False
         return super().has_delete_permission(request, obj)
+
+
+admin.site.register(Feed)
 
 
 # A changelist whose rows link to nothing, so the suite has one without a change link.

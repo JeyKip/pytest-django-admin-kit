@@ -6,6 +6,8 @@ Every user belongs to Django's default `auth.User`; `test_custom_user.py` overri
 ones it needs against a model with no `username`.
 """
 
+import datetime
+
 import pytest
 from django.contrib import admin
 from django.contrib.auth.models import Permission, User
@@ -84,6 +86,18 @@ def category(db):
 @pytest.fixture
 def product(db):
     return Product.objects.create(name="Widget", sku="SKU-1", price="10.00")
+
+
+@pytest.fixture
+def released(category):
+    """A product with every field filled in, so each one has a value to read."""
+    return Product.objects.create(
+        name="Widget",
+        sku="SKU-1",
+        price="10.00",
+        released_on=datetime.date(2026, 1, 15),
+        category=category,
+    )
 
 
 @pytest.fixture

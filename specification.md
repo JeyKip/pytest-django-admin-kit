@@ -13,7 +13,7 @@ It should allow developers to verify:
 * create and edit form fields, including their labels, initial values, and choices (done);
 * editable and rendered-only field values (done);
 * requiredness of create and edit form fields (done);
-* automatic population of form fields;
+* automatic population of form fields; (done)
 * submit actions and where the admin navigates after an operation;
 * validation errors displayed by Django Admin;
 * what a form renders back after an invalid submission;
@@ -161,7 +161,7 @@ assert page.rows[0]["released_on"].value == "Sept. 12, 2026"    # done
 ```
 
 One value on a form is not text: an option chosen from a fixed set is a pair of the value the
-form posts and the label the user reads, each read by name (section 13.3).
+form posts and the label the user reads, each read by name (section 13.3). (done)
 
 A project that wants such a value typed replaces the rule that reads it. Every normalization
 rule is a package setting with a documented default, and every one of them can be replaced by
@@ -169,7 +169,7 @@ the project. Nothing about normalization is fixed inside the package. See sectio
 
 ---
 
-## 3.5 Addressing by name
+## 3.5 Addressing by name (done)
 
 The package uses one coordinate vocabulary everywhere it applies:
 
@@ -195,7 +195,7 @@ page.rows[0][2]    # done
 
 ---
 
-## 3.6 Native access
+## 3.6 Native access (done)
 
 A package can only generalize what Django Admin itself renders. Every real project adds custom
 admin views, overridden templates, custom widgets, and third-party admin applications, and a
@@ -616,7 +616,7 @@ are read as data; names are how a test addresses a cell, as sections 3.5 and 9.7
 
 ---
 
-# 8. Changelist Result Set
+# 8. Changelist Result Set (done)
 
 ## 8.1 Record count (done)
 
@@ -639,7 +639,7 @@ varies with singular and plural forms and between Django versions.
 
 ---
 
-## 8.2 Empty changelist
+## 8.2 Empty changelist (done)
 
 An empty changelist is an explicit, assertable state:
 
@@ -1139,8 +1139,13 @@ section 9.8:
 assert page.fields["owner"].links == [("Jane Doe", admin_ui.url.edit(owner))]    # done
 ```
 
-Rendered-only fields are never populated by section 14 (marked with that section) and never
-appear in `page.required_fields` (done).
+Rendered-only fields are never populated by section 14 and never appear in
+`page.required_fields` (done). Filling one is not silently skipped but reported, since there
+is no control to put a value in:
+
+```python
+page.fields["created_at"].fill("2026-01-15")    # LookupError (done)
+```
 
 ---
 
@@ -1161,18 +1166,34 @@ Named field groups are deferred; see section 33.
 
 ---
 
-# 14. Form Population
+# 14. Form Population (done)
 
 The package must support automatic form population.
 
 The caller may provide values from either:
 
-1. a dictionary;
-2. an object.
+1. a dictionary; (done)
+2. an object. (done)
+
+A single field is filled on its own, in the terms it is read back in: a checkbox by the
+truth of what it is given, a select by the option standing for it, anything else by the
+text of the value:
+
+```python
+page.fields["name"].fill("Widget")                          # done
+page.fields["price"].fill(Decimal("19.99"))                 # done
+page.fields["released_on"].fill(date(2026, 1, 15))          # done
+page.fields["is_active"].fill(False)                        # done
+page.fields["category"].fill(str(tools.pk))                 # done
+page.fields["featured"].fill(None)                          # done
+```
+
+Giving a select a value none of its options has fails at once, naming the field and listing
+the options it offers. (done)
 
 ---
 
-## 14.1 Dictionary source
+## 14.1 Dictionary source (done)
 
 Example:
 
@@ -1186,14 +1207,16 @@ data = {
 page.populate(data)
 ```
 
-Only fields represented on the current admin form should be considered.
+Only fields represented on the current admin form should be considered. A field the source
+says nothing about is left as the page rendered it, and one the user may only read is passed
+over. (done)
 
-Unrelated dictionary keys should not automatically cause a failure unless strict behavior is
-explicitly requested.
+Unrelated dictionary keys are ignored. A key that names no field of the form populates
+nothing, and the test that relied on it fails on what it asserts next. (done)
 
 ---
 
-## 14.2 Object source
+## 14.2 Object source (done)
 
 An arbitrary object may be used as a value source.
 
@@ -1210,73 +1233,85 @@ page.populate(source)
 ```
 
 For each relevant form field, the package resolves an attribute with the corresponding field
-name.
+name. An attribute the object does not have leaves that field alone, and a property is read
+like any other attribute. (done)
 
 Django model instances should naturally be usable:
 
 ```python
-page.populate(product)
+page.populate(product)    # done
 ```
+
+A related object stands for the option the select offers for it, so a foreign key set on the
+instance picks that option. (done)
 
 This does not imply that related objects or object graphs must automatically be serialized in
 1.0.0.
 
 ---
 
-# 15. Population Modes
+## 14.3 Keyword values (done)
+
+Values may also be given as keyword arguments, on their own or next to a source. A keyword
+adds a field the source lacks or overrides the value the source has for it:
+
+```python
+page.populate(product, name="Renamed", category=None)    # done
+
+page.populate(name="Widget", price="19.99")              # done
+page.populate(data, name="Renamed")                      # done
+```
+
+The source and the mode of section 15 are positional, never keywords, so every keyword is a
+field's value and a form field named `source` or `mode` is given like any other. (done)
+
+---
+
+# 15. Population Modes (done)
 
 Three population modes are required.
 
 ## Required fields only
 
 ```python
-page.populate(
-    data,
-    fields="required",
-)
+page.populate(data, "required")
 ```
 
-Only required fields are populated.
+Only required fields are populated. The mode says which fields are looked up, so data for
+the others may sit in the source unused. (done)
 
 ---
 
 ## Optional fields only
 
 ```python
-page.populate(
-    data,
-    fields="optional",
-)
+page.populate(data, "optional")
 ```
 
-Only non-required fields are populated.
+Only non-required fields are populated. A field the user may only read is in no mode. (done)
 
 ---
 
 ## All fields
 
 ```python
-page.populate(
-    data,
-    fields="all",
-)
+page.populate(data, "all")
 ```
 
-All supported fields for which values are available are populated.
+All supported fields for which values are available are populated. This is what populating
+without a mode does. (done)
 
-Recommended constants may additionally be provided:
+The modes are the members of one enum, `PagePopulationMode`, so neither the package nor a
+project spells them out by hand:
 
 ```python
-REQUIRED
-OPTIONAL
-ALL
+from django_admin_kit.pages import PagePopulationMode
+
+page.populate(data, PagePopulationMode.REQUIRED)
 ```
 
-Example:
-
-```python
-page.populate(data, fields=REQUIRED)
-```
+A plain string is accepted and converted, so `PagePopulationMode.REQUIRED` and `"required"`
+are the same call; a string that is no mode fails on the enum's own `ValueError`.
 
 ---
 
@@ -1289,7 +1324,7 @@ Example:
 ```python
 page = admin_ui.create(Product)
 
-page.populate(data, fields="required")
+page.populate(data, PagePopulationMode.REQUIRED)
 
 result = page.submit()
 
@@ -1776,7 +1811,9 @@ AdminSession
 The exact Python class names are implementation details, but the public concepts should remain
 recognizable and stable.
 
-Every type listed above exposes a native handle, as described in section 3.6.
+Every type above that stands for something on the page exposes a native handle, as described
+in section 3.6. `AdminUrls` and `FieldChoice` are values with no element behind them, so they
+have none. (done)
 
 ---
 
@@ -1940,7 +1977,7 @@ def test_create_product(admin_ui, admin_user):
         "name": "Widget",
         "price": "12.00",
         "description": "Ignored",
-    }, fields="required")
+    }, PagePopulationMode.REQUIRED)    # done
 
     result = page.submit()
 
@@ -2001,7 +2038,7 @@ def test_product_form_is_rendered_back(admin_ui, admin_user):
 
 ---
 
-# 27. Public Fixtures
+# 27. Public Fixtures (done)
 
 The package exposes a primary pytest fixture (done):
 
@@ -2086,10 +2123,10 @@ How the browser itself is chosen and shown is **not** configured here. See secti
 
 ---
 
-## 28.2 Admin location
+## 28.2 Admin location (done)
 
 The admin URL prefix is **not** assumed to be `/admin/`. URLs are resolved from the admin site
-under test. (done)
+under test.
 
 ---
 
@@ -2193,7 +2230,7 @@ any other.
 
 ---
 
-## 28.6 Project-defined helpers
+## 28.6 Project-defined helpers (done)
 
 The package provides **no mechanism** for registering project-specific page classes, and this is
 a decision rather than an omission.
@@ -2216,7 +2253,7 @@ any. Should a registration mechanism prove worth having, adding one would be pur
 
 ---
 
-## 28.7 No required base class
+## 28.7 No required base class (done)
 
 No assertion, matcher, or page object may require a project to subclass a package-provided test
 case in order to be used.
@@ -2226,7 +2263,7 @@ expectations however it prefers.
 
 ---
 
-# 29. Custom Django Admin Sites
+# 29. Custom Django Admin Sites (done)
 
 The architecture must allow tests to target a non-default `AdminSite`.
 
@@ -2255,7 +2292,7 @@ is part of a 1.0.0 architectural requirement even if the default site is the com
 
 ---
 
-# 30. Error Reporting
+# 30. Error Reporting (done)
 
 Failure output is an important part of the library.
 
@@ -2319,7 +2356,7 @@ or:
 assert page.contains((...))
 ```
 
-should remain unchanged across supported Django versions.
+should remain unchanged across supported Django versions. (done)
 
 Version-specific normalization belongs inside the package. This includes differences in how
 values are rendered and, where practical, differences in the wording of the admin's own
@@ -2327,7 +2364,7 @@ built-in messages.
 
 Values render through the formats, time zone and locale the project has configured, and a test
 asserts that rendering as the user reads it. A test that covers several locales says which
-locale each expected rendering belongs to.
+locale each expected rendering belongs to. (done)
 
 Results must not depend on the machine a test runs on. The browser carries its own notion of
 locale and time zone, and the package pins both to what the project has configured, so the same
@@ -2364,11 +2401,11 @@ supported Django versions:
 12. Determine required and optional fields. (done)
 13. Read field labels, initial values, choices, and presentation order. (done)
 14. Distinguish editable from rendered-only fields and read a rendered-only value. (done)
-15. Populate required fields only.
-16. Populate optional fields only.
-17. Populate all supported fields.
-18. Populate from a dictionary.
-19. Populate from an object.
+15. Populate required fields only. (done)
+16. Populate optional fields only. (done)
+17. Populate all supported fields. (done)
+18. Populate from a dictionary. (done)
+19. Populate from an object. (done)
 20. Submit valid create forms.
 21. Submit valid edit forms.
 22. Invoke a submit action other than the ordinary save, including one the admin defines.
@@ -2392,7 +2429,7 @@ supported Django versions:
     with it.
 36. Open an arbitrary admin URL and read its access outcome and identity. (done)
 37. Run the test suite in parallel. (done)
-38. Run the same public test syntax starting with Django 3.2.
+38. Run the same public test syntax starting with Django 3.2. (done)
 
 ---
 
