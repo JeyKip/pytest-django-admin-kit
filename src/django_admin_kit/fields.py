@@ -155,16 +155,23 @@ class FormField:
         if (checkbox := self._control('input[type="checkbox"]')).count():
             checkbox.set_checked(bool(value))
         elif (select := self._control("select")).count():
-            select.select_option(value=self._option_value(value))
+            option = self._option(value)
+            # An option is asked for by its value, except the blank one, whose value is
+            # the empty string: the browser layer reads that as "select nothing" on the
+            # versions that still run on Python 3.8, so it is asked for by its label.
+            if option.value:
+                select.select_option(value=option.value)
+            else:
+                select.select_option(label=option.label)
         else:
             self._control("").fill("" if value is None else str(value))
 
-    def _option_value(self, value: Any) -> str:
-        """The value of the option that stands for ``value``, among the ones offered."""
-        offered = [choice.value for choice in self.choices]
+    def _option(self, value: Any) -> FieldChoice:
+        """The option that stands for ``value``, among the ones the field offers."""
+        offered = {choice.value: choice for choice in self.choices}
         for spelling in _option_spellings(value):
             if spelling in offered:
-                return spelling
+                return offered[spelling]
         raise ValueError(
             f"The field {self._name!r} offers no option for {value!r}. Options: "
             f"{', '.join(repr(option) for option in offered) or 'none'}."
