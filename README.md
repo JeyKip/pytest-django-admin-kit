@@ -193,6 +193,14 @@ assert page.fields["quantity"].value == "1"    # untouched, as the admin rendere
 Only the form's own fields are filled, so a key the form has no field for changes nothing,
 and `price_with_tax`, which the admin renders read-only, is passed over.
 
+A mode narrows what is filled to the fields the form requires, or to the ones it leaves
+open, so one data set serves a test about either:
+
+```python
+page.populate(data, PagePopulationMode.REQUIRED)    # name, sku, price, quantity, released_on
+page.populate(data, PagePopulationMode.OPTIONAL)    # is_active, featured, category
+```
+
 The source can be an object instead, read by attribute, which makes a saved record a form's
 worth of data:
 

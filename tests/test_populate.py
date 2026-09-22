@@ -8,6 +8,7 @@ import django
 import pytest
 
 from django_admin_kit.fields import FieldChoice
+from django_admin_kit.pages import PagePopulationMode
 from project.shop.models import Product
 
 # The option a select shows for no choice. Django 6.1 reworded it; the package works from
@@ -18,6 +19,54 @@ BLANK = ("", "- Select an option -" if django.VERSION >= (6, 1) else "---------"
 YES = ("true", "Yes")
 NO = ("false", "No")
 UNKNOWN = ("unknown", "Unknown")
+
+
+# What the add page shows before anything is filled in.
+AS_RENDERED = {
+    "name": "",
+    "sku": "",
+    "price": "",
+    "quantity": "1",
+    "released_on": "",
+    "is_active": True,
+    "featured": UNKNOWN,
+    "category": BLANK,
+}
+
+# The form requires these; the admin leaves the rest to the user.
+REQUIRED = ("name", "sku", "price", "quantity", "released_on")
+OPTIONAL = ("is_active", "featured", "category")
+
+
+@pytest.fixture
+def data(category):
+    """A value for every editable field of the product form, so a mode is what decides
+    which of them are filled rather than what the data happens to hold."""
+    return {
+        "name": "Widget",
+        "sku": "SKU-1",
+        "price": "19.99",
+        "quantity": 3,
+        "released_on": datetime.date(2026, 1, 15),
+        "is_active": False,
+        "featured": True,
+        "category": str(category.pk),
+    }
+
+
+@pytest.fixture
+def filled(category):
+    """What `data` puts into each field, read back as the page shows it."""
+    return {
+        "name": "Widget",
+        "sku": "SKU-1",
+        "price": "19.99",
+        "quantity": "3",
+        "released_on": "2026-01-15",
+        "is_active": False,
+        "featured": YES,
+        "category": (str(category.pk), "Tools"),
+    }
 
 
 class Draft:
@@ -420,3 +469,50 @@ def test_an_object_without_the_forms_names_leaves_the_change_page_as_it_was(
     assert page.fields["featured"].value == UNKNOWN
     assert page.fields["released_on"].value == "2026-01-15"
     assert page.fields["category"].value == (str(category.pk), "Tools")
+
+
+@pytest.mark.parametrize(
+    ("mode", "populated", "untouched"),
+    [
+        (PagePopulationMode.REQUIRED, REQUIRED, OPTIONAL),
+        (PagePopulationMode.OPTIONAL, OPTIONAL, REQUIRED),
+        (PagePopulationMode.ALL, REQUIRED + OPTIONAL, ()),
+        ("required", REQUIRED, OPTIONAL),
+        ("optional", OPTIONAL, REQUIRED),
+        ("all", REQUIRED + OPTIONAL, ()),
+    ],
+    ids=["REQUIRED", "OPTIONAL", "ALL", "'required'", "'optional'", "'all'"],
+)
+def test_a_mode_fills_the_fields_it_covers_and_leaves_the_rest(
+    admin_ui, superuser, data, filled, mode, populated, untouched
+):
+    """One data set serves a test about either half of the form: the values outside the
+    mode sit in it unused. A mode is its enum member or the word the member stands for."""
+    admin_ui.login(superuser)
+
+    page = admin_ui.create(Product)
+    page.populate(data, mode)
+
+    for name in populated:
+        assert page.fields[name].value == filled[name]
+    for name in untouched:
+        assert page.fields[name].value == AS_RENDERED[name]
+
+
+def test_a_rendered_only_field_is_in_no_mode(admin_ui, superuser):
+    admin_ui.login(superuser)
+
+    page = admin_ui.create(Product)
+    page.populate({"price_with_tax": "99.00"}, PagePopulationMode.OPTIONAL)
+
+    assert page.fields["price_with_tax"].value == "(none)"
+
+
+def test_a_word_that_names_no_mode_is_reported(admin_ui, superuser, data):
+    admin_ui.login(superuser)
+
+    page = admin_ui.create(Product)
+
+    with pytest.raises(ValueError) as failure:
+        page.populate(data, "sometimes")
+    assert str(failure.value) == "'sometimes' is not a valid PagePopulationMode"

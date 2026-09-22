@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import re
 from collections.abc import Mapping
+from enum import Enum
 from functools import cached_property
 from typing import Any
 from urllib.parse import urlsplit
@@ -30,6 +31,18 @@ from .urls import AdminUrls
 
 _NOTHING = object()
 """What a source has for a field it says nothing about, which `None` cannot stand for."""
+
+
+class PagePopulationMode(str, Enum):
+    """Which of a form's fields ``FormPage.populate`` fills.
+
+    A member is its own word, so ``PagePopulationMode.REQUIRED`` and ``"required"`` are
+    the same thing to pass and the same thing to read in a failure.
+    """
+
+    REQUIRED = "required"
+    OPTIONAL = "optional"
+    ALL = "all"
 
 
 class AdminPage:
@@ -332,7 +345,13 @@ class FormPage(ModelPage):
             name for name, field in self.fields.items() if field.editable and not field.required
         }
 
-    def populate(self, source: Any = None, /, **values: Any) -> None:
+    def populate(
+        self,
+        source: Any = None,
+        mode: PagePopulationMode = PagePopulationMode.ALL,
+        /,
+        **values: Any,
+    ) -> None:
         """Fill the form from ``source``, from ``values``, or from both.
 
         ``source`` is a dictionary read by field name, or any object read by attribute:
@@ -341,12 +360,18 @@ class FormPage(ModelPage):
         value it cares about next to the data it reuses. A field neither names is left
         as the page rendered it, and a name the form does not have fills nothing.
 
+        ``mode`` narrows which fields are filled to the ones the form requires or to
+        the ones it leaves to the user, so one set of data serves a test about either.
+        Whatever the mode, the source is not checked against it: what it says about a
+        field outside the mode is simply not used.
+
         The form decides what may be filled, not the source: the fields are filled in
         the order the form shows them, and a field the user may only read is passed
         over, as is one the admin renders hidden.
         """
+        wanted = PagePopulationMode(mode)
         for name, field in self.fields.items():
-            if not field.editable:
+            if not _within(wanted, field):
                 continue
             value = values[name] if name in values else _value_of(source, name)
             if value is not _NOTHING:
@@ -363,6 +388,17 @@ class EditPage(FormPage):
 
 class DeletePage(ModelPage):
     """The page that asks whether to delete one instance."""
+
+
+def _within(mode: PagePopulationMode, field: FormField) -> bool:
+    """Whether ``mode`` covers ``field``, which must have something to fill at all."""
+    if not field.editable:
+        return False
+    if mode is PagePopulationMode.REQUIRED:
+        return field.required
+    if mode is PagePopulationMode.OPTIONAL:
+        return not field.required
+    return True
 
 
 def _value_of(source: Any, name: str) -> Any:

@@ -13,7 +13,7 @@ It should allow developers to verify:
 * create and edit form fields, including their labels, initial values, and choices (done);
 * editable and rendered-only field values (done);
 * requiredness of create and edit form fields (done);
-* automatic population of form fields;
+* automatic population of form fields; (done)
 * submit actions and where the admin navigates after an operation;
 * validation errors displayed by Django Admin;
 * what a form renders back after an invalid submission;
@@ -1166,7 +1166,7 @@ Named field groups are deferred; see section 33.
 
 ---
 
-# 14. Form Population
+# 14. Form Population (done)
 
 The package must support automatic form population.
 
@@ -1250,7 +1250,7 @@ This does not imply that related objects or object graphs must automatically be 
 
 ---
 
-## 14.3 Keyword values
+## 14.3 Keyword values (done)
 
 Values may also be given as keyword arguments, on their own or next to a source. A keyword
 adds a field the source lacks or overrides the value the source has for it:
@@ -1263,11 +1263,11 @@ page.populate(data, name="Renamed")                      # done
 ```
 
 The source and the mode of section 15 are positional, never keywords, so every keyword is a
-field's value and a form field named `source` or `mode` is given like any other.
+field's value and a form field named `source` or `mode` is given like any other. (done)
 
 ---
 
-# 15. Population Modes
+# 15. Population Modes (done)
 
 Three population modes are required.
 
@@ -1277,7 +1277,8 @@ Three population modes are required.
 page.populate(data, "required")
 ```
 
-Only required fields are populated.
+Only required fields are populated. The mode says which fields are looked up, so data for
+the others may sit in the source unused. (done)
 
 ---
 
@@ -1287,7 +1288,7 @@ Only required fields are populated.
 page.populate(data, "optional")
 ```
 
-Only non-required fields are populated.
+Only non-required fields are populated. A field the user may only read is in no mode. (done)
 
 ---
 
@@ -1297,7 +1298,8 @@ Only non-required fields are populated.
 page.populate(data, "all")
 ```
 
-All supported fields for which values are available are populated.
+All supported fields for which values are available are populated. This is what populating
+without a mode does. (done)
 
 The modes are the members of one enum, `PagePopulationMode`, so neither the package nor a
 project spells them out by hand:
@@ -1973,7 +1975,7 @@ def test_create_product(admin_ui, admin_user):
         "name": "Widget",
         "price": "12.00",
         "description": "Ignored",
-    }, PagePopulationMode.REQUIRED)
+    }, PagePopulationMode.REQUIRED)    # done
 
     result = page.submit()
 
@@ -2397,11 +2399,11 @@ supported Django versions:
 12. Determine required and optional fields. (done)
 13. Read field labels, initial values, choices, and presentation order. (done)
 14. Distinguish editable from rendered-only fields and read a rendered-only value. (done)
-15. Populate required fields only.
-16. Populate optional fields only.
-17. Populate all supported fields.
-18. Populate from a dictionary.
-19. Populate from an object.
+15. Populate required fields only. (done)
+16. Populate optional fields only. (done)
+17. Populate all supported fields. (done)
+18. Populate from a dictionary. (done)
+19. Populate from an object. (done)
 20. Submit valid create forms.
 21. Submit valid edit forms.
 22. Invoke a submit action other than the ordinary save, including one the admin defines.
