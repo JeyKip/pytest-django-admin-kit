@@ -1139,8 +1139,13 @@ section 9.8:
 assert page.fields["owner"].links == [("Jane Doe", admin_ui.url.edit(owner))]    # done
 ```
 
-Rendered-only fields are never populated by section 14 (marked with that section) and never
-appear in `page.required_fields` (done).
+Rendered-only fields are never populated by section 14 and never appear in
+`page.required_fields` (done). Filling one is not silently skipped but reported, since there
+is no control to put a value in:
+
+```python
+page.fields["created_at"].fill("2026-01-15")    # LookupError (done)
+```
 
 ---
 
@@ -1169,6 +1174,22 @@ The caller may provide values from either:
 
 1. a dictionary;
 2. an object.
+
+A single field is filled on its own, in the terms it is read back in: a checkbox by the
+truth of what it is given, a select by the option standing for it, anything else by the
+text of the value:
+
+```python
+page.fields["name"].fill("Widget")                          # done
+page.fields["price"].fill(Decimal("19.99"))                 # done
+page.fields["released_on"].fill(date(2026, 1, 15))          # done
+page.fields["is_active"].fill(False)                        # done
+page.fields["category"].fill(str(tools.pk))                 # done
+page.fields["featured"].fill(None)                          # done
+```
+
+Giving a select a value none of its options has fails at once, naming the field and listing
+the options it offers. (done)
 
 ---
 

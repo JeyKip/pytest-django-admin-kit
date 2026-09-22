@@ -137,6 +137,38 @@ class FormField:
         """
         return [] if self.editable else self._rendered.links
 
+    def fill(self, value: Any) -> None:
+        """Put ``value`` into the field, the way a user would.
+
+        A checkbox is checked or cleared by the value's truth, a select is given the
+        option that stands for the value, and every other control is filled with the
+        value's text, ``None`` emptying it. A field the user may only read has nothing
+        to fill.
+        """
+        if not self.editable:
+            raise LookupError(
+                f"The field {self._name!r} is rendered only, so there is nothing to fill."
+            )
+        # The control is picked the way `value` picks it, so a field is read back in the
+        # terms it was written in.
+        if (checkbox := self._control('input[type="checkbox"]')).count():
+            checkbox.set_checked(bool(value))
+        elif (select := self._control("select")).count():
+            select.select_option(value=self._option_value(value))
+        else:
+            self._control("").fill("" if value is None else str(value))
+
+    def _option_value(self, value: Any) -> str:
+        """The value of the option that stands for ``value``, among the ones offered."""
+        offered = [choice.value for choice in self.choices]
+        for spelling in _option_spellings(value):
+            if spelling in offered:
+                return spelling
+        raise ValueError(
+            f"The field {self._name!r} offers no option for {value!r}. Options: "
+            f"{', '.join(repr(option) for option in offered) or 'none'}."
+        )
+
     @cached_property
     def choices(self) -> list[FieldChoice]:
         """The options a select offers, in order, the blank one included.
@@ -164,6 +196,27 @@ class FormField:
 
     def __repr__(self) -> str:
         return f"FormField({self._name!r})"
+
+
+def _option_spellings(value: Any) -> list[str]:
+    """The option values ``value`` may be written as, in the order they are looked for.
+
+    A select's options are the choice values as ``str()`` renders them, with ``""`` for
+    the blank one. The exception is the widget Django gives a nullable boolean, whose
+    three options are spelled ``"unknown"``, ``"true"`` and ``"false"``. Both spellings
+    are Django's own and the page shows only which options it has, not which widget drew
+    them, so a boolean is looked for under either.
+    """
+    if isinstance(value, FieldChoice):
+        return [value.value]
+    # `is`, because `1 == True` and a number is no boolean here.
+    if value is True:
+        return ["True", "true"]
+    if value is False:
+        return ["False", "false"]
+    if value is None:
+        return ["", "unknown"]
+    return [str(value)]
 
 
 class Fields(Dict[str, FormField]):

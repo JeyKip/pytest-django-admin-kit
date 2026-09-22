@@ -150,6 +150,28 @@ assert page.fields["released_on"].value == "Jan. 15, 2026"
 assert page.fields["category"].links == [("Tools", admin_ui.url.edit(tools))]
 ```
 
+**Filling a field the way a user would.** Each control is written in the terms it is read
+back in, so a value goes in as the test has it rather than as the markup wants it.
+
+```python
+page = admin_ui.create(Product)
+
+page.fields["name"].fill("Widget")
+page.fields["price"].fill(Decimal("19.99"))
+page.fields["quantity"].fill(3)
+page.fields["released_on"].fill(date(2026, 1, 15))
+page.fields["is_active"].fill(False)
+page.fields["featured"].fill(True)
+page.fields["category"].fill(str(tools.pk))
+
+assert page.fields["price"].value == "19.99"
+assert page.fields["featured"].value == ("true", "Yes")
+```
+
+A select takes back a choice it offered, `page.fields["category"].fill(choice)`, and `None`
+puts it on its blank option. A value no option has raises `ValueError` naming the options
+there are, and a field the user may only read raises `LookupError`.
+
 **Knowing what the index shows a user.** Models and apps a user may not see are not listed,
 and the lists come back in the admin's order.
 
