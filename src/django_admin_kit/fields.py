@@ -10,6 +10,7 @@ from __future__ import annotations
 from functools import cached_property
 from typing import Any, Dict
 
+from django.db.models import Model
 from django.utils import translation
 from playwright.sync_api import Locator
 
@@ -209,6 +210,10 @@ def _option_spellings(value: Any) -> list[str]:
     """
     if isinstance(value, FieldChoice):
         return [value.value]
+    # A select of related objects offers each one by its primary key, which is what the
+    # form posts for it.
+    if isinstance(value, Model):
+        return [str(value.pk)]
     # `is`, because `1 == True` and a number is no boolean here.
     if value is True:
         return ["True", "true"]

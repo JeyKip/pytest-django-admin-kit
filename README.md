@@ -193,6 +193,15 @@ assert page.fields["quantity"].value == "1"    # untouched, as the admin rendere
 Only the form's own fields are filled, so a key the form has no field for changes nothing,
 and `price_with_tax`, which the admin renders read-only, is passed over.
 
+The source can be an object instead, read by attribute, which makes a saved record a form's
+worth of data:
+
+```python
+page.populate(product)                      # its category picks that option
+page.populate(product, name="Renamed")      # everything it has, with one value replaced
+page.populate(SimpleNamespace(name="Widget", price="19.99"))
+```
+
 **Knowing what the index shows a user.** Models and apps a user may not see are not listed,
 and the lists come back in the admin's order.
 

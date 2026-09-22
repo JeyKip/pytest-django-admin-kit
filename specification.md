@@ -1173,7 +1173,7 @@ The package must support automatic form population.
 The caller may provide values from either:
 
 1. a dictionary; (done)
-2. an object.
+2. an object. (done)
 
 A single field is filled on its own, in the terms it is read back in: a checkbox by the
 truth of what it is given, a select by the option standing for it, anything else by the
@@ -1216,7 +1216,7 @@ nothing, and the test that relied on it fails on what it asserts next. (done)
 
 ---
 
-## 14.2 Object source
+## 14.2 Object source (done)
 
 An arbitrary object may be used as a value source.
 
@@ -1233,13 +1233,17 @@ page.populate(source)
 ```
 
 For each relevant form field, the package resolves an attribute with the corresponding field
-name.
+name. An attribute the object does not have leaves that field alone, and a property is read
+like any other attribute. (done)
 
 Django model instances should naturally be usable:
 
 ```python
-page.populate(product)
+page.populate(product)    # done
 ```
+
+A related object stands for the option the select offers for it, so a foreign key set on the
+instance picks that option. (done)
 
 This does not imply that related objects or object graphs must automatically be serialized in
 1.0.0.
@@ -1252,10 +1256,10 @@ Values may also be given as keyword arguments, on their own or next to a source.
 adds a field the source lacks or overrides the value the source has for it:
 
 ```python
-page.populate(product, name="Renamed", category=None)
+page.populate(product, name="Renamed", category=None)    # done
 
-page.populate(name="Widget", price="19.99")    # done
-page.populate(data, name="Renamed")            # done
+page.populate(name="Widget", price="19.99")              # done
+page.populate(data, name="Renamed")                      # done
 ```
 
 The source and the mode of section 15 are positional, never keywords, so every keyword is a

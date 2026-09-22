@@ -1,8 +1,6 @@
 """Which fields the create and edit pages show, by name and in the admin's order, and
 what each one says about itself."""
 
-import datetime
-
 import django
 import pytest
 from django.utils import translation
@@ -28,18 +26,6 @@ FIELDS = [
 # The option a select shows for no choice. Django 6.1 reworded it; the package reports
 # what the admin renders, so the suite proves the reader on both wordings.
 BLANK = ("", "- Select an option -" if django.VERSION >= (6, 1) else "---------")
-
-
-@pytest.fixture
-def released(category):
-    """A product with every field filled in, so each one has a value to read."""
-    return Product.objects.create(
-        name="Widget",
-        sku="SKU-1",
-        price="10.00",
-        released_on=datetime.date(2026, 1, 15),
-        category=category,
-    )
 
 
 def test_the_add_page_lists_its_fields_in_the_admin_order(admin_ui, superuser):

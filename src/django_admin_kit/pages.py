@@ -13,8 +13,9 @@ so that reading is written once.
 from __future__ import annotations
 
 import re
+from collections.abc import Mapping
 from functools import cached_property
-from typing import Any, Mapping
+from typing import Any
 from urllib.parse import urlsplit
 
 from django.apps import apps
@@ -26,6 +27,9 @@ from .fields import Fields, FormField
 from .normalize import integer
 from .rows import Row
 from .urls import AdminUrls
+
+_NOTHING = object()
+"""What a source has for a field it says nothing about, which `None` cannot stand for."""
 
 
 class AdminPage:
@@ -328,13 +332,14 @@ class FormPage(ModelPage):
             name for name, field in self.fields.items() if field.editable and not field.required
         }
 
-    def populate(self, source: Mapping[str, Any] | None = None, /, **values: Any) -> None:
+    def populate(self, source: Any = None, /, **values: Any) -> None:
         """Fill the form from ``source``, from ``values``, or from both.
 
-        ``source`` is a dictionary read by field name. A keyword adds a field the
-        dictionary lacks or overrides what it holds for one, so a test states the value
-        it cares about next to the data it reuses. A field neither names is left as the
-        page rendered it, and a name the form does not have fills nothing.
+        ``source`` is a dictionary read by field name, or any object read by attribute:
+        a model instance, a namespace, or something the project wrote. A keyword adds a
+        field the source lacks or overrides what it holds for one, so a test states the
+        value it cares about next to the data it reuses. A field neither names is left
+        as the page rendered it, and a name the form does not have fills nothing.
 
         The form decides what may be filled, not the source: the fields are filled in
         the order the form shows them, and a field the user may only read is passed
@@ -343,10 +348,9 @@ class FormPage(ModelPage):
         for name, field in self.fields.items():
             if not field.editable:
                 continue
-            if name in values:
-                field.fill(values[name])
-            elif source is not None and name in source:
-                field.fill(source[name])
+            value = values[name] if name in values else _value_of(source, name)
+            if value is not _NOTHING:
+                field.fill(value)
 
 
 class CreatePage(FormPage):
@@ -359,6 +363,20 @@ class EditPage(FormPage):
 
 class DeletePage(ModelPage):
     """The page that asks whether to delete one instance."""
+
+
+def _value_of(source: Any, name: str) -> Any:
+    """What ``source`` holds for the field named ``name``, or ``_NOTHING``.
+
+    A dictionary is read by key and anything else by attribute, so a model instance, a
+    namespace and a project's own object are all sources, and only the form's own field
+    names are ever asked for.
+    """
+    if source is None:
+        return _NOTHING
+    if isinstance(source, Mapping):
+        return source.get(name, _NOTHING)
+    return getattr(source, name, _NOTHING)
 
 
 def _text(element: Locator) -> str:

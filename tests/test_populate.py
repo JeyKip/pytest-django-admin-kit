@@ -2,6 +2,7 @@
 
 import datetime
 from decimal import Decimal
+from types import SimpleNamespace
 
 import django
 import pytest
@@ -17,6 +18,19 @@ BLANK = ("", "- Select an option -" if django.VERSION >= (6, 1) else "---------"
 YES = ("true", "Yes")
 NO = ("false", "No")
 UNKNOWN = ("unknown", "Unknown")
+
+
+class Draft:
+    """A plain object of the kind a project writes for itself: attributes set in
+    `__init__`, and a field whose value is worked out when it is asked for."""
+
+    def __init__(self, name, price):
+        self.name = name
+        self.price = price
+
+    @property
+    def sku(self):
+        return f"SKU-{self.name.upper()}"
 
 
 def test_a_text_control_takes_the_text(admin_ui, superuser):
@@ -307,3 +321,102 @@ def test_a_form_that_did_not_open_has_nothing_to_populate(admin_ui, viewer):
 
     with pytest.raises(LookupError, match=r"did not open.*Status 403"):
         page.populate({"name": "Widget"})
+
+
+def test_a_namespace_fills_the_fields_it_has_attributes_for(admin_ui, superuser):
+    admin_ui.login(superuser)
+
+    page = admin_ui.create(Product)
+    page.populate(SimpleNamespace(name="Widget", price="19.99"))
+
+    assert page.fields["name"].value == "Widget"
+    assert page.fields["price"].value == "19.99"
+    assert page.fields["quantity"].value == "1"
+
+
+def test_a_plain_object_fills_from_its_attributes(admin_ui, superuser):
+    admin_ui.login(superuser)
+
+    page = admin_ui.create(Product)
+    page.populate(Draft("Widget", "19.99"))
+
+    assert page.fields["name"].value == "Widget"
+    assert page.fields["price"].value == "19.99"
+
+
+def test_a_field_a_property_answers_for_is_filled_with_what_it_returns(admin_ui, superuser):
+    admin_ui.login(superuser)
+
+    page = admin_ui.create(Product)
+    page.populate(Draft("Widget", "19.99"))
+
+    assert page.fields["sku"].value == "SKU-WIDGET"
+
+
+def test_a_model_instance_fills_the_add_page(admin_ui, superuser, released, category):
+    """The record the admin would save, put back on a form: each attribute lands as the
+    admin renders it, the related object as the option that stands for it."""
+    admin_ui.login(superuser)
+
+    page = admin_ui.create(Product)
+    page.populate(released)
+
+    assert page.fields["name"].value == "Widget"
+    assert page.fields["sku"].value == "SKU-1"
+    assert page.fields["price"].value == "10.00"
+    assert page.fields["quantity"].value == "1"
+    assert page.fields["is_active"].value is True
+    assert page.fields["featured"].value == UNKNOWN
+    assert page.fields["released_on"].value == "2026-01-15"
+    assert page.fields["category"].value == (str(category.pk), "Tools")
+
+
+def test_an_object_that_holds_nothing_clears_what_the_page_showed(admin_ui, editor, released):
+    """A record whose nullable fields are unset empties the date and puts the select
+    back on its blank option, rather than leaving the old values standing."""
+    admin_ui.login(editor)
+
+    page = admin_ui.edit(released)
+    page.populate(SimpleNamespace(released_on=None, category=None))
+
+    assert page.fields["released_on"].value == ""
+    assert page.fields["category"].value == BLANK
+
+
+def test_a_dictionary_may_carry_a_model_instance_for_a_select(admin_ui, superuser, category):
+    admin_ui.login(superuser)
+
+    page = admin_ui.create(Product)
+    page.populate({"category": category})
+
+    assert page.fields["category"].value == (str(category.pk), "Tools")
+
+
+def test_a_keyword_wins_over_the_object_for_the_same_field(admin_ui, superuser, released):
+    admin_ui.login(superuser)
+
+    page = admin_ui.create(Product)
+    page.populate(released, name="Gadget")
+
+    assert page.fields["name"].value == "Gadget"
+    assert page.fields["sku"].value == "SKU-1"
+
+
+def test_an_object_without_the_forms_names_leaves_the_change_page_as_it_was(
+    admin_ui, editor, released, category
+):
+    """Silence is not an empty value: a source with none of the form's names changes
+    nothing, so the record's own values stay on the form."""
+    admin_ui.login(editor)
+
+    page = admin_ui.edit(released)
+    page.populate(SimpleNamespace(colour="red"))
+
+    assert page.fields["name"].value == "Widget"
+    assert page.fields["sku"].value == "SKU-1"
+    assert page.fields["price"].value == "10.00"
+    assert page.fields["quantity"].value == "1"
+    assert page.fields["is_active"].value is True
+    assert page.fields["featured"].value == UNKNOWN
+    assert page.fields["released_on"].value == "2026-01-15"
+    assert page.fields["category"].value == (str(category.pk), "Tools")
