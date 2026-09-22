@@ -161,7 +161,7 @@ assert page.rows[0]["released_on"].value == "Sept. 12, 2026"    # done
 ```
 
 One value on a form is not text: an option chosen from a fixed set is a pair of the value the
-form posts and the label the user reads, each read by name (section 13.3).
+form posts and the label the user reads, each read by name (section 13.3). (done)
 
 A project that wants such a value typed replaces the rule that reads it. Every normalization
 rule is a package setting with a documented default, and every one of them can be replaced by
@@ -169,7 +169,7 @@ the project. Nothing about normalization is fixed inside the package. See sectio
 
 ---
 
-## 3.5 Addressing by name
+## 3.5 Addressing by name (done)
 
 The package uses one coordinate vocabulary everywhere it applies:
 
@@ -195,7 +195,7 @@ page.rows[0][2]    # done
 
 ---
 
-## 3.6 Native access
+## 3.6 Native access (done)
 
 A package can only generalize what Django Admin itself renders. Every real project adds custom
 admin views, overridden templates, custom widgets, and third-party admin applications, and a
@@ -616,7 +616,7 @@ are read as data; names are how a test addresses a cell, as sections 3.5 and 9.7
 
 ---
 
-# 8. Changelist Result Set
+# 8. Changelist Result Set (done)
 
 ## 8.1 Record count (done)
 
@@ -639,7 +639,7 @@ varies with singular and plural forms and between Django versions.
 
 ---
 
-## 8.2 Empty changelist
+## 8.2 Empty changelist (done)
 
 An empty changelist is an explicit, assertable state:
 
@@ -1811,7 +1811,9 @@ AdminSession
 The exact Python class names are implementation details, but the public concepts should remain
 recognizable and stable.
 
-Every type listed above exposes a native handle, as described in section 3.6.
+Every type above that stands for something on the page exposes a native handle, as described
+in section 3.6. `AdminUrls` and `FieldChoice` are values with no element behind them, so they
+have none. (done)
 
 ---
 
@@ -2036,7 +2038,7 @@ def test_product_form_is_rendered_back(admin_ui, admin_user):
 
 ---
 
-# 27. Public Fixtures
+# 27. Public Fixtures (done)
 
 The package exposes a primary pytest fixture (done):
 
@@ -2121,10 +2123,10 @@ How the browser itself is chosen and shown is **not** configured here. See secti
 
 ---
 
-## 28.2 Admin location
+## 28.2 Admin location (done)
 
 The admin URL prefix is **not** assumed to be `/admin/`. URLs are resolved from the admin site
-under test. (done)
+under test.
 
 ---
 
@@ -2228,7 +2230,7 @@ any other.
 
 ---
 
-## 28.6 Project-defined helpers
+## 28.6 Project-defined helpers (done)
 
 The package provides **no mechanism** for registering project-specific page classes, and this is
 a decision rather than an omission.
@@ -2251,7 +2253,7 @@ any. Should a registration mechanism prove worth having, adding one would be pur
 
 ---
 
-## 28.7 No required base class
+## 28.7 No required base class (done)
 
 No assertion, matcher, or page object may require a project to subclass a package-provided test
 case in order to be used.
@@ -2261,7 +2263,7 @@ expectations however it prefers.
 
 ---
 
-# 29. Custom Django Admin Sites
+# 29. Custom Django Admin Sites (done)
 
 The architecture must allow tests to target a non-default `AdminSite`.
 
@@ -2290,7 +2292,7 @@ is part of a 1.0.0 architectural requirement even if the default site is the com
 
 ---
 
-# 30. Error Reporting
+# 30. Error Reporting (done)
 
 Failure output is an important part of the library.
 
@@ -2354,7 +2356,7 @@ or:
 assert page.contains((...))
 ```
 
-should remain unchanged across supported Django versions.
+should remain unchanged across supported Django versions. (done)
 
 Version-specific normalization belongs inside the package. This includes differences in how
 values are rendered and, where practical, differences in the wording of the admin's own
@@ -2362,7 +2364,7 @@ built-in messages.
 
 Values render through the formats, time zone and locale the project has configured, and a test
 asserts that rendering as the user reads it. A test that covers several locales says which
-locale each expected rendering belongs to.
+locale each expected rendering belongs to. (done)
 
 Results must not depend on the machine a test runs on. The browser carries its own notion of
 locale and time zone, and the package pins both to what the project has configured, so the same
@@ -2427,7 +2429,7 @@ supported Django versions:
     with it.
 36. Open an arbitrary admin URL and read its access outcome and identity. (done)
 37. Run the test suite in parallel. (done)
-38. Run the same public test syntax starting with Django 3.2.
+38. Run the same public test syntax starting with Django 3.2. (done)
 
 ---
 
