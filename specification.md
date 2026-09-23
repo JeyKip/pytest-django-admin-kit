@@ -1317,24 +1317,16 @@ are the same call; a string that is no mode fails on the enum's own `ValueError`
 
 # 16. Form Submission
 
-Create and edit pages must support submitting explicitly supplied or populated data.
-
-Example:
+Create and edit pages submit whatever the form holds when the submission is made. Filling the
+form (sections 14 and 15) and submitting it are separate steps, so a test fills a form the way
+it needs and then submits it:
 
 ```python
 page = admin_ui.create(Product)
 
 page.populate(data, PagePopulationMode.REQUIRED)
 
-result = page.submit()
-
-assert result.success
-```
-
-A compact API may also be available:
-
-```python
-result = admin_ui.create(Product, data)
+result = page.save()
 
 assert result.success
 ```
@@ -1342,9 +1334,11 @@ assert result.success
 Editing:
 
 ```python
-result = admin_ui.edit(product, {
-    "name": "New name",
-})
+page = admin_ui.edit(product)
+
+page.populate(name="New name")
+
+result = page.save()
 
 assert result.success
 ```
@@ -1368,28 +1362,53 @@ assert page.actions == {
 }
 ```
 
-Presence of a single action:
+Presence of any action:
 
 ```python
 assert page.has_action("save_and_continue")
-assert not page.has_action("delete")
+assert not page.has_action("approve")
 ```
 
-Any action may be invoked:
+Each standard action has its own check, since these are the ones a test asks about most:
 
 ```python
-result = page.submit(action="save_and_continue")
+assert page.can_save
+assert page.can_save_and_continue
+assert page.can_save_and_add_another
+assert not page.can_delete
 ```
 
-Actions the admin defines itself are addressed the same way:
+Each standard action has its own method:
+
+```python
+result = page.save()
+result = page.save_and_continue()
+result = page.save_and_add_another()
+```
+
+Deleting from the edit page is two steps in the admin, and so it is here: `delete` leads to the
+confirmation page of section 23.4, and `confirm_deleting` on that page performs the deletion:
+
+```python
+confirmation = page.delete()
+
+assert confirmation.can_confirm_deleting
+
+result = confirmation.confirm_deleting()
+```
+
+`submit` is the lower-level call the methods above are built on. It invokes any action by name,
+so an action the admin defines itself is addressed the same way, and it always takes the
+action, with no default:
 
 ```python
 assert page.has_action("approve")
 
-result = page.submit(action="approve")
+result = page.submit("approve")
 ```
 
-Omitting `action` performs the ordinary save.
+Invoking an action the page does not offer, through its own method or through `submit`, raises
+an error that names the actions the page does offer. Nothing is submitted.
 
 ---
 
@@ -1400,14 +1419,14 @@ The result reports where the admin sent the user.
 Any destination can be checked directly:
 
 ```python
-result = admin_ui.create(Product, data)
+result = page.save()
 
 assert result.success
 assert result.redirected_to(admin_ui.url.list(Product))
 ```
 
 ```python
-result = page.submit(action="save_and_continue")
+result = page.save_and_continue()
 
 assert result.redirected_to(admin_ui.url.edit(product))
 ```
@@ -1416,10 +1435,13 @@ assert result.redirected_to(admin_ui.url.edit(product))
 normalization, so a test never depends on whether the admin redirected in relative or absolute
 form.
 
-Shorthands are provided for the common destinations:
+Shorthands are provided for the destinations the standard actions lead to, each taking what the
+matching URL of section 6.3 takes:
 
 ```python
-assert result.redirected_to_list
+assert result.redirected_to_index()
+assert result.redirected_to_list(Product)
+assert result.redirected_to_create(Product)
 assert result.redirected_to_edit(product)
 ```
 
@@ -1453,9 +1475,9 @@ Example:
 ```python
 page = admin_ui.create(Product)
 
-result = page.submit({
-    "name": "",
-})
+page.populate(name="")
+
+result = page.save()
 
 assert not result.success
 ```
@@ -1473,9 +1495,9 @@ Example:
 ```python
 page = admin_ui.edit(product)
 
-result = page.submit({
-    "name": "",
-})
+page.populate(name="")
+
+result = page.save()
 
 assert not result.success
 ```
@@ -1493,19 +1515,20 @@ Nothing was written:
 ```python
 page = admin_ui.create(Product)
 
-result = page.submit({
-    "name": "",
-    "price": "19.99",
-})
+page.populate(name="", price="19.99")
+
+result = page.save()
 
 assert not result.success
 assert not result.created
 ```
 
 ```python
-result = admin_ui.edit(product, {
-    "name": "",
-})
+page = admin_ui.edit(product)
+
+page.populate(name="")
+
+result = page.save()
 
 assert not result.success
 assert not result.changed
@@ -1533,7 +1556,7 @@ Validation errors are divided into three levels:
 Example:
 
 ```python
-result = page.submit(...)
+result = page.save()
 
 assert result.errors
 ```
@@ -1638,7 +1661,11 @@ The admin reports the outcome of an operation to the user.
 Messages are exposed with their level and their normalized text, independently of markup:
 
 ```python
-result = admin_ui.create(Product, data)
+page = admin_ui.create(Product)
+
+page.populate(data)
+
+result = page.save()
 
 assert result.messages == [
     ("success", "The product “Widget” was added successfully."),
@@ -1664,10 +1691,11 @@ The package must support basic create, edit, and delete workflows.
 ## 23.1 Create
 
 ```python
-result = admin_ui.create(Product, {
-    "name": "Widget",
-    "price": "10.00",
-})
+page = admin_ui.create(Product)
+
+page.populate(name="Widget", price="10.00")
+
+result = page.save()
 
 assert result.success
 ```
@@ -1685,9 +1713,11 @@ assert product.name == "Widget"
 ## 23.2 Edit
 
 ```python
-result = admin_ui.edit(product, {
-    "name": "Updated widget",
-})
+page = admin_ui.edit(product)
+
+page.populate(name="Updated widget")
+
+result = page.save()
 
 assert result.success
 assert result.object.name == "Updated widget"
@@ -1700,7 +1730,15 @@ The object exposed by an edit result reflects the stored state after the operati
 ## 23.3 Delete
 
 ```python
-result = admin_ui.delete(product)
+result = admin_ui.delete(product).confirm_deleting()
+
+assert result.success
+```
+
+The same deletion can start from the edit page, as in section 16.1:
+
+```python
+result = admin_ui.edit(product).delete().confirm_deleting()
 
 assert result.success
 ```
@@ -1732,13 +1770,22 @@ The absence of the action is assertable:
 ```python
 page = admin_ui.edit(product)
 
-assert not page.has_action("delete")
+assert not page.can_delete
+```
+
+So is a confirmation page that offers no way to confirm, as when related objects protect the
+one being deleted:
+
+```python
+page = admin_ui.delete(product)
+
+assert not page.can_confirm_deleting
 ```
 
 So is a refused operation:
 
 ```python
-result = admin_ui.delete(product)
+result = admin_ui.delete(product).confirm_deleting()
 
 assert not result.success
 ```
@@ -1979,10 +2026,10 @@ def test_create_product(admin_ui, admin_user):
         "description": "Ignored",
     }, PagePopulationMode.REQUIRED)    # done
 
-    result = page.submit()
+    result = page.save()
 
     assert result.success
-    assert result.redirected_to_list
+    assert result.redirected_to_list(Product)
     assert result.messages.success
 ```
 
@@ -1996,10 +2043,9 @@ def test_product_validation(admin_ui, admin_user):
 
     page = admin_ui.create(Product)
 
-    result = page.submit({
-        "name": "",
-        "price": "",
-    })
+    page.populate(name="", price="")
+
+    result = page.save()
 
     assert not result.success
     assert not result.created
@@ -2025,10 +2071,9 @@ def test_product_form_is_rendered_back(admin_ui, admin_user):
 
     page = admin_ui.create(Product)
 
-    result = page.submit({
-        "name": "",
-        "price": "12.00",
-    })
+    page.populate(name="", price="12.00")
+
+    result = page.save()
 
     assert not result.success
     assert not result.created
