@@ -1424,7 +1424,8 @@ result = page.submit("approve")
 ```
 
 Invoking an action the page does not offer, through its own method or through `submit`, raises
-an error that names the actions the page does offer. Nothing is submitted.
+an error that names the actions the page does offer. Nothing is submitted, so the page stays
+as usable as it was.
 
 ---
 
@@ -1461,10 +1462,11 @@ assert result.redirected_to_create(Product)
 assert result.redirected_to_edit(product)
 ```
 
-The destination remains inspectable for anything the shorthands do not cover:
+The page the admin sent the user to is the result's page, and anything the shorthands do not
+cover is read from it (section 16.4):
 
 ```python
-assert result.destination
+assert result.page.destination == admin_ui.url.list(Product)
 ```
 
 ---
@@ -1479,6 +1481,44 @@ page = admin_ui.edit(report)
 assert page.works
 assert page.actions == set()
 ```
+
+---
+
+## 16.4 The page after a submission
+
+A submission moves the browser on, and every result carries the page the browser shows
+afterwards, whatever the admin made of the submission: the page it redirected to, or the same
+form rendered again when it rejected it. That page is read like one the test opened itself, so
+it has the page type its URL names, and it is the only way to it: the result reports on the
+submission and never repeats what the page says.
+
+```python
+result = page.save()
+
+assert result.success
+assert result.page.count == 1
+```
+
+```python
+result = page.save()
+
+assert not result.success
+assert result.page.fields["price"].value == "19.99"
+```
+
+The page that was submitted is no longer valid from the moment the submission is made,
+whether the admin accepts it, rejects it, or never answers. Reading it, or a field taken from
+it, raises an error that points to the result's page, so a test never reads the form as it was
+before the submission while believing it reads the form as it is now:
+
+```python
+result = page.save()
+
+page.fields["name"].value           # raises: the page was submitted
+result.page.fields["name"].value    # the page the admin answered with
+```
+
+An action the page does not offer submits nothing, so it leaves the page valid.
 
 ---
 
@@ -1498,7 +1538,8 @@ result = page.save()
 assert not result.success
 ```
 
-The result must expose validation errors independently of HTML markup.
+The rejected form, the result's page, must expose its validation errors independently of HTML
+markup.
 
 ---
 
@@ -1550,14 +1591,15 @@ assert not result.success
 assert not result.changed
 ```
 
-And the form comes back carrying what was submitted:
+And the form comes back carrying what was submitted, on the result's page:
 
 ```python
-assert result.fields["price"].value == "19.99"
+assert result.page.fields["price"].value == "19.99"
 ```
 
-The re-rendered form exposes the full field API of sections 10 to 13, so requiredness, choices,
-and rendered-only state remain inspectable after a failed submission.
+The re-rendered form is the result's page (section 16.4), read afresh, so it exposes the full
+field API of sections 10 to 13, and requiredness, choices, and rendered-only state remain
+inspectable after a failed submission.
 
 ---
 
@@ -1569,12 +1611,15 @@ Validation errors are divided into three levels:
 * form-level errors that belong to no single field;
 * field-level errors.
 
-Example:
+They are read from the form that shows them, the result's page after a rejected submission
+(section 16.4). A create or edit page that has not been submitted shows none:
 
 ```python
+assert not page.errors
+
 result = page.save()
 
-assert result.errors
+assert result.page.errors
 ```
 
 ---
@@ -1584,7 +1629,7 @@ assert result.errors
 The admin displays a notice when a submission fails.
 
 ```python
-assert result.errors.banner
+assert result.page.errors.banner
 ```
 
 Its exact wording varies with the number of errors and between Django versions. A test that
@@ -1593,7 +1638,7 @@ only cares that the submission was rejected should assert truthiness.
 Where a test does assert the text, the normalized message is available:
 
 ```python
-assert result.errors.banner == "Please correct the error below."
+assert result.page.errors.banner == "Please correct the error below."
 ```
 
 ---
@@ -1604,7 +1649,7 @@ Validation messages that belong to the form rather than to any single field are 
 separately from the summary notice:
 
 ```python
-assert result.errors.non_field == [
+assert result.page.errors.non_field == [
     "At least one plan must be default.",
 ]
 ```
@@ -1620,21 +1665,21 @@ Errors for an individual field should be accessible by field name.
 Example:
 
 ```python
-assert "This field is required." in result.errors["name"]
+assert "This field is required." in result.page.errors["name"]
 ```
 
 Multiple errors must be supported:
 
 ```python
-assert result.errors["email"] == [
+assert result.page.errors["email"] == [
     "Enter a valid email address.",
 ]
 ```
 
-Convenience access may also be provided:
+The same errors are also read from the field they belong to:
 
 ```python
-assert result.fields["email"].errors == [
+assert result.page.fields["email"].errors == [
     "Enter a valid email address.",
 ]
 ```
@@ -1648,7 +1693,7 @@ Tests should be able to perform both exact and partial validation checks.
 Exact:
 
 ```python
-assert result.errors["name"] == [
+assert result.page.errors["name"] == [
     "This field is required.",
 ]
 ```
@@ -1656,13 +1701,13 @@ assert result.errors["name"] == [
 Contains:
 
 ```python
-assert "This field is required." in result.errors["name"]
+assert "This field is required." in result.page.errors["name"]
 ```
 
 Complete error-set testing:
 
 ```python
-assert result.errors.fields == {
+assert result.page.errors.fields == {
     "name": ["This field is required."],
     "email": ["Enter a valid email address."],
 }
@@ -1674,7 +1719,9 @@ assert result.errors.fields == {
 
 The admin reports the outcome of an operation to the user.
 
-Messages are exposed with their level and their normalized text, independently of markup:
+The admin shows them on whichever page follows the operation, so they are read from any admin
+page, the result's page after a submission (section 16.4). Messages are exposed with their level
+and their normalized text, independently of markup:
 
 ```python
 page = admin_ui.create(Product)
@@ -1683,20 +1730,36 @@ page.populate(data)
 
 result = page.save()
 
-assert result.messages == [
+assert result.page.messages == [
     ("success", "The product “Widget” was added successfully."),
 ]
 ```
 
-Level-based access should also be natural:
+A level is the tag the project gives it, not a fixed name. Django's defaults are `debug`,
+`info`, `success`, `warning` and `error`, and a project renames them or adds levels of its own
+through `MESSAGE_TAGS`; the page shows only the tag, so a project that tags errors `danger`
+reads them as `danger`. The levels a page knows are Django's defaults merged with the
+project's `MESSAGE_TAGS`.
+
+The messages of one level are read by its name, as their texts in order:
 
 ```python
-assert result.messages.success
-assert not result.messages.error
+assert result.page.messages["success"] == [
+    "The product “Widget” was added successfully.",
+]
+assert not result.page.messages["error"]
 ```
 
-Messages are distinct from validation errors. A successful operation produces messages and no
-errors; a rejected operation produces errors and may produce no messages at all.
+A level the project does not have raises an error that names the levels it does have, rather
+than reading as no messages. Otherwise a test asking for `error` in a project that renamed it
+would find none and pass whatever the page showed.
+
+A message's level is the one known level tag among the classes the admin draws for it. Any
+extra tags the project added are not part of it, and a message whose level has no tag reads
+with the level `""`.
+
+Messages are distinct from validation errors. A successful operation leads to a page with
+messages and no errors; a rejected one to a form with errors and possibly no messages at all.
 
 ---
 
@@ -1858,7 +1921,7 @@ AdminSession
 ├── ChangelistPage
 ├── CreatePage
 ├── EditPage
-├── DeletePage
+├── DeletePage           (the confirmation the admin asks for before deleting)
 │
 ├── FormField
 │   └── FieldChoice
@@ -1866,9 +1929,11 @@ AdminSession
 ├── Row
 ├── Cell
 │
+├── ValidationErrors     (on a create or edit page)
+├── Messages             (on any page)
+│
 └── SubmissionResult
-    ├── ValidationErrors
-    └── Messages
+    └── page             (the page the submission led to, one of the above)
 ```
 
 The exact Python class names are implementation details, but the public concepts should remain
@@ -1877,6 +1942,9 @@ recognizable and stable.
 Every type above that stands for something on the page exposes a native handle, as described
 in section 3.6. `AdminUrls` and `FieldChoice` are values with no element behind them, so they
 have none. (done)
+
+A `SubmissionResult` reports on a submission rather than standing for anything on the page, so
+it has none either; the page it carries has one.
 
 ---
 
@@ -2046,7 +2114,7 @@ def test_create_product(admin_ui, admin_user):
 
     assert result.success
     assert result.redirected_to_list(Product)
-    assert result.messages.success
+    assert result.page.messages["success"]
 ```
 
 ---
@@ -2066,13 +2134,13 @@ def test_product_validation(admin_ui, admin_user):
     assert not result.success
     assert not result.created
 
-    assert result.errors.banner
+    assert result.page.errors.banner
 
-    assert result.errors["name"] == [
+    assert result.page.errors["name"] == [
         "This field is required.",
     ]
 
-    assert result.errors["price"] == [
+    assert result.page.errors["price"] == [
         "This field is required.",
     ]
 ```
@@ -2094,7 +2162,7 @@ def test_product_form_is_rendered_back(admin_ui, admin_user):
     assert not result.success
     assert not result.created
 
-    assert result.fields["price"].value == "12.00"
+    assert result.page.fields["price"].value == "12.00"
 ```
 
 ---
