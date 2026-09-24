@@ -1375,7 +1375,22 @@ Each standard action has its own check, since these are the ones a test asks abo
 assert page.can_save
 assert page.can_save_and_continue
 assert page.can_save_and_add_another
+assert not page.can_save_as_new
 assert not page.can_delete
+```
+
+"Save as new" is offered only by an admin that turns on `save_as`, on an edit page, where it
+takes the place of "Save and add another":
+
+```python
+page = admin_ui.edit(feed)
+
+assert page.actions == {
+    "save",
+    "save_and_continue",
+    "save_as_new",
+    "delete",
+}
 ```
 
 Each standard action has its own method:
@@ -1384,6 +1399,7 @@ Each standard action has its own method:
 result = page.save()
 result = page.save_and_continue()
 result = page.save_and_add_another()
+result = page.save_as_new()
 ```
 
 Deleting from the edit page is two steps in the admin, and so it is here: `delete` leads to the
