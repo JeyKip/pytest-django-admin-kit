@@ -257,6 +257,52 @@ See section 28.
 
 ---
 
+## 3.9 Live reads
+
+The package keeps nothing it has read. Every value is read from the page, or from the database,
+when a test asks for it, so it is what the user would see at that moment. That includes what
+the admin's own scripts and a project's widgets change in place, such as an option added
+through the related-object popup, and a normalization rule replaced for one test (section
+28.3), which applies to everything read after it.
+
+An object taken from a page is an address, read each time it is used, the way the browser
+layer's own locators are:
+
+* a field is the field of that name on the page (section 3.5);
+* a row is the row at that position, so once the changelist is filtered or sorted it reads
+  whichever record is there now;
+* a cell is the cell of that column in its row.
+
+`page.rows` and `page.fields` are a list and a dictionary of such addresses. Which rows and
+fields they hold is fixed when they are read; reading them again picks up any the page has
+gained or lost since.
+
+Where the browser layer already has an answer, the package gives the same one and adds nothing
+of its own:
+
+* reading an address that finds nothing, such as a row held from before a filter left fewer
+  rows, waits for the configured timeout and then fails, as a locator does;
+* the package waits for the navigation its own actions cause; a test that navigates through a
+  native handle waits for that navigation itself before it reads;
+* the objects the package hands out compare by identity, as locators do.
+
+`row.object` asks the database each time, so it is the object the row links to now, not the
+one it linked to when the row was first read.
+
+The one thing the browser layer cannot know is which admin page an object stands for, and the
+package's own actions move the browser between pages. So a page object stands for its path and
+for the kind of page the admin says it is: a changelist, a form, a delete confirmation, the
+index. It stays usable for as long as the browser shows that page, whatever happened in
+between. Once the browser shows another page, reading the page object, or anything taken from
+it, fails at once and says where the browser is now, rather than waiting for the timeout
+against a page it was never part of. A native handle is exempt: it is the browser layer's own
+object and behaves as that layer decides.
+
+`status_code`, and whether the page `works`, describe the last navigation the package itself
+made on the page. One made through a native handle is not seen.
+
+---
+
 # 4. Authentication (done)
 
 The package must support using any Django user object.
@@ -1211,6 +1257,10 @@ Only fields represented on the current admin form should be considered. A field 
 says nothing about is left as the page rendered it, and one the user may only read is passed
 over. (done)
 
+The fields filled are the ones the form shows when population starts. A field a script adds
+while the others are being filled, as a project's widget may, is not filled; populating again
+fills it.
+
 Unrelated dictionary keys are ignored. A key that names no field of the form populates
 nothing, and the test that relied on it fails on what it asserts next. (done)
 
@@ -1488,37 +1538,40 @@ assert page.actions == set()
 
 A submission moves the browser on, and every result carries the page the browser shows
 afterwards, whatever the admin made of the submission: the page it redirected to, or the same
-form rendered again when it rejected it. That page is read like one the test opened itself, so
-it has the page type its URL names, and it is the only way to it: the result reports on the
-submission and never repeats what the page says.
+form rendered again when it rejected it. That page is the only way to it: the result reports on
+the submission and never repeats what the page says.
+
+When the browser stays on the page that was submitted, the result's page is that same page
+object. That is a form the admin rejected and rendered again, "Save and continue" on an edit
+page, and "Save and add another" on a create page. Since every read is live (section 3.9), the
+page the test already holds reads the page as it is now:
+
+```python
+result = page.save()
+
+assert not result.success
+assert result.page is page
+assert page.fields["price"].value == "19.99"
+```
+
+When the browser moves to another page, the result's page is a new page object of the type
+its URL names, and the page that was submitted fails at once when it is read, or anything taken
+from it is, saying where the browser is now:
 
 ```python
 result = page.save()
 
 assert result.success
 assert result.page.count == 1
+
+page.fields["name"].value    # raises: the browser has left this page
 ```
 
-```python
-result = page.save()
+Whether a page object stays usable depends on where the browser is, never on whether the admin
+accepted the submission: "Save and continue" succeeds and keeps the page, "Save" succeeds and
+leaves it.
 
-assert not result.success
-assert result.page.fields["price"].value == "19.99"
-```
-
-The page that was submitted is no longer valid from the moment the submission is made,
-whether the admin accepts it, rejects it, or never answers. Reading it, or a field taken from
-it, raises an error that points to the result's page, so a test never reads the form as it was
-before the submission while believing it reads the form as it is now:
-
-```python
-result = page.save()
-
-page.fields["name"].value           # raises: the page was submitted
-result.page.fields["name"].value    # the page the admin answered with
-```
-
-An action the page does not offer submits nothing, so it leaves the page valid.
+An action the page does not offer submits nothing, so it leaves the page as it was.
 
 ---
 
@@ -1597,9 +1650,9 @@ And the form comes back carrying what was submitted, on the result's page:
 assert result.page.fields["price"].value == "19.99"
 ```
 
-The re-rendered form is the result's page (section 16.4), read afresh, so it exposes the full
-field API of sections 10 to 13, and requiredness, choices, and rendered-only state remain
-inspectable after a failed submission.
+The re-rendered form is the result's page (section 16.4), the same page object that was
+submitted, read as it is now (section 3.9). It exposes the full field API of sections 10 to 13,
+so requiredness, choices, and rendered-only state remain inspectable after a failed submission.
 
 ---
 
