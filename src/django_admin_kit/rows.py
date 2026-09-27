@@ -7,7 +7,6 @@ shown over it, and a row by its position. A cell is a rendered value, as the
 
 from __future__ import annotations
 
-from functools import cached_property
 from typing import Any, Iterator
 
 from django.contrib.admin.utils import unquote
@@ -33,7 +32,11 @@ class Cell(RenderedValue):
 
 
 class Row:
-    """One row of a changelist, indexable by column name or position."""
+    """One row of a changelist, indexable by column name or position.
+
+    The columns are the ones the changelist had when the row was read. A project whose
+    ``list_display`` changes with the query string reads its rows again after filtering.
+    """
 
     def __init__(
         self,
@@ -51,7 +54,11 @@ class Row:
 
     @property
     def index(self) -> int:
-        """The row's 0-based position in the changelist."""
+        """The row's 0-based position in the changelist.
+
+        The row is that position, not a record: every read goes to whichever row the page
+        shows there now, so once the changelist is filtered or sorted it may be another one.
+        """
         return self._index
 
     @property
@@ -59,11 +66,12 @@ class Row:
         """The row element, unwrapped, for anything the package does not model."""
         return self._element
 
-    @cached_property
+    @property
     def object(self) -> Any:
         """The instance behind the row, where the changelist links to its change page.
 
         ``None`` for a row without such a link, as under ``list_display_links = None``.
+        The database is asked each time, so the instance is as it is stored now.
         """
         opts = self._model._meta
         for cell in self._cells:
@@ -96,7 +104,7 @@ class Row:
                 f"{', '.join(repr(name) for name in self._columns)}."
             ) from None
 
-    @cached_property
+    @property
     def _cells(self) -> list[Cell]:
         # The row's own cells line up with the columns by position once the
         # checkbox Django adds for actions is skipped, as the headers skip its

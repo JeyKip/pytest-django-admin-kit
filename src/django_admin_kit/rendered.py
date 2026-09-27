@@ -7,7 +7,6 @@ never changes it, and the links it renders are kept next to it.
 
 from __future__ import annotations
 
-from functools import cached_property
 from typing import Any
 from urllib.parse import SplitResult, urlsplit
 
@@ -64,17 +63,17 @@ class RenderedValue:
         """The element, unwrapped, for anything the package does not model."""
         return self._element
 
-    @cached_property
+    @property
     def text(self) -> str:
         """What the document shows, with its whitespace collapsed."""
         return text_of(self._element)
 
-    @cached_property
+    @property
     def value(self) -> Any:
         """What is shown, normalized: the text, unless the admin drew an icon."""
         return normalize.normalize(self)
 
-    @cached_property
+    @property
     def links(self) -> list[Link]:
         """The links rendered, in order; ``[]`` when there is none."""
         return [

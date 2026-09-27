@@ -7,7 +7,6 @@ every field has whether the user may fill it or only read it.
 
 from __future__ import annotations
 
-from functools import cached_property
 from typing import Any, Dict
 
 from django.db.models import Model
@@ -74,7 +73,7 @@ class FormField:
         """The field's box, unwrapped, for anything the package does not model."""
         return self._element
 
-    @cached_property
+    @property
     def required(self) -> bool:
         """Whether the form requires a value, as the admin tells the user.
 
@@ -84,7 +83,7 @@ class FormField:
         """
         return "required" in (self._label.get_attribute("class") or "").split()
 
-    @cached_property
+    @property
     def label(self) -> str:
         """The label the admin shows next to the field, as data and never as an address.
 
@@ -103,7 +102,7 @@ class FormField:
             suffix = " ".join(translation.gettext(":").split())
         return label[: -len(suffix)].rstrip() if label.endswith(suffix) else label
 
-    @cached_property
+    @property
     def editable(self) -> bool:
         """Whether the field has a control to fill, rather than a value to read."""
         return self._element.locator("div.readonly").count() == 0
@@ -177,7 +176,7 @@ class FormField:
             f"{', '.join(repr(option) for option in offered) or 'none'}."
         )
 
-    @cached_property
+    @property
     def choices(self) -> list[FieldChoice]:
         """The options a select offers, in order, the blank one included.
 
@@ -192,13 +191,13 @@ class FormField:
     def _control(self, kind: str) -> Locator:
         return self._element.locator(f'{kind}[name="{self._name}"]')
 
-    @cached_property
+    @property
     def _label(self) -> Locator:
         # Django labels most fields with `label` and, from 6.0, a widget that groups
         # several inputs with `legend`.
         return self._element.locator("label, legend").first
 
-    @cached_property
+    @property
     def _rendered(self) -> RenderedValue:
         return RenderedValue(self._element.locator("div.readonly"))
 

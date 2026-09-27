@@ -15,7 +15,6 @@ from __future__ import annotations
 import re
 from collections.abc import Mapping
 from enum import Enum
-from functools import cached_property
 from typing import Any
 from urllib.parse import urlsplit
 
@@ -161,9 +160,9 @@ class IndexPage(AdminPage):
                 f"{', '.join(repr(name) for name in self._app_list) or 'none'}."
             ) from None
 
-    @cached_property
+    @property
     def _app_list(self) -> dict[str, list[type]]:
-        """App name to the registered models under it, read from the page once."""
+        """App name to the registered models under it, as the page shows them."""
         # Django renders the app list twice, the second time in the navigation
         # sidebar, so reading stays inside the content area. Each app is a `module`
         # block with an `app-<label>` class; each model a row with `model-<name>`,
@@ -226,7 +225,7 @@ class ChangelistPage(ModelPage):
     def has_column(self, name: str) -> bool:
         return name in self.columns
 
-    @cached_property
+    @property
     def rows(self) -> list[Row]:
         """The rows the changelist shows, in order.
 
@@ -260,7 +259,7 @@ class ChangelistPage(ModelPage):
         __tracebackhide__ = True
         return matching.match(patterns, self.rows)
 
-    @cached_property
+    @property
     def _header_cells(self) -> list[Locator]:
         # The checkbox Django adds for actions is a column only for users who have an
         # action to run, and it has no label, so it is not one here. The label is read
@@ -282,7 +281,7 @@ class ChangelistPage(ModelPage):
         """Reports no records at all."""
         return self.count == 0
 
-    @cached_property
+    @property
     def _count_line(self) -> re.Match[str]:
         # The count is the paginator's own text. Page links, "Show all" and, from
         # Django 6.0, a heading for screen readers are all inside child elements, so
@@ -304,7 +303,7 @@ class ChangelistPage(ModelPage):
 class FormPage(ModelPage):
     """An admin page with the model's form on it: which fields the form shows."""
 
-    @cached_property
+    @property
     def fields(self) -> Fields:
         """The fields the form shows, by name, in the order the admin presents them.
 
