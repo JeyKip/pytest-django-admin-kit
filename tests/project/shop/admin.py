@@ -92,7 +92,11 @@ class ProductAdmin(admin.ModelAdmin):
         return super().has_delete_permission(request, obj)
 
 
-admin.site.register(Feed)
+# An admin that copies a record: its edit page offers "Save as new" in place of "Save and
+# add another".
+@admin.register(Feed)
+class FeedAdmin(admin.ModelAdmin):
+    save_as = True
 
 
 # A changelist whose rows link to nothing, so the suite has one without a change link.

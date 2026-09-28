@@ -13,7 +13,7 @@ from django.contrib import admin
 from django.contrib.auth.models import Permission, User
 
 from django_admin_kit.urls import AdminUrls
-from project.shop.models import Category, Product
+from project.shop.models import Category, Feed, Product
 
 
 def grant(user, *codenames):
@@ -98,6 +98,11 @@ def released(category):
         released_on=datetime.date(2026, 1, 15),
         category=category,
     )
+
+
+@pytest.fixture
+def feed(db):
+    return Feed.objects.create(source="catalogue.csv")
 
 
 @pytest.fixture

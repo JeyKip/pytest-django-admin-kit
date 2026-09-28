@@ -23,7 +23,9 @@ class Product(models.Model):
 
 class Feed(models.Model):
     """A model whose own fields are named after the arguments `populate` takes, so the
-    suite proves a project is not kept from filling them."""
+    suite proves a project is not kept from filling them.
+
+    Its admin copies records, so it also stands for an admin that offers "Save as new"."""
 
     source = models.CharField(max_length=100)
     mode = models.CharField(

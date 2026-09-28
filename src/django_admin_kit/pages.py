@@ -44,6 +44,19 @@ class PagePopulationMode(str, Enum):
     ALL = "all"
 
 
+class FormAction(str, Enum):
+    """The actions the admin puts on every create and edit form, by the names they post.
+
+    A member is the name itself, so it compares and hashes as that string and mixes with
+    the name of an action a project adds: ``{FormAction.SAVE, "_approve"}``.
+    """
+
+    SAVE = "_save"
+    SAVE_AND_CONTINUE = "_continue"
+    SAVE_AND_ADD_ANOTHER = "_addanother"
+    SAVE_AS_NEW = "_saveasnew"
+
+
 class AdminPage:
     """One opened admin page."""
 
@@ -343,6 +356,50 @@ class FormPage(ModelPage):
         return {
             name for name, field in self.fields.items() if field.editable and not field.required
         }
+
+    @property
+    def actions(self) -> set[str]:
+        """The names of the actions the form offers: what each of its buttons posts.
+
+        The names are the buttons' own, as the admin's view checks for them, so the admin's
+        are ``"_save"`` and the like, also found in ``FormAction``, and a project's are what
+        its template writes. A link submits nothing, so the delete link is not an action,
+        and neither is the "Close" link shown to a user who may not save.
+        """
+        # A button without a name cannot be told apart by the view, so it is no action.
+        buttons = self._submit_row.locator(
+            'input[type="submit"][name], button[type="submit"][name], button:not([type])[name]'
+        )
+        return {str(button.get_attribute("name")) for button in buttons.all()}
+
+    def has_action(self, name: str) -> bool:
+        return name in self.actions
+
+    @property
+    def can_save(self) -> bool:
+        return self.has_action(FormAction.SAVE)
+
+    @property
+    def can_save_and_continue(self) -> bool:
+        return self.has_action(FormAction.SAVE_AND_CONTINUE)
+
+    @property
+    def can_save_and_add_another(self) -> bool:
+        return self.has_action(FormAction.SAVE_AND_ADD_ANOTHER)
+
+    @property
+    def can_save_as_new(self) -> bool:
+        return self.has_action(FormAction.SAVE_AS_NEW)
+
+    @property
+    def can_delete(self) -> bool:
+        """Whether the form links to the page that deletes its object."""
+        return self._submit_row.locator("a.deletelink").count() > 0
+
+    @property
+    def _submit_row(self) -> Locator:
+        # An admin with `save_on_top` draws the same row above the form as well.
+        return self._shown().locator("#content-main form .submit-row").first
 
     def populate(
         self,
