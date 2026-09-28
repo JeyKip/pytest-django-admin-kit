@@ -414,8 +414,8 @@ do shows up as what the page offers:
 ```python
 page = admin_ui.edit(product)
 
-assert not page.has_action("delete")
-assert page.has_action("publish")
+assert not page.can_delete
+assert page.has_action("_publish")
 ```
 
 See section 16.1.
@@ -1399,24 +1399,40 @@ assert result.success
 
 A form offers a set of actions, not a single submit.
 
-The package exposes the standard admin actions and any further actions the admin adds:
+An action is a button that submits the form, and it is named exactly as the button is: by
+the `name` it posts, which is also what the admin's view checks for. Nothing is translated, so
+a test uses the name written in the template and in the view, underscore included:
 
 ```python
 page = admin_ui.edit(product)
 
 assert page.actions == {
-    "save",
-    "save_and_continue",
-    "save_and_add_another",
-    "delete",
+    "_save",
+    "_continue",
+    "_addanother",
 }
 ```
+
+The admin's own actions are also available as constants, so a test need not type their names:
+
+```python
+from django_admin_kit.pages import FormAction
+
+assert page.actions == {
+    FormAction.SAVE,
+    FormAction.SAVE_AND_CONTINUE,
+    FormAction.SAVE_AND_ADD_ANOTHER,
+}
+```
+
+Each constant is the name it stands for, so constants and names mix freely, in a set as
+anywhere else.
 
 Presence of any action:
 
 ```python
-assert page.has_action("save_and_continue")
-assert not page.has_action("approve")
+assert page.has_action(FormAction.SAVE_AND_CONTINUE)
+assert not page.has_action("_approve")
 ```
 
 Each standard action has its own check, since these are the ones a test asks about most:
@@ -1436,10 +1452,9 @@ takes the place of "Save and add another":
 page = admin_ui.edit(feed)
 
 assert page.actions == {
-    "save",
-    "save_and_continue",
-    "save_as_new",
-    "delete",
+    FormAction.SAVE,
+    FormAction.SAVE_AND_CONTINUE,
+    FormAction.SAVE_AS_NEW,
 }
 ```
 
@@ -1452,10 +1467,29 @@ result = page.save_and_add_another()
 result = page.save_as_new()
 ```
 
-Deleting from the edit page is two steps in the admin, and so it is here: `delete` leads to the
-confirmation page of section 23.4, and `confirm_deleting` on that page performs the deletion:
+`submit` is the lower-level call these methods are built on. It invokes any action by its name,
+so an action the admin defines itself is addressed the same way, and it always takes the
+action, with no default:
 
 ```python
+assert page.has_action("_approve")
+
+result = page.submit("_approve")
+```
+
+Invoking an action the page does not offer, through its own method or through `submit`, raises
+an error that names the actions the page does offer. Nothing is submitted, so the page stays
+as usable as it was.
+
+Deleting is not an action. The admin offers it as a link to the confirmation page of section
+23.4, which submits nothing, so it is not in `actions`, as the "Close" link shown to a user who
+may not save is not either. It has its own check and its own method, and deletion takes the
+admin's two steps: `delete` follows the link to the confirmation page, and `confirm_deleting`
+on that page performs the deletion:
+
+```python
+assert page.can_delete
+
 confirmation = page.delete()
 
 assert confirmation.can_confirm_deleting
@@ -1463,19 +1497,10 @@ assert confirmation.can_confirm_deleting
 result = confirmation.confirm_deleting()
 ```
 
-`submit` is the lower-level call the methods above are built on. It invokes any action by name,
-so an action the admin defines itself is addressed the same way, and it always takes the
-action, with no default:
+`delete` returns the confirmation page itself, as opening it would, since following a link has
+no outcome to report; `confirm_deleting` returns a result like any submission.
 
-```python
-assert page.has_action("approve")
-
-result = page.submit("approve")
-```
-
-Invoking an action the page does not offer, through its own method or through `submit`, raises
-an error that names the actions the page does offer. Nothing is submitted, so the page stays
-as usable as it was.
+`delete` on a page that offers no delete link raises an error, and leaves the page as it was.
 
 ---
 

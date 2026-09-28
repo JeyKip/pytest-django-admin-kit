@@ -12,16 +12,18 @@ In scope:
 * no value read from the page or the database is kept: every read is live (3.9);
 * a page object stays usable while the browser shows its path and its kind, and fails at once
   otherwise, as does anything taken from it (3.9, 16.4);
-* `FormPage.actions`, `has_action(name)`, and the checks `can_save`, `can_save_and_continue`,
-  `can_save_and_add_another`, `can_save_as_new`, `can_delete`;
-* `FormPage.submit(action)`, and `save()`, `save_and_continue()`, `save_and_add_another()`,
-  `save_as_new()` and `delete()` built on it;
+* `FormPage.actions` (the names the form's buttons post), `has_action(name)`, and the checks
+  `can_save`, `can_save_and_continue`, `can_save_and_add_another`, `can_save_as_new`;
+* `FormAction`, the admin's own action names as constants;
+* `FormPage.submit(action)`, and `save()`, `save_and_continue()`, `save_and_add_another()` and
+  `save_as_new()` built on it;
+* `FormPage.can_delete` and `FormPage.delete()`, which follows the delete link;
 * `DeletePage.can_confirm_deleting` and `DeletePage.confirm_deleting()`;
 * `SubmissionResult` with `success`, `redirected_to(url)`, `redirected_to_index()`,
   `redirected_to_list(model)`, `redirected_to_create(model)`, `redirected_to_edit(instance)`,
   and `page`: the submitted page itself when the browser stayed on it, otherwise a new page of
   the type its URL names;
-* the error for an action the page does not offer;
+* the errors for an action the page does not offer and for deleting without a delete link;
 * a custom action in the test project, so an action the admin defines is proved end to end;
 * README entries, once every slice is in, and spec marks.
 
@@ -83,16 +85,16 @@ the bulk one), `dashboard`, `login`, next to `app-<label> model-<name>`.
 
 For the test project's users that gives:
 
-| User, page | `actions` |
-|---|---|
-| superuser, edit | `save`, `save_and_continue`, `save_and_add_another`, `delete` |
-| superuser, create | `save`, `save_and_continue`, `save_and_add_another` |
-| superuser, edit of a released product | `save`, `save_and_continue`, `save_and_add_another` |
-| editor, edit | `save`, `save_and_continue` |
-| adder, create | `save`, `save_and_add_another` |
-| viewer, edit | none |
-| superuser, edit of a feed | `save`, `save_and_continue`, `save_as_new`, `delete` (and `refresh` from S7) |
-| superuser, create of a feed | `save`, `save_and_continue`, `save_and_add_another` |
+| User, page | `actions` | `can_delete` |
+|---|---|---|
+| superuser, edit | `_save`, `_continue`, `_addanother` | yes |
+| superuser, create | `_save`, `_continue`, `_addanother` | no |
+| superuser, edit of a released product | `_save`, `_continue`, `_addanother` | no |
+| editor, edit | `_save`, `_continue` | no |
+| adder, create | `_save`, `_addanother` | no |
+| viewer, edit | none | no |
+| superuser, edit of a feed | `_save`, `_continue`, `_saveasnew` (and `_refresh` from S7) | yes |
+| superuser, create of a feed | `_save`, `_continue`, `_addanother` | no |
 
 ## Decisions and assumptions
 
@@ -124,45 +126,53 @@ For the test project's users that gives:
    native handle is Playwright's own object and behaves as Playwright decides.
 5. **Where actions are read.** The first `.submit-row` inside the page's form. `save_on_top`
    draws the same row twice, so the first one is all of them.
-6. **Action names.** A submit control in the row is an action named after the `name` it posts,
-   because that is what the admin's own view checks for. Django's get the spec's names:
-   `_save` is `save`, `_continue` is `save_and_continue`, `_addanother` is
-   `save_and_add_another`, `_saveasnew` is `save_as_new`. Any other name loses its leading
-   underscore, so `_approve` is `approve`. The delete link is `delete`. The Close link is not an
-   action: it submits nothing and is shown precisely when nothing can be saved, which is what
-   16.3 asserts as `actions == set()`. A submit control with no `name` cannot be told apart by
-   the view and is not an action.
-7. **`actions` is a `set[str]`**, as the spec shows. Order is presentation and moved in 4.2.
-8. **The checks are properties**, like `works`, `denied` and `editable`, each
-   `self.has_action("<name>")`.
-9. **`submit(action)` takes the action with no default.** It looks the action up first and,
-   when the page does not offer it, raises `LookupError` before anything is clicked:
-   `The page offers no action 'delete'. Actions: 'save', 'save_and_continue'.` (sorted, `none`
-   when empty). `LookupError` is what a refused page raises from every reader, and what
-   `Fields` and `models_for` raise for a name that is not there. The save methods are
-   `return self.submit("<name>")`, so they fail the same way with the same text. Nothing was
-   submitted, so the page is as it was.
-10. **A submission happens in the page's own browser tab.** It clicks the control and waits
+6. **An action is named exactly as its button posts it.** A submit control in the row is an
+   action, and its name is the `name` attribute, untouched: `_save`, `_continue`,
+   `_addanother`, `_saveasnew`, and whatever a project writes, underscore or not. That is what
+   the admin's view checks for, so the name in a test is the one in the template and in
+   `response_change`, and one rule serves the admin's actions and a project's alike. A submit
+   control with no `name` cannot be told apart by the view and is not an action. A project that
+   posts one name with different values (`<button name="_action" value="publish">`) has one
+   action by this rule, and clicks the button it means through `native`.
+7. **Links are not actions.** The delete link and the Close link submit nothing, so neither is
+   in `actions`; Close is shown precisely when nothing can be saved, which is what 16.3 asserts
+   as `actions == set()`. Deleting has its own check and method (decision 17).
+8. **`FormAction` holds the admin's own names.** A `str` enum in `pages.py`, beside
+   `PagePopulationMode`: `SAVE = "_save"`, `SAVE_AND_CONTINUE = "_continue"`,
+   `SAVE_AND_ADD_ANOTHER = "_addanother"`, `SAVE_AS_NEW = "_saveasnew"`. A member hashes and
+   compares as its string, checked on Python 3.8 and 3.14, so `actions` stays a plain
+   `set[str]` and `page.actions == {FormAction.SAVE, "_refresh"}` holds; `has_action` and
+   `submit` take either.
+9. **`actions` is a `set[str]`**, as the spec shows. Order is presentation and moved in 4.2.
+10. **The checks are properties**, like `works`, `denied` and `editable`: each save check is
+    `self.has_action(FormAction.<MEMBER>)`, and `can_delete` is whether the row has the delete
+    link.
+11. **`submit(action)` takes the action with no default.** It looks the action up first and,
+    when the page does not offer it, raises `LookupError` before anything is clicked:
+    `The page offers no action '_approve'. Actions: '_continue', '_save'.` (sorted, `none`
+    when empty). `LookupError` is what a refused page raises from every reader, and what
+    `Fields` and `models_for` raise for a name that is not there. The save methods are
+    `return self.submit(FormAction.<MEMBER>)`, so they fail the same way with the same text.
+    Nothing was submitted, so the page is as it was.
+12. **A submission happens in the page's own browser tab.** It clicks the control and waits
     for the navigation it causes, with Playwright's `expect_navigation`, whose value is the
     response the browser ended up on. Nothing is retyped or posted around the browser, so the
     page's scripts run as they would for a user.
-11. **`success` is "the admin answered by redirecting".** Django redirects after every save,
+13. **`success` is "the admin answered by redirecting".** Django redirects after every save,
     continue, add-another, save-as-new and delete it performs, and answers a rejected form by
     rendering it again with status 200 (or with 403 when refused). The result keeps whether the
-    final response came through a redirect (`response.request.redirected_from is not None`). A
-    link action (`delete`) is a plain GET, so its result is a success when the page it points
-    to opened.
-12. **`redirected_to(url)` requires a redirect as well as the destination.** "Save and
+    final response came through a redirect (`response.request.redirected_from is not None`).
+14. **`redirected_to(url)` requires a redirect as well as the destination.** "Save and
     continue" on an edit page and a rejected save both end on the edit URL; only the first was
     redirected there. So `redirected_to` is `redirected and page.destination == url`, and every
     shorthand is `redirected_to(self._urls.<kind>(...))`.
-13. **The result reports on the submission and reaches the browser only through `page`.** It
+15. **The result reports on the submission and reaches the browser only through `page`.** It
     holds the page, whether the navigation was redirected, and the `AdminUrls`. It has no
     `native`, `status_code` or `destination` of its own, and nothing the page says is repeated
     on it: validation errors and messages are read from the page (sections 20 to 22). What
     sections 19 and 23 add to it, `created`, `changed` and `object`, are facts about the
     database that no page shows. It lives in a new `results.py` and is not an `AdminPage`.
-14. **`result.page` is the submitted page when the browser stayed on it.** After the
+16. **`result.page` is the submitted page when the browser stayed on it.** After the
     navigation, the page's own check (decision 4) decides: if the browser still shows the
     submitted page's path and kind, the result's page is that same object, and it records the
     new response's status and the path it was asked for, so `status_code` and `works` describe
@@ -176,23 +186,26 @@ For the test project's users that gives:
     `site.is_registered`). A new page is requested at the path it landed on, so a submission
     the admin answers with the login page reads as `denied`. Its type is `AdminPage` to a type
     checker, since only the admin decides where a submission goes.
-15. **`delete()` returns the confirmation page.** It is `submit("delete")`, whose page is built
-    as a `DeletePage` requested at the link's own path, so `works`, `denied` and everything
-    later read on a confirmation page read the same whether it was opened directly or reached
-    from the edit page. The return type is `DeletePage`, and the edit page it came from fails
-    its check afterwards, since the browser left it.
-16. **`confirm_deleting()` and `can_confirm_deleting` are on `DeletePage`**, where the admin
+17. **`delete()` follows the delete link and returns the confirmation page.** It is not a
+    submission, so it does not go through `submit` and returns no result. When the row has no
+    delete link it raises `LookupError` before anything is clicked:
+    `The page offers no delete link.` Otherwise it clicks the link, waits for the navigation,
+    and builds a `DeletePage` requested at the link's own path, so `works`, `denied` and
+    everything later read on a confirmation page read the same whether it was opened directly or
+    reached from the edit page. The edit page it came from fails its check afterwards, since the
+    browser left it.
+18. **`confirm_deleting()` and `can_confirm_deleting` are on `DeletePage`**, where the admin
     draws the button. When the page offers no confirmation, `confirm_deleting()` raises
     `LookupError`: `The page offers no way to confirm the deletion.` It returns a
     `SubmissionResult`; the admin redirects after a deletion, so the confirmation page fails
     its check afterwards like any page the browser left.
-17. **`Feed` carries the admin's own action.** Its admin already exists for "Save as new", so
+19. **`Feed` carries the admin's own action.** Its admin already exists for "Save as new", so
     the custom "Refresh" button goes on the same admin rather than on a model of its own, and
     the model's docstring grows a line saying so.
-18. **A category a product uses is protected.** `Product.category` becomes `PROTECT`, so the
+20. **A category a product uses is protected.** `Product.category` becomes `PROTECT`, so the
     suite has a confirmation page with nothing to confirm. Products, and categories no product
     uses, still delete through the ordinary confirmation, and no test deletes a category today.
-19. **README waits for the whole plan.** Every slice's usage goes into the README in one
+21. **README waits for the whole plan.** Every slice's usage goes into the README in one
     commit after the last slice, so it describes the finished API once.
 
 ## Known problems and what is done about them
@@ -211,7 +224,7 @@ moves the browser between pages.
 | A read right after a navigation started through `native` may see the old document | yes | nothing; the package's own actions wait; documented in 3.9 |
 | Wrappers compare by identity, so two reads of one field are not `==` | yes: locators compare by identity | nothing; documented in 3.9 |
 | `row.object` asks the database each time, so it follows changes and can raise `DoesNotExist` | not applicable | nothing; that is the live answer; documented on `Row.object` and in 3.9 |
-| `status_code` and `works` cannot be read from the page | not applicable | the package's navigating methods record them (decision 14); a native navigation is not seen, documented in 3.9 |
+| `status_code` and `works` cannot be read from the page | not applicable | the package's navigating methods record them (decision 16); a native navigation is not seen, documented in 3.9 |
 | `populate` fills the fields shown when it starts, so one a script adds meanwhile is not filled | not applicable | nothing; documented in 14.1 |
 | A row match compares cells and reports them in two reads, which could differ if a script changes the page in between | yes: `expect` reports the value of its last poll | nothing |
 | Every read is a round trip | yes | accepted |
@@ -261,23 +274,24 @@ spec's 3.9, the rewritten 16.4, and the notes in 14.1 and 19.
 
 ### S2. Read which actions a form offers
 
-* `pages.py`: `_ACTIONS = {"_save": "save", "_continue": "save_and_continue", "_addanother":
-  "save_and_add_another", "_saveasnew": "save_as_new"}` at the top; on `FormPage` `actions`
-  (read through `_shown()`), `has_action`, and the five checks.
+* `pages.py`: `FormAction` beside `PagePopulationMode` at the top; on `FormPage` `actions`
+  (read through `_shown()`), `has_action`, the four save checks and `can_delete`.
 * Test project: `FeedAdmin` with `save_as = True`; `Feed` docstring says it also stands for an
   admin that copies records. `tests/conftest.py`: a `feed` fixture
   (`Feed.objects.create(source="catalogue.csv")`).
-* `tests/test_actions.py`: the table above, parametrized by user and page; `has_action` for
-  an offered and an unoffered name; the five checks for the editor and for a feed's edit page;
-  the viewer's edit page offers `set()` (16.3); a released product's edit page does not offer
-  `delete` (5.3); a refused page raises `LookupError` from `actions`.
+* `tests/test_actions.py`: the table above, parametrized by user and page, with the expected
+  sets written as `FormAction` members; `actions` holds plain strings, so the same page compares
+  equal to the posted names written out; `has_action` for an offered and an unoffered name, as
+  a member and as a string; the five checks for the editor and for a feed's edit page; the
+  viewer's edit page offers `set()` (16.3); a released product's edit page cannot be deleted
+  (5.3); a refused page raises `LookupError` from `actions` and from `can_delete`.
 * Consistent: read only, nothing submits yet.
 
 ### S3. Save a form, and the page the admin answers with
 
 * `results.py` (new): `SubmissionResult` with `success`, `redirected_to(url)` and `page`.
-* `pages.py`: `FormPage.submit(action)` and `save()`; the `LookupError` of decision 9; the
-  path-and-kind comparison and the page a landed URL names (decision 14); recording the new
+* `pages.py`: `FormPage.submit(action)` and `save()`; the `LookupError` of decision 11; the
+  path-and-kind comparison and the page a landed URL names (decision 16); recording the new
   status and requested path on a page the browser stayed on.
 * `tests/test_submit.py`:
   * a filled create page saves: `success`, the product is in the database,
@@ -288,7 +302,7 @@ spec's 3.9, the rewritten 16.4, and the notes in 14.1 and 19.
     submitted page itself (`result.page is page`), it works, and its fields hold what was
     submitted;
   * the adder's save lands on an `IndexPage`;
-  * `submit("approve")` on a page without it raises the exact message and leaves the database
+  * `submit("_approve")` on a page without it raises the exact message and leaves the database
     as it was; `save()` on the viewer's edit page raises `... Actions: none.`
 * Consistent: the page check is not enforced yet, and no test reads a page the browser left.
 
@@ -328,15 +342,16 @@ spec's 3.9, the rewritten 16.4, and the notes in 14.1 and 19.
 ### S7. An action the admin defines
 
 * Test project: the `Feed` template and `FeedAdmin.response_change` above.
-* `tests/test_actions.py`: the feed's edit page row of the table gains `refresh`.
-* `tests/test_submit.py`: the feed's create page does not offer `refresh`;
-  `submit("refresh")` saves what was populated, is `redirected_to` the feed's history page, and
+* `tests/test_actions.py`: the feed's edit page row of the table gains `_refresh`.
+* `tests/test_submit.py`: the feed's create page does not offer `_refresh`;
+  `submit("_refresh")` saves what was populated, is `redirected_to` the feed's history page, and
   its page is a plain `AdminPage` that works.
 * `test_index.py` is unaffected (the model list is unchanged).
 
 ### S8. Delete from the edit page
 
-* `pages.py`: `FormPage.delete()` over `submit("delete")`, returning a `DeletePage`.
+* `pages.py`: `FormPage.delete()`, following the link and returning a `DeletePage`
+  (decision 17).
 * `tests/test_confirm_delete.py`: from the superuser's edit page, `delete()` opens the
   confirmation (`works`, destination is `admin_ui.url.delete(product)`), and the edit page
   fails its check afterwards; the editor's `delete()` raises; a create page's `delete()`
