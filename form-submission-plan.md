@@ -179,8 +179,9 @@ For the test project's users that gives:
     the document it now reads. Otherwise the result's page is a new object of the type the
     landed URL names: the path is resolved through Django's resolver in the site's namespace;
     `index` is an `IndexPage`; a registered model's `changelist`, `add`, `change` and `delete`
-    views are a `ChangelistPage`, `CreatePage`, `EditPage` and `DeletePage` of that model;
-    anything else is an `AdminPage`. The model is found by matching the URL name against each
+    views are a `ChangelistPage`, `CreatePage`, `EditPage` and `DeletePage` of that model,
+    each only when the page's `body` says it is of that kind, since a view may answer with a
+    page of another kind at its own URL; anything else is an `AdminPage`. The model is found by matching the URL name against each
     registered model's `<app_label>_<model_name>_` prefix, so an app label with an underscore
     in it is not split wrongly, and only public calls are used (`apps.get_models()`,
     `site.is_registered`). A new page is requested at the path it landed on, so a submission

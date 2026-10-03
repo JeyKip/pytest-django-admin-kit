@@ -20,11 +20,13 @@ from urllib.parse import urlsplit
 
 from django.apps import apps
 from django.db.models import Model
-from playwright.sync_api import Locator, Page
+from django.urls import Resolver404, resolve
+from playwright.sync_api import Locator, Page, Response
 
 from . import matching
 from .fields import Fields, FormField
 from .normalize import integer
+from .results import SubmissionResult
 from .rows import Row
 from .urls import AdminUrls
 
@@ -59,6 +61,15 @@ class FormAction(str, Enum):
 
 class AdminPage:
     """One opened admin page."""
+
+    # The page type the admin declares in the `body` class, or None for pages the
+    # package does not model. The path and the status are usually enough to tell
+    # whether the browser still shows this page. The class is needed when the admin
+    # answers with a different page at the same URL and status 200: for example, a
+    # project's `response_add` or `response_change` that renders a confirmation page
+    # instead of redirecting, or, once changelist actions are supported, the
+    # confirmation page of "Delete selected".
+    _kind: str | None = None
 
     def __init__(self, page: Page, status_code: int, requested: str, urls: AdminUrls) -> None:
         self._page = page
@@ -143,9 +154,16 @@ class AdminPage:
             )
         return self._page
 
+    def _shows_itself(self) -> bool:
+        """Whether the browser still shows this page: the same path and the same page
+        type."""
+        return self.destination == self._requested and _is_kind(self._page, self._kind)
+
 
 class IndexPage(AdminPage):
     """The admin index: which models it lists for the current user."""
+
+    _kind = "dashboard"
 
     @property
     def apps(self) -> list[str]:
@@ -218,6 +236,8 @@ class ModelPage(AdminPage):
 
 class ChangelistPage(ModelPage):
     """A model's changelist: its columns, its rows, and how many records it reports."""
+
+    _kind = "change-list"
 
     @property
     def headers(self) -> list[str]:
@@ -315,6 +335,8 @@ class ChangelistPage(ModelPage):
 
 class FormPage(ModelPage):
     """An admin page with the model's form on it: which fields the form shows."""
+
+    _kind = "change-form"
 
     @property
     def fields(self) -> Fields:
@@ -433,6 +455,41 @@ class FormPage(ModelPage):
             if value is not _NOTHING:
                 field.fill(value)
 
+    def submit(self, action: str) -> SubmissionResult:
+        """Click the button that posts ``action``, and wait for the next page.
+
+        ``action`` is the button's ``name``, or a ``FormAction``. If the page has no such
+        button, nothing is clicked and ``LookupError`` lists the actions it has.
+
+        The result's page is this same object if the browser stayed on this page, for
+        example when the admin rejects the form and shows it again.
+        """
+        # Use the plain name, so an error shows "_save" rather than the enum member.
+        name = action.value if isinstance(action, FormAction) else action
+        # Read the actions once, for both the check and the error message.
+        offered = self.actions
+        if name not in offered:
+            raise LookupError(
+                f"The page offers no action {name!r}. Actions: "
+                f"{', '.join(repr(each) for each in sorted(offered)) or 'none'}."
+            )
+        with self._page.expect_navigation() as navigation:
+            self._submit_row.locator(f'[name="{name}"]').first.click()
+        return self._submitted(navigation.value)
+
+    def save(self) -> SubmissionResult:
+        return self.submit(FormAction.SAVE)
+
+    def _submitted(self, response: Response | None) -> SubmissionResult:
+        # A navigation of the page always comes with a response.
+        assert response is not None
+        redirected = response.request.redirected_from is not None
+        if self._shows_itself():
+            # The browser loaded a new document here, so report its status.
+            self._status_code = response.status
+            return SubmissionResult(self, redirected)
+        return SubmissionResult(_page_at(self._page, response.status, self._urls), redirected)
+
 
 class CreatePage(FormPage):
     """The page that adds a new instance of a model."""
@@ -444,6 +501,57 @@ class EditPage(FormPage):
 
 class DeletePage(ModelPage):
     """The page that asks whether to delete one instance."""
+
+    _kind = "delete-confirmation"
+
+
+# The page class for each admin view of a model, by the end of the view's URL name.
+_MODEL_PAGES: dict[str, type[ModelPage]] = {
+    "changelist": ChangelistPage,
+    "add": CreatePage,
+    "change": EditPage,
+    "delete": DeletePage,
+}
+
+
+def _page_at(page: Page, status_code: int, urls: AdminUrls) -> AdminPage:
+    """A page object for the page the browser is on.
+
+    The class comes from the URL, and is used only if the page's ``body`` class confirms
+    it; otherwise the result is a plain ``AdminPage``. The page counts as requested at its
+    current path, so it reads like a page the test opened directly.
+    """
+    path = urlsplit(page.url).path
+    try:
+        match = resolve(path)
+    except Resolver404:
+        return AdminPage(page, status_code, path, urls)
+    # A view added to the admin without a name has no URL name.
+    url_name = match.url_name or ""
+    if match.namespace != urls.site.name:
+        return AdminPage(page, status_code, path, urls)
+    # A view can render a different page at its own URL, so the URL alone is not trusted.
+    if url_name == "index" and _is_kind(page, IndexPage._kind):
+        return IndexPage(page, status_code, path, urls)
+    # Find the model by the full prefix of its URL names, such as "shop_product_",
+    # because an app label may itself contain underscores.
+    for model in apps.get_models():
+        if not urls.site.is_registered(model):
+            continue
+        prefix = f"{model._meta.app_label}_{model._meta.model_name}_"
+        if url_name.startswith(prefix):
+            page_class = _MODEL_PAGES.get(url_name[len(prefix) :])
+            if page_class is not None and _is_kind(page, page_class._kind):
+                return page_class(page, status_code, path, urls, model)
+    return AdminPage(page, status_code, path, urls)
+
+
+def _is_kind(page: Page, kind: str | None) -> bool:
+    """Whether ``page`` has the page type ``kind`` in its ``body`` class. ``None``
+    matches any page."""
+    if kind is None:
+        return True
+    return kind in (page.locator("body").get_attribute("class") or "").split()
 
 
 def _within(mode: PagePopulationMode, field: FormField) -> bool:
