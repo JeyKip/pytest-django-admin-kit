@@ -67,3 +67,11 @@ deps = [
 # than once outside. It is a no-op when the right build is already cached.
 commands_pre = [["playwright", "install", "chromium"]]
 commands = [["pytest", { replace = "posargs", extend = true }]]
+# Each cell keeps its own font cache. Chromium reads the developer's
+# ~/.cache/fontconfig, which other programs on the machine write in whatever format
+# their fontconfig uses, and the Chromium build of the 3.8 cells crashes on pages with
+# web fonts when it meets caches it cannot use. Playwright and uv find their own caches
+# through the same variable, so both are pointed back at the shared ones.
+set_env.XDG_CACHE_HOME = "{env_tmp_dir}/cache"
+set_env.PLAYWRIGHT_BROWSERS_PATH = { replace = "env", name = "PLAYWRIGHT_BROWSERS_PATH", default = "{env:HOME}/.cache/ms-playwright" }
+set_env.UV_CACHE_DIR = { replace = "env", name = "UV_CACHE_DIR", default = "{env:HOME}/.cache/uv" }
