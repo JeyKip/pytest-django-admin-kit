@@ -39,7 +39,7 @@ def opened(admin_ui, request, user, page):
         # Continuing would open the object's page, which the adder may not view.
         ("adder", "product's create page", {SAVE, ADD_ANOTHER}),
         ("viewer", "product's edit page", set()),
-        ("superuser", "feed's edit page", {SAVE, CONTINUE, SAVE_AS_NEW}),
+        ("superuser", "feed's edit page", {SAVE, CONTINUE, SAVE_AS_NEW, "_refresh"}),
         ("superuser", "feed's create page", {SAVE, CONTINUE, ADD_ANOTHER}),
     ],
 )

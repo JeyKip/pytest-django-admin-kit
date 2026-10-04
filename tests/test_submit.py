@@ -5,6 +5,7 @@ import datetime
 from urllib.parse import urlsplit
 
 import pytest
+from django.urls import reverse
 
 from django_admin_kit.pages import AdminPage, ChangelistPage, CreatePage, EditPage, IndexPage
 from project.shop.models import Feed, Product
@@ -85,6 +86,16 @@ def incomplete(admin_ui, superuser):
 @pytest.fixture
 def rejected(incomplete):
     return incomplete.save()
+
+
+@pytest.fixture
+def refreshing(admin_ui, superuser, feed):
+    """A feed's edit page with a new source filled in, ready for the project's own
+    "Refresh" button."""
+    admin_ui.login(superuser)
+    page = admin_ui.edit(feed)
+    page.populate(source="refreshed.csv")
+    return page
 
 
 @pytest.fixture
@@ -360,3 +371,27 @@ def test_continuing_is_redirected_to_the_edit_page(released, renaming):
 
 def test_a_rejected_save_is_not_redirected_to_the_create_page_it_is_on(rejected):
     assert not rejected.redirected_to_create(Product)
+
+
+def test_an_action_the_project_adds_saves_what_was_filled_in(feed, refreshing):
+    result = refreshing.submit("_refresh")
+
+    feed.refresh_from_db()
+    assert result.success
+    assert feed.source == "refreshed.csv"
+
+
+def test_an_action_the_project_adds_goes_where_the_project_sends_it(feed, refreshing):
+    """The project's code sends "Refresh" to the feed's history, where a plain save would
+    go to the changelist."""
+    result = refreshing.submit("_refresh")
+
+    assert result.redirected_to(reverse("admin:shop_feed_history", args=[feed.pk]))
+
+
+def test_a_page_the_package_does_not_model_is_a_plain_admin_page(refreshing):
+    """The history page is the admin's, but the package has no page type for it."""
+    result = refreshing.submit("_refresh")
+
+    assert type(result.page) is AdminPage
+    assert result.page.works
