@@ -529,9 +529,6 @@ class FormPage(ModelPage):
     def save_and_add_another(self) -> SubmissionResult:
         return self.submit(FormAction.SAVE_AND_ADD_ANOTHER)
 
-    def save_as_new(self) -> SubmissionResult:
-        return self.submit(FormAction.SAVE_AS_NEW)
-
     def _submitted(self, response: Response | None) -> SubmissionResult:
         # A navigation of the page always comes with a response.
         assert response is not None
@@ -550,6 +547,31 @@ class CreatePage(FormPage):
 
 class EditPage(FormPage):
     """The change page of one instance, read only for a user who may only view it."""
+
+    # Both of these need an object that already exists, so the admin offers them on an
+    # edit page and never on a create page.
+    def save_as_new(self) -> SubmissionResult:
+        return self.submit(FormAction.SAVE_AS_NEW)
+
+    def delete(self) -> DeletePage:
+        """Follow the delete link to the page that asks to confirm the deletion.
+
+        Deleting takes two steps in the admin, and this is the first: nothing is deleted
+        until ``confirm_deleting`` on the returned page. The link submits nothing, so the
+        confirmation page comes back on its own, as opening it directly would give it. If
+        the page has no delete link, nothing is clicked and ``LookupError`` says so.
+        """
+        link = self._submit_row.locator("a.deletelink")
+        if not link.count():
+            raise LookupError("The page offers no delete link.")
+        # The link may carry the changelist's filters in its query; the page is its path.
+        path = urlsplit(link.get_attribute("href") or "").path
+        with self._page.expect_navigation() as navigation:
+            link.click()
+        response = navigation.value
+        # A navigation of the page always comes with a response.
+        assert response is not None
+        return DeletePage(self._page, response.status, path, self._urls, self._model)
 
 
 class DeletePage(ModelPage):

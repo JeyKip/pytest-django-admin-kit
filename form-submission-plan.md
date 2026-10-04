@@ -15,9 +15,12 @@ In scope:
 * `FormPage.actions` (the names the form's buttons post), `has_action(name)`, and the checks
   `can_save`, `can_save_and_continue`, `can_save_and_add_another`, `can_save_as_new`;
 * `FormAction`, the admin's own action names as constants;
-* `FormPage.submit(action)`, and `save()`, `save_and_continue()`, `save_and_add_another()` and
-  `save_as_new()` built on it;
-* `FormPage.can_delete` and `FormPage.delete()`, which follows the delete link;
+* `FormPage.submit(action)`, and `save()`, `save_and_continue()` and `save_and_add_another()`
+  built on it, with `EditPage.save_as_new()` too, since the admin offers "Save as new" only on
+  an edit page;
+* `FormPage.can_delete`, and `EditPage.delete()`, which follows the delete link, since the
+  admin draws that link only on an edit page; a create page answers both checks with `False`
+  and has neither method;
 * `DeletePage.can_confirm_deleting` and `DeletePage.confirm_deleting()`;
 * `SubmissionResult` with `success`, `redirected_to(url)`, `redirected_to_index()`,
   `redirected_to_list(model)`, `redirected_to_create(model)`, `redirected_to_edit(instance)`,
@@ -355,12 +358,11 @@ spec's 3.9, the rewritten 16.4, and the notes in 14.1 and 19.
 
 ### S8. Delete from the edit page
 
-* `pages.py`: `FormPage.delete()`, following the link and returning a `DeletePage`
-  (decision 17).
+* `pages.py`: `EditPage.delete()`, following the link and returning a `DeletePage`
+  (decision 17); `save_as_new()` moves to `EditPage` beside it.
 * `tests/test_confirm_delete.py`: from the superuser's edit page, `delete()` opens the
   confirmation (`works`, destination is `admin_ui.url.delete(product)`), and the edit page
-  fails its check afterwards; the editor's `delete()` raises; a create page's `delete()`
-  raises.
+  fails its check afterwards; the editor's `delete()` raises.
 * Consistent: nothing confirms yet; the confirmation page is read like one opened directly.
 
 ### S9. Confirm a deletion
