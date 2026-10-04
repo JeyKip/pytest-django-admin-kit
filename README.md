@@ -211,6 +211,102 @@ page.populate(product, name="Renamed")      # everything it has, with one value 
 page.populate(SimpleNamespace(name="Widget", price="19.99"))
 ```
 
+**Knowing what a form lets the user do.** An action is a button that submits the form,
+named exactly by what it posts, which is what the admin's view checks for. The admin's own
+are constants in `FormAction`, from `django_admin_kit.pages`, and each has its own check.
+
+```python
+page = admin_ui.edit(product)
+
+assert page.actions == {
+    FormAction.SAVE,
+    FormAction.SAVE_AND_CONTINUE,
+    FormAction.SAVE_AND_ADD_ANOTHER,
+}
+assert page.has_action("_continue")
+assert page.can_save
+assert not page.can_save_as_new
+assert page.can_delete
+```
+
+A button a project adds is an action under the name it posts, such as `"_refresh"` on the
+test project's feeds. Deleting is a link rather than a button, so it is not in `actions` and
+has its own check.
+
+**Submitting a form.** Filling a form and submitting it are separate steps. Each of the
+admin's buttons has a method, `save()`, `save_and_continue()`, `save_and_add_another()`, and
+`save_as_new()` on an edit page, and `submit` presses any button by the name it posts. An
+action the page does not offer raises `LookupError` naming the ones it does, and submits
+nothing.
+
+```python
+page = admin_ui.create(Product)
+page.populate(
+    name="Widget",
+    sku="SKU-1",
+    price="10.00",
+    released_on=date(2026, 1, 15),
+)
+
+result = page.save()
+
+assert result.success
+assert result.redirected_to_list(Product)
+assert result.page.count == 1
+```
+
+`success` is whether the admin redirected, which it does after every save it accepts.
+`redirected_to(url)` takes any `admin_ui.url` path, and `redirected_to_index()`,
+`redirected_to_list(model)`, `redirected_to_create(model)` and `redirected_to_edit(instance)`
+are shorthands for the usual ones. A form the admin rejects is shown again at its own URL
+without a redirect, so it is never redirected there.
+
+`result.page` is the page the browser shows afterwards. When the browser stays on the
+submitted page, as with a rejected form or "Save and continue", it is that same page object;
+otherwise it is a new page of the type its URL names, or a plain `AdminPage` for a page the
+package does not model.
+
+```python
+page = admin_ui.create(Product)
+page.populate(name="", price="10.00")
+
+result = page.save()
+
+assert not result.success
+assert result.page is page
+assert page.fields["price"].value == "10.00"
+```
+
+**Reading is live.** Nothing read from a page is kept, so every read is the page as it is
+now, including what the admin's own scripts changed in place. A field, row or cell taken from
+a page is an address, read each time it is used: a field by its name, a row by its position.
+Once the browser shows another page, reading the old page object, or anything taken from it,
+fails at once and says where the browser is.
+
+```python
+result = page.save()                 # the admin redirects to the changelist
+
+page.fields["name"].value            # LookupError: The browser no longer shows this page; ...
+result.page.rows[0]["name"].value    # read the page the browser shows now
+```
+
+**Deleting.** The admin deletes in two steps, and so does the package: `delete()` follows an
+edit page's delete link to the confirmation, and `confirm_deleting()` there deletes.
+
+```python
+confirmation = admin_ui.edit(product).delete()
+
+assert confirmation.can_confirm_deleting
+
+result = confirmation.confirm_deleting()
+
+assert result.redirected_to_list(Product)
+```
+
+When deleting would also remove objects that are protected, or that the user may not delete,
+the admin offers no confirmation: a category a product uses reads `can_confirm_deleting` as
+`False`, and `confirm_deleting()` raises `LookupError`.
+
 **Knowing what the index shows a user.** Models and apps a user may not see are not listed,
 and the lists come back in the admin's order.
 

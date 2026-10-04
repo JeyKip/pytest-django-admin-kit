@@ -24,6 +24,19 @@ class FakePaginator:
         return self.text
 
 
+class FakeBody:
+    """The page's body, which says the page is a changelist.
+
+    A page reads its `body` class to tell whether the browser still shows it, when it is
+    built and before every read. These are the classes Django renders on a changelist, so
+    the fake page goes through that check as a real one does.
+    """
+
+    def get_attribute(self, name):
+        assert name == "class"
+        return "app-shop model-product change-list"
+
+
 class FakePage:
     """A changelist that opened, whose paginator says `text`."""
 
@@ -33,6 +46,8 @@ class FakePage:
         self.text = text
 
     def locator(self, selector):
+        if selector == "body":
+            return FakeBody()
         assert selector == "#changelist .paginator"
         return FakePaginator(self.text)
 

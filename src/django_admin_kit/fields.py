@@ -7,8 +7,7 @@ every field has whether the user may fill it or only read it.
 
 from __future__ import annotations
 
-from functools import cached_property
-from typing import Any, Dict
+from typing import Any, Callable, Dict
 
 from django.db.models import Model
 from django.utils import translation
@@ -56,13 +55,17 @@ class FormField:
     """One field of an admin form.
 
     ``language`` is the one the page was rendered in, which decides what the admin put
-    after the label.
+    after the label. ``check`` is run before every read, and fails when the browser no
+    longer shows the page the field is on.
     """
 
-    def __init__(self, element: Locator, name: str, language: str) -> None:
+    def __init__(
+        self, element: Locator, name: str, language: str, check: Callable[[], None]
+    ) -> None:
         self._element = element
         self._name = name
         self._language = language
+        self._check = check
 
     @property
     def name(self) -> str:
@@ -74,7 +77,7 @@ class FormField:
         """The field's box, unwrapped, for anything the package does not model."""
         return self._element
 
-    @cached_property
+    @property
     def required(self) -> bool:
         """Whether the form requires a value, as the admin tells the user.
 
@@ -82,15 +85,17 @@ class FormField:
         finally has it, so a ``ModelForm`` that changes what the model says is read the
         way the user sees it. A field the user may only read is never required.
         """
+        self._check()
         return "required" in (self._label.get_attribute("class") or "").split()
 
-    @cached_property
+    @property
     def label(self) -> str:
         """The label the admin shows next to the field, as data and never as an address.
 
         The suffix the form puts after every label, ``:`` in English and whatever the
         page's language makes of it, is not part of the label and is taken off.
         """
+        self._check()
         label = text_of(self._label)
         # The suffix is Django's own translated ":", so the catalog says what the page
         # ends each label with: "Name:" in English, "Name\xa0:" in French, a full-width
@@ -103,9 +108,10 @@ class FormField:
             suffix = " ".join(translation.gettext(":").split())
         return label[: -len(suffix)].rstrip() if label.endswith(suffix) else label
 
-    @cached_property
+    @property
     def editable(self) -> bool:
         """Whether the field has a control to fill, rather than a value to read."""
+        self._check()
         return self._element.locator("div.readonly").count() == 0
 
     @property
@@ -117,6 +123,7 @@ class FormField:
         user may only read is read as a changelist cell is: its text, or the boolean
         the admin drew as an icon.
         """
+        self._check()
         if not self.editable:
             return self._rendered.value
         # Each kind of control is asked for by name and by what it is. A widget that
@@ -136,6 +143,7 @@ class FormField:
         ``[]`` for an editable field: its value is what the control holds, and the
         icons the admin may draw next to a select are not part of it.
         """
+        self._check()
         return [] if self.editable else self._rendered.links
 
     def fill(self, value: Any) -> None:
@@ -146,6 +154,7 @@ class FormField:
         value's text, ``None`` emptying it. A field the user may only read has nothing
         to fill.
         """
+        self._check()
         if not self.editable:
             raise LookupError(
                 f"The field {self._name!r} is rendered only, so there is nothing to fill."
@@ -177,13 +186,14 @@ class FormField:
             f"{', '.join(repr(option) for option in offered) or 'none'}."
         )
 
-    @cached_property
+    @property
     def choices(self) -> list[FieldChoice]:
         """The options a select offers, in order, the blank one included.
 
         ``[]`` for any other field: a text input has no fixed set of options, and a
         field the user may only read offers none.
         """
+        self._check()
         return [
             FieldChoice(option.get_attribute("value") or "", text_of(option))
             for option in self._control("select").locator("option").all()
@@ -192,15 +202,15 @@ class FormField:
     def _control(self, kind: str) -> Locator:
         return self._element.locator(f'{kind}[name="{self._name}"]')
 
-    @cached_property
+    @property
     def _label(self) -> Locator:
         # Django labels most fields with `label` and, from 6.0, a widget that groups
         # several inputs with `legend`.
         return self._element.locator("label, legend").first
 
-    @cached_property
+    @property
     def _rendered(self) -> RenderedValue:
-        return RenderedValue(self._element.locator("div.readonly"))
+        return RenderedValue(self._element.locator("div.readonly"), self._check)
 
     def __repr__(self) -> str:
         return f"FormField({self._name!r})"

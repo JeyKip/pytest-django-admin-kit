@@ -1,0 +1,7 @@
+{% extends "admin/submit_line.html" %}
+{% comment %}
+A button of the project's own on a feed's edit page, the way a project adds one: the admin
+looks this template up for the feed's form before its own. `original` is the feed being
+edited, and is empty on the create page, where nothing handles the button.
+{% endcomment %}
+{% block submit-row %}{{ block.super }}{% if original %}<input type="submit" value="Refresh" name="_refresh">{% endif %}{% endblock %}

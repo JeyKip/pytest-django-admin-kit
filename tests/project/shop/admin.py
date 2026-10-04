@@ -2,6 +2,8 @@ from decimal import Decimal
 
 from django import forms
 from django.contrib import admin
+from django.http import HttpResponseRedirect
+from django.urls import reverse
 from django.utils.html import format_html
 
 from .models import Category, Feed, Product
@@ -92,7 +94,21 @@ class ProductAdmin(admin.ModelAdmin):
         return super().has_delete_permission(request, obj)
 
 
-admin.site.register(Feed)
+# An admin that copies a record: its edit page offers "Save as new" in place of "Save and
+# add another". Its edit page also has a button of the project's own, "Refresh", added by
+# the feed's `submit_line.html`.
+@admin.register(Feed)
+class FeedAdmin(admin.ModelAdmin):
+    save_as = True
+
+    # "Refresh" saves as usual, then shows the feed's history rather than the changelist a
+    # plain save leads to, so a test sees that this code answered it.
+    def response_change(self, request, obj):
+        if "_refresh" in request.POST:
+            return HttpResponseRedirect(
+                reverse("admin:shop_feed_history", args=[obj.pk], current_app=self.admin_site.name)
+            )
+        return super().response_change(request, obj)
 
 
 # A changelist whose rows link to nothing, so the suite has one without a change link.

@@ -15,17 +15,18 @@ from __future__ import annotations
 import re
 from collections.abc import Mapping
 from enum import Enum
-from functools import cached_property
 from typing import Any
 from urllib.parse import urlsplit
 
 from django.apps import apps
 from django.db.models import Model
-from playwright.sync_api import Locator, Page
+from django.urls import Resolver404, resolve
+from playwright.sync_api import Locator, Page, Response
 
 from . import matching
 from .fields import Fields, FormField
 from .normalize import integer
+from .results import SubmissionResult
 from .rows import Row
 from .urls import AdminUrls
 
@@ -45,14 +46,37 @@ class PagePopulationMode(str, Enum):
     ALL = "all"
 
 
+class FormAction(str, Enum):
+    """The actions the admin puts on every create and edit form, by the names they post.
+
+    A member is the name itself, so it compares and hashes as that string and mixes with
+    the name of an action a project adds: ``{FormAction.SAVE, "_approve"}``.
+    """
+
+    SAVE = "_save"
+    SAVE_AND_CONTINUE = "_continue"
+    SAVE_AND_ADD_ANOTHER = "_addanother"
+    SAVE_AS_NEW = "_saveasnew"
+
+
 class AdminPage:
     """One opened admin page."""
+
+    # The page type the admin declares in the `body` class, or None for pages the
+    # package does not model. The path and the status are usually enough to tell
+    # whether the browser still shows this page. The class is needed when the admin
+    # answers with a different page at the same URL and status 200: for example, a
+    # project's `response_add` or `response_change` that renders a confirmation page
+    # instead of redirecting, or, once changelist actions are supported, the
+    # confirmation page of "Delete selected".
+    _kind: str | None = None
 
     def __init__(self, page: Page, status_code: int, requested: str, urls: AdminUrls) -> None:
         self._page = page
         self._status_code = status_code
         self._requested = requested
         self._urls = urls
+        self._landed()
 
     @property
     def native(self) -> Page:
@@ -62,6 +86,7 @@ class AdminPage:
     @property
     def status_code(self) -> int:
         """The status of the response the browser ended up on, after any redirects."""
+        self._check()
         return self._status_code
 
     @property
@@ -71,22 +96,26 @@ class AdminPage:
         Query string and fragment are dropped, so a redirect to the login page compares
         equal to ``admin_ui.url.login()`` whatever ``next`` it carries.
         """
-        return urlsplit(self._page.url).path
+        self._check()
+        return self._destination
 
     @property
     def redirected(self) -> bool:
         """Ended up somewhere other than the page asked for."""
-        return self.destination != self._requested
+        self._check()
+        return self._redirected
 
     @property
     def works(self) -> bool:
         """Loaded where it was asked for."""
-        return self._status_code == 200 and not self.redirected
+        self._check()
+        return self._works
 
     @property
     def denied(self) -> bool:
         """Refused, whether by redirect to the login page or in place."""
-        return self._status_code == 403 or self.destination == self._urls.login()
+        self._check()
+        return self._status_code == 403 or self._destination == self._urls.login()
 
     @property
     def missing(self) -> bool:
@@ -98,11 +127,12 @@ class AdminPage:
         page that redirects to the index is the login page, when the user is already
         logged in; that is a plain redirect.
         """
+        self._check()
         if self._status_code == 404:
             return True
         return (
-            self.redirected
-            and self.destination == self._urls.index()
+            self._redirected
+            and self._destination == self._urls.index()
             and self._requested != self._urls.login()
         )
 
@@ -118,22 +148,77 @@ class AdminPage:
         # other h2 elements, for filters and the like, but none next to the h1.
         return _text(self._shown().locator("#content h1 + h2"))
 
+    @property
+    def _destination(self) -> str:
+        return urlsplit(self._page.url).path
+
+    @property
+    def _redirected(self) -> bool:
+        return self._destination != self._requested
+
+    @property
+    def _works(self) -> bool:
+        return self._status_code == 200 and not self._redirected
+
     def _shown(self) -> Page:
         """The page, once it is known to be the one that was asked for.
 
         A page that did not open shows nothing to read, and reading it anyway would
         let a test pass for a user who never saw it.
         """
-        if not self.works:
+        self._check()
+        if not self._works:
             raise LookupError(
                 "The page did not open, so there is nothing to read from it. "
-                f"Status {self.status_code}, at {self.destination}."
+                f"Status {self._status_code}, at {self._destination}."
             )
         return self._page
+
+    def _landed(self) -> None:
+        """Remember where the browser is now, as the page this object stands for.
+
+        A page that did not open, such as one refused with a redirect to the login page,
+        stands for wherever the browser landed, so it can still say how it was refused.
+        """
+        self._path = self._destination
+        self._of_kind = _is_kind(self._page, self._kind)
+
+    def _still_shown(self) -> bool:
+        """Whether the browser still shows this page: the same path and, if the page was
+        of its type, still that type."""
+        if self._destination != self._path:
+            return False
+        return not self._of_kind or _is_kind(self._page, self._kind)
+
+    def _check(self) -> None:
+        """Fail at once if the browser has moved on to another page.
+
+        Every reader runs this first, and so does every object the page hands out, so
+        nothing reads a page the browser no longer shows.
+        """
+        if not self._still_shown():
+            raise LookupError(
+                f"The browser no longer shows this page; it is at {self._destination}. "
+                "Read the page it shows now, such as a submission's result.page."
+            )
+
+    def _submitted(self, response: Response | None) -> SubmissionResult:
+        """The result of a submission from this page, given the response it ended on."""
+        # A navigation of the page always comes with a response.
+        assert response is not None
+        redirected = response.request.redirected_from is not None
+        if self._still_shown():
+            # The browser loaded a new document here, so report its status.
+            self._status_code = response.status
+            return SubmissionResult(self, redirected, self._urls)
+        landed = _page_at(self._page, response.status, self._urls)
+        return SubmissionResult(landed, redirected, self._urls)
 
 
 class IndexPage(AdminPage):
     """The admin index: which models it lists for the current user."""
+
+    _kind = "dashboard"
 
     @property
     def apps(self) -> list[str]:
@@ -161,9 +246,9 @@ class IndexPage(AdminPage):
                 f"{', '.join(repr(name) for name in self._app_list) or 'none'}."
             ) from None
 
-    @cached_property
+    @property
     def _app_list(self) -> dict[str, list[type]]:
-        """App name to the registered models under it, read from the page once."""
+        """App name to the registered models under it, as the page shows them."""
         # Django renders the app list twice, the second time in the navigation
         # sidebar, so reading stays inside the content area. Each app is a `module`
         # block with an `app-<label>` class; each model a row with `model-<name>`,
@@ -207,6 +292,8 @@ class ModelPage(AdminPage):
 class ChangelistPage(ModelPage):
     """A model's changelist: its columns, its rows, and how many records it reports."""
 
+    _kind = "change-list"
+
     @property
     def headers(self) -> list[str]:
         """The column labels the page shows, in order.
@@ -226,7 +313,7 @@ class ChangelistPage(ModelPage):
     def has_column(self, name: str) -> bool:
         return name in self.columns
 
-    @cached_property
+    @property
     def rows(self) -> list[Row]:
         """The rows the changelist shows, in order.
 
@@ -235,7 +322,7 @@ class ChangelistPage(ModelPage):
         columns = self.columns
         elements = self._shown().locator("#result_list tbody tr").all()
         return [
-            Row(element, index, columns, self._model, self._urls)
+            Row(element, index, columns, self._model, self._urls, self._check)
             for index, element in enumerate(elements)
         ]
 
@@ -260,7 +347,7 @@ class ChangelistPage(ModelPage):
         __tracebackhide__ = True
         return matching.match(patterns, self.rows)
 
-    @cached_property
+    @property
     def _header_cells(self) -> list[Locator]:
         # The checkbox Django adds for actions is a column only for users who have an
         # action to run, and it has no label, so it is not one here. The label is read
@@ -282,7 +369,7 @@ class ChangelistPage(ModelPage):
         """Reports no records at all."""
         return self.count == 0
 
-    @cached_property
+    @property
     def _count_line(self) -> re.Match[str]:
         # The count is the paginator's own text. Page links, "Show all" and, from
         # Django 6.0, a heading for screen readers are all inside child elements, so
@@ -304,7 +391,9 @@ class ChangelistPage(ModelPage):
 class FormPage(ModelPage):
     """An admin page with the model's form on it: which fields the form shows."""
 
-    @cached_property
+    _kind = "change-form"
+
+    @property
     def fields(self) -> Fields:
         """The fields the form shows, by name, in the order the admin presents them.
 
@@ -327,7 +416,7 @@ class FormPage(ModelPage):
                 if "hidden" in classes:
                     continue
                 for name in _field_names(box):
-                    fields[name] = FormField(box, name, language)
+                    fields[name] = FormField(box, name, language, self._check)
         return fields
 
     @property
@@ -344,6 +433,50 @@ class FormPage(ModelPage):
         return {
             name for name, field in self.fields.items() if field.editable and not field.required
         }
+
+    @property
+    def actions(self) -> set[str]:
+        """The names of the actions the form offers: what each of its buttons posts.
+
+        The names are the buttons' own, as the admin's view checks for them, so the admin's
+        are ``"_save"`` and the like, also found in ``FormAction``, and a project's are what
+        its template writes. A link submits nothing, so the delete link is not an action,
+        and neither is the "Close" link shown to a user who may not save.
+        """
+        # A button without a name cannot be told apart by the view, so it is no action.
+        buttons = self._submit_row.locator(
+            'input[type="submit"][name], button[type="submit"][name], button:not([type])[name]'
+        )
+        return {str(button.get_attribute("name")) for button in buttons.all()}
+
+    def has_action(self, name: str) -> bool:
+        return name in self.actions
+
+    @property
+    def can_save(self) -> bool:
+        return self.has_action(FormAction.SAVE)
+
+    @property
+    def can_save_and_continue(self) -> bool:
+        return self.has_action(FormAction.SAVE_AND_CONTINUE)
+
+    @property
+    def can_save_and_add_another(self) -> bool:
+        return self.has_action(FormAction.SAVE_AND_ADD_ANOTHER)
+
+    @property
+    def can_save_as_new(self) -> bool:
+        return self.has_action(FormAction.SAVE_AS_NEW)
+
+    @property
+    def can_delete(self) -> bool:
+        """Whether the form links to the page that deletes its object."""
+        return self._submit_row.locator("a.deletelink").count() > 0
+
+    @property
+    def _submit_row(self) -> Locator:
+        # An admin with `save_on_top` draws the same row above the form as well.
+        return self._shown().locator("#content-main form .submit-row").first
 
     def populate(
         self,
@@ -377,6 +510,37 @@ class FormPage(ModelPage):
             if value is not _NOTHING:
                 field.fill(value)
 
+    def submit(self, action: str) -> SubmissionResult:
+        """Click the button that posts ``action``, and wait for the next page.
+
+        ``action`` is the button's ``name``, or a ``FormAction``. If the page has no such
+        button, nothing is clicked and ``LookupError`` lists the actions it has.
+
+        The result's page is this same object if the browser stayed on this page, for
+        example when the admin rejects the form and shows it again.
+        """
+        # Use the plain name, so an error shows "_save" rather than the enum member.
+        name = action.value if isinstance(action, FormAction) else action
+        # Read the actions once, for both the check and the error message.
+        offered = self.actions
+        if name not in offered:
+            raise LookupError(
+                f"The page offers no action {name!r}. Actions: "
+                f"{', '.join(repr(each) for each in sorted(offered)) or 'none'}."
+            )
+        with self._page.expect_navigation() as navigation:
+            self._submit_row.locator(f'[name="{name}"]').first.click()
+        return self._submitted(navigation.value)
+
+    def save(self) -> SubmissionResult:
+        return self.submit(FormAction.SAVE)
+
+    def save_and_continue(self) -> SubmissionResult:
+        return self.submit(FormAction.SAVE_AND_CONTINUE)
+
+    def save_and_add_another(self) -> SubmissionResult:
+        return self.submit(FormAction.SAVE_AND_ADD_ANOTHER)
+
 
 class CreatePage(FormPage):
     """The page that adds a new instance of a model."""
@@ -385,9 +549,112 @@ class CreatePage(FormPage):
 class EditPage(FormPage):
     """The change page of one instance, read only for a user who may only view it."""
 
+    # Both of these need an object that already exists, so the admin offers them on an
+    # edit page and never on a create page.
+    def save_as_new(self) -> SubmissionResult:
+        return self.submit(FormAction.SAVE_AS_NEW)
+
+    def delete(self) -> DeletePage:
+        """Follow the delete link to the page that asks to confirm the deletion.
+
+        Deleting takes two steps in the admin, and this is the first: nothing is deleted
+        until ``confirm_deleting`` on the returned page. The link submits nothing, so the
+        confirmation page comes back on its own, as opening it directly would give it. If
+        the page has no delete link, nothing is clicked and ``LookupError`` says so.
+        """
+        link = self._submit_row.locator("a.deletelink")
+        if not link.count():
+            raise LookupError("The page offers no delete link.")
+        # The link may carry the changelist's filters in its query; the page is its path.
+        path = urlsplit(link.get_attribute("href") or "").path
+        with self._page.expect_navigation() as navigation:
+            link.click()
+        response = navigation.value
+        # A navigation of the page always comes with a response.
+        assert response is not None
+        return DeletePage(self._page, response.status, path, self._urls, self._model)
+
 
 class DeletePage(ModelPage):
     """The page that asks whether to delete one instance."""
+
+    _kind = "delete-confirmation"
+
+    @property
+    def can_confirm_deleting(self) -> bool:
+        """Whether the page lets the user confirm the deletion.
+
+        The admin offers no confirmation when deleting the object would also delete
+        objects that are protected, or that the user may not delete; the page then lists
+        them instead.
+        """
+        return self._confirm_button.count() > 0
+
+    def confirm_deleting(self) -> SubmissionResult:
+        """Click "Yes, I'm sure", and wait for the next page.
+
+        If the page offers no confirmation, nothing is clicked and ``LookupError`` says
+        so.
+        """
+        button = self._confirm_button
+        if not button.count():
+            raise LookupError("The page offers no way to confirm the deletion.")
+        with self._page.expect_navigation() as navigation:
+            button.click()
+        return self._submitted(navigation.value)
+
+    @property
+    def _confirm_button(self) -> Locator:
+        return self._shown().locator('#content form input[type="submit"]')
+
+
+# The page class for each admin view of a model, by the end of the view's URL name.
+_MODEL_PAGES: dict[str, type[ModelPage]] = {
+    "changelist": ChangelistPage,
+    "add": CreatePage,
+    "change": EditPage,
+    "delete": DeletePage,
+}
+
+
+def _page_at(page: Page, status_code: int, urls: AdminUrls) -> AdminPage:
+    """A page object for the page the browser is on.
+
+    The class comes from the URL, and is used only if the page's ``body`` class confirms
+    it; otherwise the result is a plain ``AdminPage``. The page counts as requested at its
+    current path, so it reads like a page the test opened directly.
+    """
+    path = urlsplit(page.url).path
+    try:
+        match = resolve(path)
+    except Resolver404:
+        return AdminPage(page, status_code, path, urls)
+    # A view added to the admin without a name has no URL name.
+    url_name = match.url_name or ""
+    if match.namespace != urls.site.name:
+        return AdminPage(page, status_code, path, urls)
+    # A view can render a different page at its own URL, so the URL alone is not trusted.
+    if url_name == "index" and _is_kind(page, IndexPage._kind):
+        return IndexPage(page, status_code, path, urls)
+    # Find the model by the full prefix of its URL names, such as "shop_product_",
+    # because an app label may itself contain underscores.
+    for model in apps.get_models():
+        if not urls.site.is_registered(model):
+            continue
+        prefix = f"{model._meta.app_label}_{model._meta.model_name}_"
+        if url_name.startswith(prefix):
+            page_class = _MODEL_PAGES.get(url_name[len(prefix) :])
+            if page_class is not None and _is_kind(page, page_class._kind):
+                return page_class(page, status_code, path, urls, model)
+    return AdminPage(page, status_code, path, urls)
+
+
+def _is_kind(page: Page, kind: str | None) -> bool:
+    """Whether ``page`` has the page type ``kind`` in its ``body`` class. ``None``
+    matches any page."""
+    if kind is None:
+        return True
+    return kind in (page.locator("body").get_attribute("class") or "").split()
 
 
 def _within(mode: PagePopulationMode, field: FormField) -> bool:

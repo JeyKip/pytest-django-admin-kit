@@ -14,7 +14,7 @@ It should allow developers to verify:
 * editable and rendered-only field values (done);
 * requiredness of create and edit form fields (done);
 * automatic population of form fields; (done)
-* submit actions and where the admin navigates after an operation;
+* submit actions and where the admin navigates after an operation; (done)
 * validation errors displayed by Django Admin;
 * what a form renders back after an invalid submission;
 * messages displayed after an operation;
@@ -257,6 +257,56 @@ See section 28.
 
 ---
 
+## 3.9 Live reads (done)
+
+The package keeps nothing it has read. Every value is read from the page, or from the database,
+when a test asks for it, so it is what the user would see at that moment. That includes what
+the admin's own scripts and a project's widgets change in place, such as an option added
+through the related-object popup, and a normalization rule replaced for one test (section
+28.3), which applies to everything read after it.
+
+An object taken from a page is an address, read each time it is used, the way the browser
+layer's own locators are:
+
+* a field is the field of that name on the page (section 3.5);
+* a row is the row at that position, so once the changelist is filtered or sorted it reads
+  whichever record is there now;
+* a cell is the cell of that column in its row.
+
+`page.rows` and `page.fields` are a list and a dictionary of such addresses. Which rows and
+fields they hold is fixed when they are read; reading them again picks up any the page has
+gained or lost since.
+
+Where the browser layer already has an answer, the package gives the same one and adds nothing
+of its own:
+
+* reading an address that finds nothing, such as a row held from before a filter left fewer
+  rows, waits for the configured timeout and then fails, as a locator does;
+* the package waits for the navigation its own actions cause; a test that navigates through a
+  native handle waits for that navigation itself before it reads;
+* the objects the package hands out compare by identity, as locators do.
+
+`row.object` asks the database each time, so it is the object the row links to now, not the
+one it linked to when the row was first read.
+
+The one thing the browser layer cannot know is which admin page an object stands for, and the
+package's own actions move the browser between pages. So a page object stands for its path and
+for the kind of page the admin says it is: a changelist, a form, a delete confirmation, the
+index. It stays usable for as long as the browser shows that page, whatever happened in
+between. Once the browser shows another page, reading the page object, or anything taken from
+it, fails at once and says where the browser is now, rather than waiting for the timeout
+against a page it was never part of. A native handle is exempt: it is the browser layer's own
+object and behaves as that layer decides.
+
+The page an object stands for is the one the package last left the browser on for it. A page
+that did not open where it was asked, such as one refused with a redirect to the login page,
+stands for the page it landed on, so it can still say how it was refused.
+
+`status_code`, and whether the page `works`, describe the last navigation the package itself
+made on the page. One made through a native handle is not seen.
+
+---
+
 # 4. Authentication (done)
 
 The package must support using any Django user object.
@@ -359,7 +409,7 @@ assert admin_ui.delete(published).denied   # done
 
 ---
 
-## 5.3 Operations
+## 5.3 Operations (done)
 
 An admin may withhold an operation independently of the permission system, or gate an
 operation of its own behind a permission the model never declared. Either way, what a user may
@@ -368,8 +418,8 @@ do shows up as what the page offers:
 ```python
 page = admin_ui.edit(product)
 
-assert not page.has_action("delete")
-assert page.has_action("publish")
+assert not page.can_delete
+assert page.has_action("_publish")
 ```
 
 See section 16.1.
@@ -1211,6 +1261,10 @@ Only fields represented on the current admin form should be considered. A field 
 says nothing about is left as the page rendered it, and one the user may only read is passed
 over. (done)
 
+The fields filled are the ones the form shows when population starts. A field a script adds
+while the others are being filled, as a project's widget may, is not filled; populating again
+fills it. (done)
+
 Unrelated dictionary keys are ignored. A key that names no field of the form populates
 nothing, and the test that relied on it fails on what it asserts next. (done)
 
@@ -1315,7 +1369,7 @@ are the same call; a string that is no mode fails on the enum's own `ValueError`
 
 ---
 
-# 16. Form Submission
+# 16. Form Submission (done)
 
 Create and edit pages submit whatever the form holds when the submission is made. Filling the
 form (sections 14 and 15) and submitting it are separate steps, so a test fills a form the way
@@ -1345,28 +1399,44 @@ assert result.success
 
 ---
 
-## 16.1 Submit actions
+## 16.1 Submit actions (done)
 
 A form offers a set of actions, not a single submit.
 
-The package exposes the standard admin actions and any further actions the admin adds:
+An action is a button that submits the form, and it is named exactly as the button is: by
+the `name` it posts, which is also what the admin's view checks for. Nothing is translated, so
+a test uses the name written in the template and in the view, underscore included:
 
 ```python
 page = admin_ui.edit(product)
 
 assert page.actions == {
-    "save",
-    "save_and_continue",
-    "save_and_add_another",
-    "delete",
+    "_save",
+    "_continue",
+    "_addanother",
 }
 ```
+
+The admin's own actions are also available as constants, so a test need not type their names:
+
+```python
+from django_admin_kit.pages import FormAction
+
+assert page.actions == {
+    FormAction.SAVE,
+    FormAction.SAVE_AND_CONTINUE,
+    FormAction.SAVE_AND_ADD_ANOTHER,
+}
+```
+
+Each constant is the name it stands for, so constants and names mix freely, in a set as
+anywhere else.
 
 Presence of any action:
 
 ```python
-assert page.has_action("save_and_continue")
-assert not page.has_action("approve")
+assert page.has_action(FormAction.SAVE_AND_CONTINUE)
+assert not page.has_action("_approve")
 ```
 
 Each standard action has its own check, since these are the ones a test asks about most:
@@ -1375,7 +1445,21 @@ Each standard action has its own check, since these are the ones a test asks abo
 assert page.can_save
 assert page.can_save_and_continue
 assert page.can_save_and_add_another
+assert not page.can_save_as_new
 assert not page.can_delete
+```
+
+"Save as new" is offered only by an admin that turns on `save_as`, on an edit page, where it
+takes the place of "Save and add another":
+
+```python
+page = admin_ui.edit(feed)
+
+assert page.actions == {
+    FormAction.SAVE,
+    FormAction.SAVE_AND_CONTINUE,
+    FormAction.SAVE_AS_NEW,
+}
 ```
 
 Each standard action has its own method:
@@ -1384,12 +1468,32 @@ Each standard action has its own method:
 result = page.save()
 result = page.save_and_continue()
 result = page.save_and_add_another()
+result = page.save_as_new()
 ```
 
-Deleting from the edit page is two steps in the admin, and so it is here: `delete` leads to the
-confirmation page of section 23.4, and `confirm_deleting` on that page performs the deletion:
+`submit` is the lower-level call these methods are built on. It invokes any action by its name,
+so an action the admin defines itself is addressed the same way, and it always takes the
+action, with no default:
 
 ```python
+assert page.has_action("_approve")
+
+result = page.submit("_approve")
+```
+
+Invoking an action the page does not offer, through its own method or through `submit`, raises
+an error that names the actions the page does offer. Nothing is submitted, so the page stays
+as usable as it was.
+
+Deleting is not an action. The admin offers it as a link to the confirmation page of section
+23.4, which submits nothing, so it is not in `actions`, as the "Close" link shown to a user who
+may not save is not either. It has its own check and its own method, and deletion takes the
+admin's two steps: `delete` follows the link to the confirmation page, and `confirm_deleting`
+on that page performs the deletion:
+
+```python
+assert page.can_delete
+
 confirmation = page.delete()
 
 assert confirmation.can_confirm_deleting
@@ -1397,22 +1501,14 @@ assert confirmation.can_confirm_deleting
 result = confirmation.confirm_deleting()
 ```
 
-`submit` is the lower-level call the methods above are built on. It invokes any action by name,
-so an action the admin defines itself is addressed the same way, and it always takes the
-action, with no default:
+`delete` returns the confirmation page itself, as opening it would, since following a link has
+no outcome to report; `confirm_deleting` returns a result like any submission.
 
-```python
-assert page.has_action("approve")
-
-result = page.submit("approve")
-```
-
-Invoking an action the page does not offer, through its own method or through `submit`, raises
-an error that names the actions the page does offer. Nothing is submitted.
+`delete` on a page that offers no delete link raises an error, and leaves the page as it was.
 
 ---
 
-## 16.2 Post-submission navigation
+## 16.2 Post-submission navigation (done)
 
 The result reports where the admin sent the user.
 
@@ -1445,15 +1541,16 @@ assert result.redirected_to_create(Product)
 assert result.redirected_to_edit(product)
 ```
 
-The destination remains inspectable for anything the shorthands do not cover:
+The page the admin sent the user to is the result's page, and anything the shorthands do not
+cover is read from it (section 16.4):
 
 ```python
-assert result.destination
+assert result.page.destination == admin_ui.url.list(Product)
 ```
 
 ---
 
-## 16.3 Forms with no submit actions
+## 16.3 Forms with no submit actions (done)
 
 A form on which the admin offers no actions at all is a supported, assertable state:
 
@@ -1463,6 +1560,47 @@ page = admin_ui.edit(report)
 assert page.works
 assert page.actions == set()
 ```
+
+---
+
+## 16.4 The page after a submission (done)
+
+A submission moves the browser on, and every result carries the page the browser shows
+afterwards, whatever the admin made of the submission: the page it redirected to, or the same
+form rendered again when it rejected it. That page is the only way to it: the result reports on
+the submission and never repeats what the page says.
+
+When the browser stays on the page that was submitted, the result's page is that same page
+object. That is a form the admin rejected and rendered again, "Save and continue" on an edit
+page, and "Save and add another" on a create page. Since every read is live (section 3.9), the
+page the test already holds reads the page as it is now:
+
+```python
+result = page.save()
+
+assert not result.success
+assert result.page is page
+assert page.fields["price"].value == "19.99"
+```
+
+When the browser moves to another page, the result's page is a new page object of the type
+its URL names, and the page that was submitted fails at once when it is read, or anything taken
+from it is, saying where the browser is now:
+
+```python
+result = page.save()
+
+assert result.success
+assert result.page.count == 1
+
+page.fields["name"].value    # raises: the browser has left this page
+```
+
+Whether a page object stays usable depends on where the browser is, never on whether the admin
+accepted the submission: "Save and continue" succeeds and keeps the page, "Save" succeeds and
+leaves it.
+
+An action the page does not offer submits nothing, so it leaves the page as it was.
 
 ---
 
@@ -1482,7 +1620,8 @@ result = page.save()
 assert not result.success
 ```
 
-The result must expose validation errors independently of HTML markup.
+The rejected form, the result's page, must expose its validation errors independently of HTML
+markup.
 
 ---
 
@@ -1534,14 +1673,16 @@ assert not result.success
 assert not result.changed
 ```
 
-And the form comes back carrying what was submitted:
+And the form comes back carrying what was submitted, on the result's page: (done)
 
 ```python
-assert result.fields["price"].value == "19.99"
+assert result.page.fields["price"].value == "19.99"    # done
 ```
 
-The re-rendered form exposes the full field API of sections 10 to 13, so requiredness, choices,
-and rendered-only state remain inspectable after a failed submission.
+The re-rendered form is the result's page (section 16.4), the same page object that was
+submitted, read as it is now (section 3.9). It exposes the full field API of sections 10 to 13,
+so requiredness, choices, and rendered-only state remain inspectable after a failed submission.
+(done)
 
 ---
 
@@ -1553,12 +1694,15 @@ Validation errors are divided into three levels:
 * form-level errors that belong to no single field;
 * field-level errors.
 
-Example:
+They are read from the form that shows them, the result's page after a rejected submission
+(section 16.4). A create or edit page that has not been submitted shows none:
 
 ```python
+assert not page.errors
+
 result = page.save()
 
-assert result.errors
+assert result.page.errors
 ```
 
 ---
@@ -1568,7 +1712,7 @@ assert result.errors
 The admin displays a notice when a submission fails.
 
 ```python
-assert result.errors.banner
+assert result.page.errors.banner
 ```
 
 Its exact wording varies with the number of errors and between Django versions. A test that
@@ -1577,7 +1721,7 @@ only cares that the submission was rejected should assert truthiness.
 Where a test does assert the text, the normalized message is available:
 
 ```python
-assert result.errors.banner == "Please correct the error below."
+assert result.page.errors.banner == "Please correct the error below."
 ```
 
 ---
@@ -1588,7 +1732,7 @@ Validation messages that belong to the form rather than to any single field are 
 separately from the summary notice:
 
 ```python
-assert result.errors.non_field == [
+assert result.page.errors.non_field == [
     "At least one plan must be default.",
 ]
 ```
@@ -1604,21 +1748,21 @@ Errors for an individual field should be accessible by field name.
 Example:
 
 ```python
-assert "This field is required." in result.errors["name"]
+assert "This field is required." in result.page.errors["name"]
 ```
 
 Multiple errors must be supported:
 
 ```python
-assert result.errors["email"] == [
+assert result.page.errors["email"] == [
     "Enter a valid email address.",
 ]
 ```
 
-Convenience access may also be provided:
+The same errors are also read from the field they belong to:
 
 ```python
-assert result.fields["email"].errors == [
+assert result.page.fields["email"].errors == [
     "Enter a valid email address.",
 ]
 ```
@@ -1632,7 +1776,7 @@ Tests should be able to perform both exact and partial validation checks.
 Exact:
 
 ```python
-assert result.errors["name"] == [
+assert result.page.errors["name"] == [
     "This field is required.",
 ]
 ```
@@ -1640,13 +1784,13 @@ assert result.errors["name"] == [
 Contains:
 
 ```python
-assert "This field is required." in result.errors["name"]
+assert "This field is required." in result.page.errors["name"]
 ```
 
 Complete error-set testing:
 
 ```python
-assert result.errors.fields == {
+assert result.page.errors.fields == {
     "name": ["This field is required."],
     "email": ["Enter a valid email address."],
 }
@@ -1658,7 +1802,9 @@ assert result.errors.fields == {
 
 The admin reports the outcome of an operation to the user.
 
-Messages are exposed with their level and their normalized text, independently of markup:
+The admin shows them on whichever page follows the operation, so they are read from any admin
+page, the result's page after a submission (section 16.4). Messages are exposed with their level
+and their normalized text, independently of markup:
 
 ```python
 page = admin_ui.create(Product)
@@ -1667,20 +1813,36 @@ page.populate(data)
 
 result = page.save()
 
-assert result.messages == [
+assert result.page.messages == [
     ("success", "The product “Widget” was added successfully."),
 ]
 ```
 
-Level-based access should also be natural:
+A level is the tag the project gives it, not a fixed name. Django's defaults are `debug`,
+`info`, `success`, `warning` and `error`, and a project renames them or adds levels of its own
+through `MESSAGE_TAGS`; the page shows only the tag, so a project that tags errors `danger`
+reads them as `danger`. The levels a page knows are Django's defaults merged with the
+project's `MESSAGE_TAGS`.
+
+The messages of one level are read by its name, as their texts in order:
 
 ```python
-assert result.messages.success
-assert not result.messages.error
+assert result.page.messages["success"] == [
+    "The product “Widget” was added successfully.",
+]
+assert not result.page.messages["error"]
 ```
 
-Messages are distinct from validation errors. A successful operation produces messages and no
-errors; a rejected operation produces errors and may produce no messages at all.
+A level the project does not have raises an error that names the levels it does have, rather
+than reading as no messages. Otherwise a test asking for `error` in a project that renamed it
+would find none and pass whatever the page showed.
+
+A message's level is the one known level tag among the classes the admin draws for it. Any
+extra tags the project added are not part of it, and a message whose level has no tag reads
+with the level `""`.
+
+Messages are distinct from validation errors. A successful operation leads to a page with
+messages and no errors; a rejected one to a form with errors and possibly no messages at all.
 
 ---
 
@@ -1727,7 +1889,7 @@ The object exposed by an edit result reflects the stored state after the operati
 
 ---
 
-## 23.3 Delete
+## 23.3 Delete (done)
 
 ```python
 result = admin_ui.delete(product).confirm_deleting()
@@ -1765,21 +1927,21 @@ assert len(page.objects) == 3
 
 An admin may decline to offer or to perform a deletion.
 
-The absence of the action is assertable:
+The absence of the action is assertable: (done)
 
 ```python
 page = admin_ui.edit(product)
 
-assert not page.can_delete
+assert not page.can_delete    # done
 ```
 
 So is a confirmation page that offers no way to confirm, as when related objects protect the
-one being deleted:
+one being deleted: (done)
 
 ```python
 page = admin_ui.delete(product)
 
-assert not page.can_confirm_deleting
+assert not page.can_confirm_deleting    # done
 ```
 
 So is a refused operation:
@@ -1842,7 +2004,7 @@ AdminSession
 ├── ChangelistPage
 ├── CreatePage
 ├── EditPage
-├── DeletePage
+├── DeletePage           (the confirmation the admin asks for before deleting)
 │
 ├── FormField
 │   └── FieldChoice
@@ -1850,9 +2012,11 @@ AdminSession
 ├── Row
 ├── Cell
 │
+├── ValidationErrors     (on a create or edit page)
+├── Messages             (on any page)
+│
 └── SubmissionResult
-    ├── ValidationErrors
-    └── Messages
+    └── page             (the page the submission led to, one of the above)
 ```
 
 The exact Python class names are implementation details, but the public concepts should remain
@@ -1861,6 +2025,9 @@ recognizable and stable.
 Every type above that stands for something on the page exposes a native handle, as described
 in section 3.6. `AdminUrls` and `FieldChoice` are values with no element behind them, so they
 have none. (done)
+
+A `SubmissionResult` reports on a submission rather than standing for anything on the page, so
+it has none either; the page it carries has one. (done)
 
 ---
 
@@ -2030,7 +2197,7 @@ def test_create_product(admin_ui, admin_user):
 
     assert result.success
     assert result.redirected_to_list(Product)
-    assert result.messages.success
+    assert result.page.messages["success"]
 ```
 
 ---
@@ -2050,13 +2217,13 @@ def test_product_validation(admin_ui, admin_user):
     assert not result.success
     assert not result.created
 
-    assert result.errors.banner
+    assert result.page.errors.banner
 
-    assert result.errors["name"] == [
+    assert result.page.errors["name"] == [
         "This field is required.",
     ]
 
-    assert result.errors["price"] == [
+    assert result.page.errors["price"] == [
         "This field is required.",
     ]
 ```
@@ -2078,7 +2245,7 @@ def test_product_form_is_rendered_back(admin_ui, admin_user):
     assert not result.success
     assert not result.created
 
-    assert result.fields["price"].value == "12.00"
+    assert result.page.fields["price"].value == "12.00"
 ```
 
 ---
@@ -2451,10 +2618,10 @@ supported Django versions:
 17. Populate all supported fields. (done)
 18. Populate from a dictionary. (done)
 19. Populate from an object. (done)
-20. Submit valid create forms.
-21. Submit valid edit forms.
-22. Invoke a submit action other than the ordinary save, including one the admin defines.
-23. Determine where the admin navigated after a successful operation.
+20. Submit valid create forms. (done)
+21. Submit valid edit forms. (done)
+22. Invoke a submit action other than the ordinary save, including one the admin defines. (done)
+23. Determine where the admin navigated after a successful operation. (done)
 24. Submit invalid create forms.
 25. Submit invalid edit forms.
 26. Verify that an invalid submission wrote nothing and that the form rendered the submitted
