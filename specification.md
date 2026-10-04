@@ -14,7 +14,7 @@ It should allow developers to verify:
 * editable and rendered-only field values (done);
 * requiredness of create and edit form fields (done);
 * automatic population of form fields; (done)
-* submit actions and where the admin navigates after an operation;
+* submit actions and where the admin navigates after an operation; (done)
 * validation errors displayed by Django Admin;
 * what a form renders back after an invalid submission;
 * messages displayed after an operation;
@@ -257,7 +257,7 @@ See section 28.
 
 ---
 
-## 3.9 Live reads
+## 3.9 Live reads (done)
 
 The package keeps nothing it has read. Every value is read from the page, or from the database,
 when a test asks for it, so it is what the user would see at that moment. That includes what
@@ -297,6 +297,10 @@ between. Once the browser shows another page, reading the page object, or anythi
 it, fails at once and says where the browser is now, rather than waiting for the timeout
 against a page it was never part of. A native handle is exempt: it is the browser layer's own
 object and behaves as that layer decides.
+
+The page an object stands for is the one the package last left the browser on for it. A page
+that did not open where it was asked, such as one refused with a redirect to the login page,
+stands for the page it landed on, so it can still say how it was refused.
 
 `status_code`, and whether the page `works`, describe the last navigation the package itself
 made on the page. One made through a native handle is not seen.
@@ -405,7 +409,7 @@ assert admin_ui.delete(published).denied   # done
 
 ---
 
-## 5.3 Operations
+## 5.3 Operations (done)
 
 An admin may withhold an operation independently of the permission system, or gate an
 operation of its own behind a permission the model never declared. Either way, what a user may
@@ -1259,7 +1263,7 @@ over. (done)
 
 The fields filled are the ones the form shows when population starts. A field a script adds
 while the others are being filled, as a project's widget may, is not filled; populating again
-fills it.
+fills it. (done)
 
 Unrelated dictionary keys are ignored. A key that names no field of the form populates
 nothing, and the test that relied on it fails on what it asserts next. (done)
@@ -1365,7 +1369,7 @@ are the same call; a string that is no mode fails on the enum's own `ValueError`
 
 ---
 
-# 16. Form Submission
+# 16. Form Submission (done)
 
 Create and edit pages submit whatever the form holds when the submission is made. Filling the
 form (sections 14 and 15) and submitting it are separate steps, so a test fills a form the way
@@ -1395,7 +1399,7 @@ assert result.success
 
 ---
 
-## 16.1 Submit actions
+## 16.1 Submit actions (done)
 
 A form offers a set of actions, not a single submit.
 
@@ -1504,7 +1508,7 @@ no outcome to report; `confirm_deleting` returns a result like any submission.
 
 ---
 
-## 16.2 Post-submission navigation
+## 16.2 Post-submission navigation (done)
 
 The result reports where the admin sent the user.
 
@@ -1546,7 +1550,7 @@ assert result.page.destination == admin_ui.url.list(Product)
 
 ---
 
-## 16.3 Forms with no submit actions
+## 16.3 Forms with no submit actions (done)
 
 A form on which the admin offers no actions at all is a supported, assertable state:
 
@@ -1559,7 +1563,7 @@ assert page.actions == set()
 
 ---
 
-## 16.4 The page after a submission
+## 16.4 The page after a submission (done)
 
 A submission moves the browser on, and every result carries the page the browser shows
 afterwards, whatever the admin made of the submission: the page it redirected to, or the same
@@ -1669,15 +1673,16 @@ assert not result.success
 assert not result.changed
 ```
 
-And the form comes back carrying what was submitted, on the result's page:
+And the form comes back carrying what was submitted, on the result's page: (done)
 
 ```python
-assert result.page.fields["price"].value == "19.99"
+assert result.page.fields["price"].value == "19.99"    # done
 ```
 
 The re-rendered form is the result's page (section 16.4), the same page object that was
 submitted, read as it is now (section 3.9). It exposes the full field API of sections 10 to 13,
 so requiredness, choices, and rendered-only state remain inspectable after a failed submission.
+(done)
 
 ---
 
@@ -1884,7 +1889,7 @@ The object exposed by an edit result reflects the stored state after the operati
 
 ---
 
-## 23.3 Delete
+## 23.3 Delete (done)
 
 ```python
 result = admin_ui.delete(product).confirm_deleting()
@@ -1922,21 +1927,21 @@ assert len(page.objects) == 3
 
 An admin may decline to offer or to perform a deletion.
 
-The absence of the action is assertable:
+The absence of the action is assertable: (done)
 
 ```python
 page = admin_ui.edit(product)
 
-assert not page.can_delete
+assert not page.can_delete    # done
 ```
 
 So is a confirmation page that offers no way to confirm, as when related objects protect the
-one being deleted:
+one being deleted: (done)
 
 ```python
 page = admin_ui.delete(product)
 
-assert not page.can_confirm_deleting
+assert not page.can_confirm_deleting    # done
 ```
 
 So is a refused operation:
@@ -2022,7 +2027,7 @@ in section 3.6. `AdminUrls` and `FieldChoice` are values with no element behind 
 have none. (done)
 
 A `SubmissionResult` reports on a submission rather than standing for anything on the page, so
-it has none either; the page it carries has one.
+it has none either; the page it carries has one. (done)
 
 ---
 
@@ -2613,10 +2618,10 @@ supported Django versions:
 17. Populate all supported fields. (done)
 18. Populate from a dictionary. (done)
 19. Populate from an object. (done)
-20. Submit valid create forms.
-21. Submit valid edit forms.
-22. Invoke a submit action other than the ordinary save, including one the admin defines.
-23. Determine where the admin navigated after a successful operation.
+20. Submit valid create forms. (done)
+21. Submit valid edit forms. (done)
+22. Invoke a submit action other than the ordinary save, including one the admin defines. (done)
+23. Determine where the admin navigated after a successful operation. (done)
 24. Submit invalid create forms.
 25. Submit invalid edit forms.
 26. Verify that an invalid submission wrote nothing and that the form rendered the submitted
