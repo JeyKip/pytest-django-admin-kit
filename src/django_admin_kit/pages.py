@@ -202,6 +202,18 @@ class AdminPage:
                 "Read the page it shows now, such as a submission's result.page."
             )
 
+    def _submitted(self, response: Response | None) -> SubmissionResult:
+        """The result of a submission from this page, given the response it ended on."""
+        # A navigation of the page always comes with a response.
+        assert response is not None
+        redirected = response.request.redirected_from is not None
+        if self._still_shown():
+            # The browser loaded a new document here, so report its status.
+            self._status_code = response.status
+            return SubmissionResult(self, redirected, self._urls)
+        landed = _page_at(self._page, response.status, self._urls)
+        return SubmissionResult(landed, redirected, self._urls)
+
 
 class IndexPage(AdminPage):
     """The admin index: which models it lists for the current user."""
@@ -529,17 +541,6 @@ class FormPage(ModelPage):
     def save_and_add_another(self) -> SubmissionResult:
         return self.submit(FormAction.SAVE_AND_ADD_ANOTHER)
 
-    def _submitted(self, response: Response | None) -> SubmissionResult:
-        # A navigation of the page always comes with a response.
-        assert response is not None
-        redirected = response.request.redirected_from is not None
-        if self._still_shown():
-            # The browser loaded a new document here, so report its status.
-            self._status_code = response.status
-            return SubmissionResult(self, redirected, self._urls)
-        landed = _page_at(self._page, response.status, self._urls)
-        return SubmissionResult(landed, redirected, self._urls)
-
 
 class CreatePage(FormPage):
     """The page that adds a new instance of a model."""
@@ -578,6 +579,33 @@ class DeletePage(ModelPage):
     """The page that asks whether to delete one instance."""
 
     _kind = "delete-confirmation"
+
+    @property
+    def can_confirm_deleting(self) -> bool:
+        """Whether the page lets the user confirm the deletion.
+
+        The admin offers no confirmation when deleting the object would also delete
+        objects that are protected, or that the user may not delete; the page then lists
+        them instead.
+        """
+        return self._confirm_button.count() > 0
+
+    def confirm_deleting(self) -> SubmissionResult:
+        """Click "Yes, I'm sure", and wait for the next page.
+
+        If the page offers no confirmation, nothing is clicked and ``LookupError`` says
+        so.
+        """
+        button = self._confirm_button
+        if not button.count():
+            raise LookupError("The page offers no way to confirm the deletion.")
+        with self._page.expect_navigation() as navigation:
+            button.click()
+        return self._submitted(navigation.value)
+
+    @property
+    def _confirm_button(self) -> Locator:
+        return self._shown().locator('#content form input[type="submit"]')
 
 
 # The page class for each admin view of a model, by the end of the view's URL name.
