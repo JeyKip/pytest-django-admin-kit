@@ -539,8 +539,9 @@ class FormPage(ModelPage):
         if self._still_shown():
             # The browser loaded a new document here, so report its status.
             self._status_code = response.status
-            return SubmissionResult(self, redirected)
-        return SubmissionResult(_page_at(self._page, response.status, self._urls), redirected)
+            return SubmissionResult(self, redirected, self._urls)
+        landed = _page_at(self._page, response.status, self._urls)
+        return SubmissionResult(landed, redirected, self._urls)
 
 
 class CreatePage(FormPage):

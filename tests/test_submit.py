@@ -333,3 +333,30 @@ def test_what_reads_nothing_from_a_page_the_browser_left_still_answers(admin_ui,
     assert urlsplit(filled.native.url).path == admin_ui.url.list(Product)
     assert field.name == "name"
     assert repr(field) == "FormField('name')"
+
+
+def test_a_save_that_leads_to_the_changelist_is_redirected_to_the_list(saved):
+    assert saved.redirected_to_list(Product)
+
+
+def test_a_save_that_leads_to_the_index_is_redirected_to_the_index(admin_ui, adder):
+    """The adder may not view the changelist, so the admin sends them to the index."""
+    admin_ui.login(adder)
+    page = admin_ui.create(Product)
+    page.populate(WIDGET)
+
+    result = page.save()
+
+    assert result.redirected_to_index()
+
+
+def test_adding_another_is_redirected_to_the_create_page(filled):
+    assert filled.save_and_add_another().redirected_to_create(Product)
+
+
+def test_continuing_is_redirected_to_the_edit_page(released, renaming):
+    assert renaming.save_and_continue().redirected_to_edit(released)
+
+
+def test_a_rejected_save_is_not_redirected_to_the_create_page_it_is_on(rejected):
+    assert not rejected.redirected_to_create(Product)
