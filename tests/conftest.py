@@ -28,6 +28,15 @@ def urls():
 
 
 @pytest.fixture
+def left_for():
+    """The message a page gives when read after the browser moved on to ``path``."""
+    return lambda path: (
+        f"The browser no longer shows this page; it is at {path}. "
+        "Read the page it shows now, such as a submission's result.page."
+    )
+
+
+@pytest.fixture
 def superuser(db):
     return User.objects.create_superuser(username="alice", password="pw")
 

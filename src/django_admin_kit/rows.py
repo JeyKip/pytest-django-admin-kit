@@ -7,7 +7,7 @@ shown over it, and a row by its position. A cell is a rendered value, as the
 
 from __future__ import annotations
 
-from typing import Any, Iterator
+from typing import Any, Callable, Iterator
 
 from django.contrib.admin.utils import unquote
 from django.db.models import Model
@@ -21,8 +21,8 @@ from .urls import AdminUrls
 class Cell(RenderedValue):
     """One cell of a changelist row."""
 
-    def __init__(self, element: Locator, column: str) -> None:
-        super().__init__(element)
+    def __init__(self, element: Locator, column: str, check: Callable[[], None]) -> None:
+        super().__init__(element, check)
         self._column = column
 
     @property
@@ -45,12 +45,14 @@ class Row:
         columns: list[str],
         model: type[Model],
         urls: AdminUrls,
+        check: Callable[[], None],
     ) -> None:
         self._element = element
         self._index = index
         self._columns = columns
         self._model = model
         self._urls = urls
+        self._check = check
 
     @property
     def index(self) -> int:
@@ -106,12 +108,13 @@ class Row:
 
     @property
     def _cells(self) -> list[Cell]:
+        self._check()
         # The row's own cells line up with the columns by position once the
         # checkbox Django adds for actions is skipped, as the headers skip its
         # header cell.
         cells = self._element.locator(":scope > th, :scope > td").all()
         cells = [cell for cell in cells if "action-checkbox" not in _classes(cell)]
-        return [Cell(cell, column) for cell, column in zip(cells, self._columns)]
+        return [Cell(cell, column, self._check) for cell, column in zip(cells, self._columns)]
 
 
 def _classes(element: Locator) -> list[str]:

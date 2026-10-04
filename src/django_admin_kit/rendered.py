@@ -7,7 +7,7 @@ never changes it, and the links it renders are kept next to it.
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Callable
 from urllib.parse import SplitResult, urlsplit
 
 from playwright.sync_api import Locator
@@ -53,10 +53,15 @@ class Link:
 
 
 class RenderedValue:
-    """One value the admin rendered, read from the element that holds it."""
+    """One value the admin rendered, read from the element that holds it.
 
-    def __init__(self, element: Locator) -> None:
+    ``check`` is run before every read, and fails when the browser no longer shows the
+    page the value is on.
+    """
+
+    def __init__(self, element: Locator, check: Callable[[], None]) -> None:
         self._element = element
+        self._check = check
 
     @property
     def native(self) -> Locator:
@@ -66,16 +71,19 @@ class RenderedValue:
     @property
     def text(self) -> str:
         """What the document shows, with its whitespace collapsed."""
+        self._check()
         return text_of(self._element)
 
     @property
     def value(self) -> Any:
         """What is shown, normalized: the text, unless the admin drew an icon."""
+        self._check()
         return normalize.normalize(self)
 
     @property
     def links(self) -> list[Link]:
         """The links rendered, in order; ``[]`` when there is none."""
+        self._check()
         return [
             Link(text_of(a), a.get_attribute("href") or "")
             for a in self._element.locator("a[href]").all()

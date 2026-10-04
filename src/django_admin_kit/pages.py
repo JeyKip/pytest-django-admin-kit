@@ -76,6 +76,7 @@ class AdminPage:
         self._status_code = status_code
         self._requested = requested
         self._urls = urls
+        self._landed()
 
     @property
     def native(self) -> Page:
@@ -85,6 +86,7 @@ class AdminPage:
     @property
     def status_code(self) -> int:
         """The status of the response the browser ended up on, after any redirects."""
+        self._check()
         return self._status_code
 
     @property
@@ -94,22 +96,26 @@ class AdminPage:
         Query string and fragment are dropped, so a redirect to the login page compares
         equal to ``admin_ui.url.login()`` whatever ``next`` it carries.
         """
-        return urlsplit(self._page.url).path
+        self._check()
+        return self._destination
 
     @property
     def redirected(self) -> bool:
         """Ended up somewhere other than the page asked for."""
-        return self.destination != self._requested
+        self._check()
+        return self._redirected
 
     @property
     def works(self) -> bool:
         """Loaded where it was asked for."""
-        return self._status_code == 200 and not self.redirected
+        self._check()
+        return self._works
 
     @property
     def denied(self) -> bool:
         """Refused, whether by redirect to the login page or in place."""
-        return self._status_code == 403 or self.destination == self._urls.login()
+        self._check()
+        return self._status_code == 403 or self._destination == self._urls.login()
 
     @property
     def missing(self) -> bool:
@@ -121,11 +127,12 @@ class AdminPage:
         page that redirects to the index is the login page, when the user is already
         logged in; that is a plain redirect.
         """
+        self._check()
         if self._status_code == 404:
             return True
         return (
-            self.redirected
-            and self.destination == self._urls.index()
+            self._redirected
+            and self._destination == self._urls.index()
             and self._requested != self._urls.login()
         )
 
@@ -141,23 +148,59 @@ class AdminPage:
         # other h2 elements, for filters and the like, but none next to the h1.
         return _text(self._shown().locator("#content h1 + h2"))
 
+    @property
+    def _destination(self) -> str:
+        return urlsplit(self._page.url).path
+
+    @property
+    def _redirected(self) -> bool:
+        return self._destination != self._requested
+
+    @property
+    def _works(self) -> bool:
+        return self._status_code == 200 and not self._redirected
+
     def _shown(self) -> Page:
         """The page, once it is known to be the one that was asked for.
 
         A page that did not open shows nothing to read, and reading it anyway would
         let a test pass for a user who never saw it.
         """
-        if not self.works:
+        self._check()
+        if not self._works:
             raise LookupError(
                 "The page did not open, so there is nothing to read from it. "
-                f"Status {self.status_code}, at {self.destination}."
+                f"Status {self._status_code}, at {self._destination}."
             )
         return self._page
 
-    def _shows_itself(self) -> bool:
-        """Whether the browser still shows this page: the same path and the same page
-        type."""
-        return self.destination == self._requested and _is_kind(self._page, self._kind)
+    def _landed(self) -> None:
+        """Remember where the browser is now, as the page this object stands for.
+
+        A page that did not open, such as one refused with a redirect to the login page,
+        stands for wherever the browser landed, so it can still say how it was refused.
+        """
+        self._path = self._destination
+        self._of_kind = _is_kind(self._page, self._kind)
+
+    def _still_shown(self) -> bool:
+        """Whether the browser still shows this page: the same path and, if the page was
+        of its type, still that type."""
+        if self._destination != self._path:
+            return False
+        return not self._of_kind or _is_kind(self._page, self._kind)
+
+    def _check(self) -> None:
+        """Fail at once if the browser has moved on to another page.
+
+        Every reader runs this first, and so does every object the page hands out, so
+        nothing reads a page the browser no longer shows.
+        """
+        if not self._still_shown():
+            raise LookupError(
+                f"The browser no longer shows this page; it is at {self._destination}. "
+                "Read the page it shows now, such as a submission's result.page."
+            )
 
 
 class IndexPage(AdminPage):
@@ -267,7 +310,7 @@ class ChangelistPage(ModelPage):
         columns = self.columns
         elements = self._shown().locator("#result_list tbody tr").all()
         return [
-            Row(element, index, columns, self._model, self._urls)
+            Row(element, index, columns, self._model, self._urls, self._check)
             for index, element in enumerate(elements)
         ]
 
@@ -361,7 +404,7 @@ class FormPage(ModelPage):
                 if "hidden" in classes:
                     continue
                 for name in _field_names(box):
-                    fields[name] = FormField(box, name, language)
+                    fields[name] = FormField(box, name, language, self._check)
         return fields
 
     @property
@@ -484,7 +527,7 @@ class FormPage(ModelPage):
         # A navigation of the page always comes with a response.
         assert response is not None
         redirected = response.request.redirected_from is not None
-        if self._shows_itself():
+        if self._still_shown():
             # The browser loaded a new document here, so report its status.
             self._status_code = response.status
             return SubmissionResult(self, redirected)

@@ -117,9 +117,13 @@ For the test project's users that gives:
    its page type: `change-list` for `ChangelistPage`, `change-form` for `CreatePage` and
    `EditPage`, `delete-confirmation` for `DeletePage`, `dashboard` for `IndexPage`; a plain
    `AdminPage` has no kind and is held to its path alone. Every reader of a page, and of a
-   `FormField`, `Row` or `Cell` taken from it, first runs the page's check: the tab's current
-   path (read from `tab.url`, which costs no round trip) and, for a page with a kind, its
-   `body` class must match. Otherwise it raises `LookupError` at once:
+   `FormField`, `Row` or `Cell` taken from it, first runs the page's check. The page
+   remembers where the package last left the browser for it, the path it landed on and
+   whether it was of its kind there, so a page that did not open, such as one refused with a
+   redirect to the login page, still answers `denied` and the rest. The check compares the
+   tab's current path (read from `tab.url`, which costs no round trip) with that path and,
+   for a page that was of its kind, its `body` class with the kind. Otherwise it raises
+   `LookupError` at once:
    `The browser no longer shows this page; it is at /admin/shop/product/. Read the page it shows now, such as a submission's result.page.`
    The page hands the check to the objects it builds. `native`, a field's `name`, a row's
    `index`, a cell's `column` and every `repr` read nothing from the page and are exempt; a
@@ -312,8 +316,8 @@ spec's 3.9, the rewritten 16.4, and the notes in 14.1 and 19.
 * `pages.py`: the check of decision 4 at the start of every page reader; the page hands it to
   the `FormField`, `Row` and `Cell` objects it builds. `fields.py`, `rows.py`: each reader runs
   the check it was given.
-* `tests/test_submit.py`: after a save that redirected, each reader of the page and of a field
-  taken before the save raises the exact message at once (parametrized by reader); `native`,
+* `tests/test_submit.py`: after a save that led to another page, each reader of the page and
+  of a field taken before the save raises the exact message at once (parametrized by reader); `native`,
   a field's `name` and `repr` still answer.
 * `tests/test_live.py`: a changelist left through `page.native.goto(...)` raises from `rows`,
   `count` and a held row; the same path showing another kind of page (a Playwright route that

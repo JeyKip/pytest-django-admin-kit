@@ -2,6 +2,7 @@
 and the page the browser shows afterwards."""
 
 import datetime
+from urllib.parse import urlsplit
 
 import pytest
 
@@ -21,13 +22,55 @@ WIDGET = {
 }
 
 
+# Every way of reading a create or edit page, by what it reads.
+PAGE_READERS = {
+    "status_code": lambda page: page.status_code,
+    "destination": lambda page: page.destination,
+    "redirected": lambda page: page.redirected,
+    "works": lambda page: page.works,
+    "denied": lambda page: page.denied,
+    "missing": lambda page: page.missing,
+    "title": lambda page: page.title,
+    "subtitle": lambda page: page.subtitle,
+    "fields": lambda page: page.fields,
+    "required_fields": lambda page: page.required_fields,
+    "optional_fields": lambda page: page.optional_fields,
+    "actions": lambda page: page.actions,
+    "has_action": lambda page: page.has_action("_save"),
+    "can_save": lambda page: page.can_save,
+    "can_save_and_continue": lambda page: page.can_save_and_continue,
+    "can_save_and_add_another": lambda page: page.can_save_and_add_another,
+    "can_save_as_new": lambda page: page.can_save_as_new,
+    "can_delete": lambda page: page.can_delete,
+    "populate": lambda page: page.populate(name="Gadget"),
+    "submit": lambda page: page.submit("_save"),
+    "save": lambda page: page.save(),
+}
+
+# Every way of reading a field, by what it reads.
+FIELD_READERS = {
+    "value": lambda field: field.value,
+    "links": lambda field: field.links,
+    "required": lambda field: field.required,
+    "label": lambda field: field.label,
+    "editable": lambda field: field.editable,
+    "choices": lambda field: field.choices,
+    "fill": lambda field: field.fill("Gadget"),
+}
+
+
 @pytest.fixture
-def saved(admin_ui, superuser):
-    """A create page with a valid product, already saved."""
+def filled(admin_ui, superuser):
+    """A create page with a valid product, not yet saved."""
     admin_ui.login(superuser)
     page = admin_ui.create(Product)
     page.populate(WIDGET)
-    return page.save()
+    return page
+
+
+@pytest.fixture
+def saved(filled):
+    return filled.save()
 
 
 @pytest.fixture
@@ -148,3 +191,37 @@ def test_saving_a_page_that_offers_no_save_names_no_actions(admin_ui, viewer, pr
         page.save()
 
     assert str(failure.value) == "The page offers no action '_save'. Actions: none."
+
+
+@pytest.mark.parametrize("read", PAGE_READERS.values(), ids=PAGE_READERS.keys())
+def test_a_page_the_browser_left_fails_at_once_when_read(admin_ui, left_for, filled, read):
+    filled.save()
+
+    with pytest.raises(LookupError) as failure:
+        read(filled)
+
+    assert str(failure.value) == left_for(admin_ui.url.list(Product))
+
+
+@pytest.mark.parametrize("read", FIELD_READERS.values(), ids=FIELD_READERS.keys())
+def test_a_field_of_a_page_the_browser_left_fails_at_once_when_read(
+    admin_ui, left_for, filled, read
+):
+    field = filled.fields["name"]
+    filled.save()
+
+    with pytest.raises(LookupError) as failure:
+        read(field)
+
+    assert str(failure.value) == left_for(admin_ui.url.list(Product))
+
+
+def test_what_reads_nothing_from_a_page_the_browser_left_still_answers(admin_ui, filled):
+    """The native handle is the browser layer's own object, and a field's name and repr
+    come from the field itself."""
+    field = filled.fields["name"]
+    filled.save()
+
+    assert urlsplit(filled.native.url).path == admin_ui.url.list(Product)
+    assert field.name == "name"
+    assert repr(field) == "FormField('name')"
