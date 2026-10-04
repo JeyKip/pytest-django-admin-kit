@@ -523,6 +523,15 @@ class FormPage(ModelPage):
     def save(self) -> SubmissionResult:
         return self.submit(FormAction.SAVE)
 
+    def save_and_continue(self) -> SubmissionResult:
+        return self.submit(FormAction.SAVE_AND_CONTINUE)
+
+    def save_and_add_another(self) -> SubmissionResult:
+        return self.submit(FormAction.SAVE_AND_ADD_ANOTHER)
+
+    def save_as_new(self) -> SubmissionResult:
+        return self.submit(FormAction.SAVE_AS_NEW)
+
     def _submitted(self, response: Response | None) -> SubmissionResult:
         # A navigation of the page always comes with a response.
         assert response is not None

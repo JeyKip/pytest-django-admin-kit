@@ -6,8 +6,8 @@ from urllib.parse import urlsplit
 
 import pytest
 
-from django_admin_kit.pages import AdminPage, ChangelistPage, CreatePage, IndexPage
-from project.shop.models import Product
+from django_admin_kit.pages import AdminPage, ChangelistPage, CreatePage, EditPage, IndexPage
+from project.shop.models import Feed, Product
 
 # A page without a form, standing in for a confirmation page that a project's
 # `response_add` might render instead of redirecting.
@@ -85,6 +85,16 @@ def incomplete(admin_ui, superuser):
 @pytest.fixture
 def rejected(incomplete):
     return incomplete.save()
+
+
+@pytest.fixture
+def renaming(admin_ui, superuser, released):
+    """The released product's edit page with a new name filled in. The released product,
+    because the form requires a release date."""
+    admin_ui.login(superuser)
+    page = admin_ui.edit(released)
+    page.populate(name="Gadget")
+    return page
 
 
 def test_an_accepted_save_is_a_success_and_stores_the_object(saved):
@@ -191,6 +201,104 @@ def test_saving_a_page_that_offers_no_save_names_no_actions(admin_ui, viewer, pr
         page.save()
 
     assert str(failure.value) == "The page offers no action '_save'. Actions: none."
+
+
+def test_continuing_on_an_edit_page_is_redirected_back_to_it(admin_ui, released, renaming):
+    result = renaming.save_and_continue()
+
+    assert result.success
+    assert result.redirected_to(admin_ui.url.edit(released))
+
+
+def test_continuing_on_an_edit_page_carries_the_same_page(renaming):
+    result = renaming.save_and_continue()
+
+    assert result.page is renaming
+    assert renaming.fields["name"].value == "Gadget"
+
+
+def test_continuing_on_a_create_page_leads_to_the_new_objects_edit_page(admin_ui, filled):
+    result = filled.save_and_continue()
+
+    widget = Product.objects.get(sku="SKU-1")
+    assert result.redirected_to(admin_ui.url.edit(widget))
+    assert isinstance(result.page, EditPage)
+    assert result.page.works
+
+
+def test_continuing_on_a_create_page_leaves_it(admin_ui, left_for, filled):
+    filled.save_and_continue()
+
+    with pytest.raises(LookupError) as failure:
+        bool(filled.works)
+
+    widget = Product.objects.get(sku="SKU-1")
+    assert str(failure.value) == left_for(admin_ui.url.edit(widget))
+
+
+def test_adding_another_is_redirected_back_to_the_create_page(admin_ui, filled):
+    result = filled.save_and_add_another()
+
+    assert result.success
+    assert result.redirected_to(admin_ui.url.create(Product))
+    assert Product.objects.filter(sku="SKU-1").exists()
+
+
+def test_adding_another_carries_the_same_page_now_empty(filled):
+    result = filled.save_and_add_another()
+
+    assert result.page is filled
+    assert filled.fields["name"].value == ""
+
+
+def test_a_user_who_may_not_add_cannot_add_another(admin_ui, editor, product):
+    admin_ui.login(editor)
+    page = admin_ui.edit(product)
+
+    with pytest.raises(LookupError) as failure:
+        page.save_and_add_another()
+
+    assert str(failure.value) == (
+        "The page offers no action '_addanother'. Actions: '_continue', '_save'."
+    )
+
+
+def test_saving_as_new_stores_a_copy_and_leaves_the_original(admin_ui, superuser, feed):
+    admin_ui.login(superuser)
+    page = admin_ui.edit(feed)
+    page.populate(source="copy.csv")
+
+    result = page.save_as_new()
+
+    copy = Feed.objects.exclude(pk=feed.pk).get()
+    feed.refresh_from_db()
+    assert result.success
+    assert feed.source == "catalogue.csv"
+    assert copy.source == "copy.csv"
+
+
+def test_saving_as_new_is_redirected_to_the_copys_edit_page(admin_ui, superuser, feed):
+    admin_ui.login(superuser)
+    page = admin_ui.edit(feed)
+    page.populate(source="copy.csv")
+
+    result = page.save_as_new()
+
+    copy = Feed.objects.exclude(pk=feed.pk).get()
+    assert result.redirected_to(admin_ui.url.edit(copy))
+    assert isinstance(result.page, EditPage)
+
+
+def test_an_admin_that_does_not_copy_records_offers_no_save_as_new(admin_ui, superuser, product):
+    admin_ui.login(superuser)
+    page = admin_ui.edit(product)
+
+    with pytest.raises(LookupError) as failure:
+        page.save_as_new()
+
+    assert str(failure.value) == (
+        "The page offers no action '_saveasnew'. Actions: '_addanother', '_continue', '_save'."
+    )
 
 
 @pytest.mark.parametrize("read", PAGE_READERS.values(), ids=PAGE_READERS.keys())
