@@ -33,8 +33,19 @@ class ValidationErrors:
         notice = self._form().locator("p.errornote")
         return text_of(notice) if notice.count() else ""
 
+    @property
+    def non_field(self) -> list[str]:
+        """The errors of the form as a whole rather than of one field, in order.
+
+        The notice is not one of them, though the admin shows them right under it.
+        """
+        # The form's own list is a direct child of the form's one div, which leaves out
+        # the lists of the inline formsets next to it.
+        items = self._form().locator(":scope > div > ul.errorlist.nonfield > li")
+        return [text_of(item) for item in items.all()]
+
     def __bool__(self) -> bool:
-        return bool(self.banner)
+        return bool(self.banner or self.non_field)
 
     def __repr__(self) -> str:
-        return f"ValidationErrors(banner={self.banner!r})"
+        return f"ValidationErrors(banner={self.banner!r}, non_field={self.non_field!r})"

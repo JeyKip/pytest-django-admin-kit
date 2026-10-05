@@ -27,6 +27,14 @@ class ProductForm(forms.ModelForm):
         if "released_on" in self.fields:
             self.fields["released_on"].required = True
 
+    # A rule about two fields together, so the form has an error that belongs to no
+    # single field.
+    def clean(self):
+        cleaned_data = super().clean()
+        if cleaned_data.get("featured") and not cleaned_data.get("is_active"):
+            raise forms.ValidationError("A featured product must be active.")
+        return cleaned_data
+
 
 @admin.register(Product)
 class ProductAdmin(admin.ModelAdmin):
