@@ -277,6 +277,32 @@ assert result.page is page
 assert page.fields["price"].value == "10.00"
 ```
 
+**Finding out why a form was rejected.** The admin shows errors at three levels, and each is
+read on its own: the notice above the form, the errors of the form as a whole, and the errors
+of each field. A field can fail several rules at once, so its errors are always a list.
+
+```python
+page = admin_ui.create(Product)
+page.populate(
+    name="Widget",
+    price="10.00",
+)
+
+result = page.save()
+
+assert result.page.errors.banner == "Please correct the errors below."
+assert result.page.errors.non_field == []
+assert result.page.fields["sku"].errors == ["This field is required."]
+assert result.page.errors.fields == {
+    "sku": ["This field is required."],
+    "released_on": ["This field is required."],
+}
+```
+
+A page the admin has not rejected shows no errors, so `assert not page.errors` holds on one
+that was never submitted. The notice's wording depends on how many errors there are, so a test
+that only cares that the form was rejected asserts `result.page.errors.banner` is there.
+
 **Reading is live.** Nothing read from a page is kept, so every read is the page as it is
 now, including what the admin's own scripts changed in place. A field, row or cell taken from
 a page is an address, read each time it is used: a field by its name, a row by its position.
