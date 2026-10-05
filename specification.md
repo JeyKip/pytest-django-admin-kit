@@ -7,16 +7,16 @@ The package provides a pytest-oriented API for testing Django Admin behavior.
 It should allow developers to verify:
 
 * authentication and access with different users (done);
-* availability and basic operation of admin pages;
-* the set of models the admin exposes;
+* availability and basic operation of admin pages; (done)
+* the set of models the admin exposes; (done)
 * changelist columns, record counts, and row contents (done);
 * create and edit form fields, including their labels, initial values, and choices (done);
 * editable and rendered-only field values (done);
 * requiredness of create and edit form fields (done);
 * automatic population of form fields; (done)
 * submit actions and where the admin navigates after an operation; (done)
-* validation errors displayed by Django Admin;
-* what a form renders back after an invalid submission;
+* validation errors displayed by Django Admin; (done)
+* what a form renders back after an invalid submission; (done)
 * messages displayed after an operation;
 * the contents of a deletion confirmation.
 
@@ -1604,7 +1604,7 @@ An action the page does not offer submits nothing, so it leaves the page as it w
 
 ---
 
-# 17. Create Validation Testing
+# 17. Create Validation Testing (done)
 
 The package must make it easy to intentionally submit invalid create forms.
 
@@ -1625,7 +1625,7 @@ markup.
 
 ---
 
-# 18. Edit Validation Testing
+# 18. Edit Validation Testing (done)
 
 The same validation interface must apply to edit forms.
 
@@ -1645,7 +1645,7 @@ Create and edit validation should use the same public error representation.
 
 ---
 
-# 19. Re-render After Invalid Submission
+# 19. Re-render After Invalid Submission (done)
 
 An invalid submission brings the form back carrying what was submitted, on the result's
 page: (done)
@@ -1668,7 +1668,7 @@ so requiredness, choices, and rendered-only state remain inspectable after a fai
 
 ---
 
-# 20. Validation Error Model
+# 20. Validation Error Model (done)
 
 Validation errors are divided into three levels:
 
@@ -1687,9 +1687,11 @@ result = page.save()
 assert result.page.errors
 ```
 
+`page.errors` is true when any of the three levels shows something.
+
 ---
 
-## 20.1 Summary notice
+## 20.1 Summary notice (done)
 
 The admin displays a notice when a submission fails.
 
@@ -1700,7 +1702,8 @@ assert result.page.errors.banner
 Its exact wording varies with the number of errors and between Django versions. A test that
 only cares that the submission was rejected should assert truthiness.
 
-Where a test does assert the text, the normalized message is available:
+Where a test does assert the text, the normalized message is available, and `""` on a
+page that shows no notice:
 
 ```python
 assert result.page.errors.banner == "Please correct the error below."
@@ -1708,7 +1711,7 @@ assert result.page.errors.banner == "Please correct the error below."
 
 ---
 
-## 20.2 Form-level errors
+## 20.2 Form-level errors (done)
 
 Validation messages that belong to the form rather than to any single field are exposed
 separately from the summary notice:
@@ -1723,7 +1726,7 @@ The summary notice and form-level errors are distinct concepts and must not be c
 
 ---
 
-## 20.3 Field errors
+## 20.3 Field errors (done)
 
 Errors for an individual field are read from the field they belong to, addressed by name as
 in section 10:
@@ -1746,7 +1749,7 @@ assert result.page.fields["sku"].errors == [
 
 ---
 
-# 21. Validation Error Matching
+# 21. Validation Error Matching (done)
 
 Tests should be able to perform both exact and partial validation checks.
 
@@ -1772,6 +1775,8 @@ assert result.page.errors.fields == {
     "email": ["Enter a valid email address."],
 }
 ```
+
+`errors.fields` holds only the fields that show errors, so a field it leaves out has none.
 
 ---
 
@@ -2191,15 +2196,15 @@ def test_product_validation(admin_ui, admin_user):
 
     result = page.save()
 
-    assert not result.success
+    assert not result.success    # done
 
-    assert result.page.errors.banner
+    assert result.page.errors.banner    # done
 
-    assert result.page.fields["name"].errors == [
+    assert result.page.fields["name"].errors == [    # done
         "This field is required.",
     ]
 
-    assert result.page.fields["price"].errors == [
+    assert result.page.fields["price"].errors == [    # done
         "This field is required.",
     ]
 ```
@@ -2218,9 +2223,9 @@ def test_product_form_is_rendered_back(admin_ui, admin_user):
 
     result = page.save()
 
-    assert not result.success
+    assert not result.success    # done
 
-    assert result.page.fields["price"].value == "12.00"
+    assert result.page.fields["price"].value == "12.00"    # done
 ```
 
 ---
@@ -2597,13 +2602,14 @@ supported Django versions:
 21. Submit valid edit forms. (done)
 22. Invoke a submit action other than the ordinary save, including one the admin defines. (done)
 23. Determine where the admin navigated after a successful operation. (done)
-24. Submit invalid create forms.
-25. Submit invalid edit forms.
+24. Submit invalid create forms. (done)
+25. Submit invalid edit forms. (done)
 26. Verify that the form rendered the submitted values back after an invalid submission.
+    (done)
 27. Inspect the admin's summary notice, form-level errors, and field-level errors as three
-    distinct levels.
+    distinct levels. (done)
 28. Read the messages displayed after an operation.
-29. Perform and verify a basic delete operation.
+29. Perform and verify a basic delete operation. (done)
 30. Read the contents of a deletion confirmation.
 31. Verify that a refused deletion is not offered or not performed.
 32. Read the models the admin exposes to the current user, their grouping, and their order.
