@@ -36,6 +36,7 @@ PAGE_READERS = {
     "fields": lambda page: page.fields,
     "required_fields": lambda page: page.required_fields,
     "optional_fields": lambda page: page.optional_fields,
+    "errors": lambda page: page.errors,
     "actions": lambda page: page.actions,
     "has_action": lambda page: page.has_action("_save"),
     "can_save": lambda page: page.can_save,
@@ -56,6 +57,7 @@ FIELD_READERS = {
     "label": lambda field: field.label,
     "editable": lambda field: field.editable,
     "choices": lambda field: field.choices,
+    "errors": lambda field: field.errors,
     "fill": lambda field: field.fill("Gadget"),
 }
 

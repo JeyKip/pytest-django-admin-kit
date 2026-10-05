@@ -146,6 +146,22 @@ class FormField:
         self._check()
         return [] if self.editable else self._rendered.links
 
+    @property
+    def errors(self) -> list[str]:
+        """The errors the admin shows for the field, in order; ``[]`` when it shows none.
+
+        A field can fail several rules at once, so this is always a list.
+        """
+        self._check()
+        items = self._element.locator("ul.errorlist > li").all()
+        # A field that shares its line with others has a box of its own. Django 4.2 to 6.0
+        # put its errors next to that box, in a wrapper around the two; the others put
+        # them inside it. The wrapper holds one field, so its list is this field's.
+        if "fieldBox" in (self._element.get_attribute("class") or "").split():
+            wrapper = self._element.locator("xpath=..")
+            items = wrapper.locator(":scope > ul.errorlist > li").all() + items
+        return [text_of(item) for item in items]
+
     def fill(self, value: Any) -> None:
         """Put ``value`` into the field, the way a user would.
 
