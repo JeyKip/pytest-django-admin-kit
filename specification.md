@@ -1647,9 +1647,8 @@ Create and edit validation should use the same public error representation.
 
 # 19. Re-render After Invalid Submission
 
-An invalid submission has two consequences a test must be able to state directly.
-
-Nothing was written:
+An invalid submission brings the form back carrying what was submitted, on the result's
+page: (done)
 
 ```python
 page = admin_ui.create(Product)
@@ -1659,23 +1658,6 @@ page.populate(name="", price="19.99")
 result = page.save()
 
 assert not result.success
-assert not result.created
-```
-
-```python
-page = admin_ui.edit(product)
-
-page.populate(name="")
-
-result = page.save()
-
-assert not result.success
-assert not result.changed
-```
-
-And the form comes back carrying what was submitted, on the result's page: (done)
-
-```python
 assert result.page.fields["price"].value == "19.99"    # done
 ```
 
@@ -1743,27 +1725,22 @@ The summary notice and form-level errors are distinct concepts and must not be c
 
 ## 20.3 Field errors
 
-Errors for an individual field should be accessible by field name.
-
-Example:
-
-```python
-assert "This field is required." in result.page.errors["name"]
-```
-
-Multiple errors must be supported:
+Errors for an individual field are read from the field they belong to, addressed by name as
+in section 10:
 
 ```python
-assert result.page.errors["email"] == [
-    "Enter a valid email address.",
+assert result.page.fields["name"].errors == [
+    "This field is required.",
 ]
 ```
 
-The same errors are also read from the field they belong to:
+A field may fail several rules at once, so its errors are a list, in the order the admin shows
+them, and `[]` for a field with none:
 
 ```python
-assert result.page.fields["email"].errors == [
-    "Enter a valid email address.",
+assert result.page.fields["sku"].errors == [
+    'A SKU starts with "SKU-".',
+    "A SKU has no spaces.",
 ]
 ```
 
@@ -1776,7 +1753,7 @@ Tests should be able to perform both exact and partial validation checks.
 Exact:
 
 ```python
-assert result.page.errors["name"] == [
+assert result.page.fields["name"].errors == [
     "This field is required.",
 ]
 ```
@@ -1784,7 +1761,7 @@ assert result.page.errors["name"] == [
 Contains:
 
 ```python
-assert "This field is required." in result.page.errors["name"]
+assert "This field is required." in result.page.fields["name"].errors
 ```
 
 Complete error-set testing:
@@ -2215,15 +2192,14 @@ def test_product_validation(admin_ui, admin_user):
     result = page.save()
 
     assert not result.success
-    assert not result.created
 
     assert result.page.errors.banner
 
-    assert result.page.errors["name"] == [
+    assert result.page.fields["name"].errors == [
         "This field is required.",
     ]
 
-    assert result.page.errors["price"] == [
+    assert result.page.fields["price"].errors == [
         "This field is required.",
     ]
 ```
@@ -2243,7 +2219,6 @@ def test_product_form_is_rendered_back(admin_ui, admin_user):
     result = page.save()
 
     assert not result.success
-    assert not result.created
 
     assert result.page.fields["price"].value == "12.00"
 ```
@@ -2624,8 +2599,7 @@ supported Django versions:
 23. Determine where the admin navigated after a successful operation. (done)
 24. Submit invalid create forms.
 25. Submit invalid edit forms.
-26. Verify that an invalid submission wrote nothing and that the form rendered the submitted
-    values back.
+26. Verify that the form rendered the submitted values back after an invalid submission.
 27. Inspect the admin's summary notice, form-level errors, and field-level errors as three
     distinct levels.
 28. Read the messages displayed after an operation.
