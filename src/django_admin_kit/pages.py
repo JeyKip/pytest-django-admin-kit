@@ -24,6 +24,7 @@ from django.urls import Resolver404, resolve
 from playwright.sync_api import Locator, Page, Response
 
 from . import matching
+from .errors import ValidationErrors
 from .fields import Fields, FormField
 from .normalize import integer
 from .results import SubmissionResult
@@ -433,6 +434,12 @@ class FormPage(ModelPage):
         return {
             name for name, field in self.fields.items() if field.editable and not field.required
         }
+
+    @property
+    def errors(self) -> ValidationErrors:
+        """The validation errors the form shows; none until the admin rejects it."""
+        self._shown()
+        return ValidationErrors(lambda: self._shown().locator("#content-main form"))
 
     @property
     def actions(self) -> set[str]:
