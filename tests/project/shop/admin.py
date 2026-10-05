@@ -2,6 +2,7 @@ from decimal import Decimal
 
 from django import forms
 from django.contrib import admin
+from django.core.validators import RegexValidator
 from django.http import HttpResponseRedirect
 from django.urls import reverse
 from django.utils.html import format_html
@@ -26,6 +27,13 @@ class ProductForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
         if "released_on" in self.fields:
             self.fields["released_on"].required = True
+        # Two rules a SKU can break at once, so a field has more than one error.
+        if "sku" in self.fields:
+            self.fields["sku"].validators = [
+                *self.fields["sku"].validators,
+                RegexValidator(r"^SKU-", 'A SKU must start with "SKU-".'),
+                RegexValidator(r"\s", "A SKU must not contain spaces.", inverse_match=True),
+            ]
 
     # A rule about two fields together, so the form has an error that belongs to no
     # single field.

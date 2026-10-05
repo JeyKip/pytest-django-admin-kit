@@ -1739,8 +1739,8 @@ them, and `[]` for a field with none:
 
 ```python
 assert result.page.fields["sku"].errors == [
-    'A SKU starts with "SKU-".',
-    "A SKU has no spaces.",
+    'A SKU must start with "SKU-".',
+    "A SKU must not contain spaces.",
 ]
 ```
 

@@ -439,7 +439,9 @@ class FormPage(ModelPage):
     def errors(self) -> ValidationErrors:
         """The validation errors the form shows; none until the admin rejects it."""
         self._shown()
-        return ValidationErrors(lambda: self._shown().locator("#content-main form"))
+        return ValidationErrors(
+            lambda: self._shown().locator("#content-main form"), lambda: self.fields
+        )
 
     @property
     def actions(self) -> set[str]:

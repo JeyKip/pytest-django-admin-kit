@@ -1,27 +1,31 @@
 """The validation errors a create or edit form shows after the admin rejected it.
 
-The admin shows them at several levels, and each is read on its own: the summary
-notice above the form is never mistaken for an error of the form itself.
+The admin shows them at three levels, and each is read on its own: the summary
+notice above the form, the errors of the form as a whole, and the errors of each field.
 """
 
 from __future__ import annotations
 
-from typing import Callable
+from typing import TYPE_CHECKING, Callable
 
 from playwright.sync_api import Locator
 
 from .rendered import text_of
 
+if TYPE_CHECKING:
+    from .fields import Fields
+
 
 class ValidationErrors:
     """The errors a form shows, read from the page each time they are asked for.
 
-    ``form`` gives the form element, and fails when the browser no longer shows the
-    page the form is on.
+    ``form`` gives the form element and ``fields`` the form's fields; both fail when the
+    browser no longer shows the page the form is on.
     """
 
-    def __init__(self, form: Callable[[], Locator]) -> None:
+    def __init__(self, form: Callable[[], Locator], fields: Callable[[], Fields]) -> None:
         self._form = form
+        self._fields = fields
 
     @property
     def banner(self) -> str:
@@ -44,8 +48,17 @@ class ValidationErrors:
         items = self._form().locator(":scope > div > ul.errorlist.nonfield > li")
         return [text_of(item) for item in items.all()]
 
+    @property
+    def fields(self) -> dict[str, list[str]]:
+        """The errors of each field that has any, by field name, in the order the admin
+        presents the fields. One field's errors are read from it: ``field.errors``."""
+        return {name: errors for name, field in self._fields().items() if (errors := field.errors)}
+
     def __bool__(self) -> bool:
-        return bool(self.banner or self.non_field)
+        return bool(self.banner or self.non_field or self.fields)
 
     def __repr__(self) -> str:
-        return f"ValidationErrors(banner={self.banner!r}, non_field={self.non_field!r})"
+        return (
+            f"ValidationErrors(banner={self.banner!r}, non_field={self.non_field!r}, "
+            f"fields={self.fields!r})"
+        )

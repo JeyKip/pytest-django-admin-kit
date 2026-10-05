@@ -57,6 +57,7 @@ FIELD_READERS = {
     "label": lambda field: field.label,
     "editable": lambda field: field.editable,
     "choices": lambda field: field.choices,
+    "errors": lambda field: field.errors,
     "fill": lambda field: field.fill("Gadget"),
 }
 

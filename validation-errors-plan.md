@@ -80,9 +80,10 @@ in English on every supported version.
    * required fields left empty give "This field is required." (Django's own);
    * a SKU another product has gives "Product with this Sku already exists." (Django's own
      unique check, the realistic edit error);
-   * two validators on `sku` give a field two errors at once: `A SKU starts with "SKU-".` and
-     `A SKU has no spaces.`, both failed by `"bad sku"`. Every SKU the suite already saves
-     (`SKU-1`, `SKU-Bolt` and so on) passes both;
+   * two validators on `sku` give a field two errors at once:
+     `A SKU must start with "SKU-".` and `A SKU must not contain spaces.`, both failed by
+     `"bad sku"`. Every SKU the suite already saves (`SKU-1`, `SKU-Bolt` and so on) passes
+     both;
    * `clean()` gives the form-level error "A featured product must be active." when
      `featured` is `True` and `is_active` is off. No existing submission sets `featured`.
 
