@@ -1865,29 +1865,29 @@ messages and no errors; a rejected one to a form with errors and possibly no mes
 
 The package must support basic create, edit, and delete workflows.
 
-## 23.1 Create
+The result of an operation says whether the admin accepted it (section 16.2). What was stored
+is the test's to check, through the ORM it already uses: the test knows the object it edited
+and what it filled in for a new one. The package does not look stored objects up for it, since
+a plain "Save" redirects to the changelist and names no new object.
+
+## 23.1 Create (done)
 
 ```python
 page = admin_ui.create(Product)
 
-page.populate(name="Widget", price="10.00")
+page.populate(name="Widget", sku="SKU-1", price="10.00")
 
 result = page.save()
 
-assert result.success
-```
+assert result.success    # done
 
-Operation results expose the affected object:
-
-```python
-product = result.object
-
+product = Product.objects.get(sku="SKU-1")
 assert product.name == "Widget"
 ```
 
 ---
 
-## 23.2 Edit
+## 23.2 Edit (done)
 
 ```python
 page = admin_ui.edit(product)
@@ -1896,11 +1896,11 @@ page.populate(name="Updated widget")
 
 result = page.save()
 
-assert result.success
-assert result.object.name == "Updated widget"
-```
+assert result.success    # done
 
-The object exposed by an edit result reflects the stored state after the operation.
+product.refresh_from_db()
+assert product.name == "Updated widget"
+```
 
 ---
 
