@@ -1800,28 +1800,61 @@ assert result.page.messages == [
 ]
 ```
 
+`page.messages` is a sequence of messages in the order the page shows them, so it is
+indexed, iterated and compared like a list. Each message is a `Message` with a `level` and a
+`text`, and compares equal to a `(level, text)` pair written as a tuple or a list:
+
+```python
+message = result.page.messages[0]
+
+assert message.level == "success"
+assert message.text == "The product “Widget” was added successfully."
+```
+
 A level is the tag the project gives it, not a fixed name. Django's defaults are `debug`,
 `info`, `success`, `warning` and `error`, and a project renames them or adds levels of its own
 through `MESSAGE_TAGS`; the page shows only the tag, so a project that tags errors `danger`
 reads them as `danger`. The levels a page knows are Django's defaults merged with the
 project's `MESSAGE_TAGS`.
 
-The messages of one level are read by its name, as their texts in order:
+The messages of one level are read by its name, as their texts in order, and `[]` when the
+page shows none of that level:
 
 ```python
-assert result.page.messages["success"] == [
+assert result.page.messages.of_level("success") == [
     "The product “Widget” was added successfully.",
 ]
-assert not result.page.messages["error"]
+assert not result.page.messages.of_level("error")
 ```
 
-A level the project does not have raises an error that names the levels it does have, rather
-than reading as no messages. Otherwise a test asking for `error` in a project that renamed it
-would find none and pass whatever the page showed.
+A level the project does not have raises `KeyError` that lists the levels it does have,
+rather than reading as no messages. Otherwise a test asking for `error` in a project that
+renamed it would find none and pass whatever the page showed:
+
+```text
+KeyError: "The project has no message level 'error'. Levels: 'debug', 'info', 'success', 'warning', 'danger'."
+```
 
 A message's level is the one known level tag among the classes the admin draws for it. Any
 extra tags the project added are not part of it, and a message whose level has no tag reads
-with the level `""`.
+with the level `""`, which `of_level("")` reads too.
+
+Messages are read even from a page that did not open where it was asked, because the page
+the admin sent the user to is where it reports why. A user who asks for an object that does
+not exist is sent to the index with a warning (section 6.1), and the page that reports
+`missing` reads it:
+
+```python
+page = admin_ui.edit(product)    # deleted meanwhile
+
+assert page.missing
+assert page.messages.of_level("warning") == [
+    "Product with ID “1” doesn’t exist. Perhaps it was deleted?",
+]
+```
+
+Django shows a message once, so opening the index again would not show it. Every other reader
+still refuses a page that did not open.
 
 Messages are distinct from validation errors. A successful operation leads to a page with
 messages and no errors; a rejected one to a form with errors and possibly no messages at all.
@@ -1996,6 +2029,7 @@ AdminSession
 │
 ├── ValidationErrors     (on a create or edit page)
 ├── Messages             (on any page)
+│   └── Message
 │
 └── SubmissionResult
     └── page             (the page the submission led to, one of the above)
@@ -2179,7 +2213,7 @@ def test_create_product(admin_ui, admin_user):
 
     assert result.success
     assert result.redirected_to_list(Product)
-    assert result.page.messages["success"]
+    assert result.page.messages.of_level("success")
 ```
 
 ---
