@@ -17,7 +17,7 @@ It should allow developers to verify:
 * submit actions and where the admin navigates after an operation; (done)
 * validation errors displayed by Django Admin; (done)
 * what a form renders back after an invalid submission; (done)
-* messages displayed after an operation;
+* messages displayed after an operation; (done)
 * the contents of a deletion confirmation.
 
 The package should emphasize readable tests using normal Python `assert` statements rather than
@@ -604,7 +604,7 @@ Such a page guarantees what does not depend on knowing the page's shape:
 * the access outcome of section 6.1 (done);
 * the page identity of section 6.2 (done);
 * the response status of section 6.4 (done);
-* the operation messages of section 22, once that section is built;
+* the operation messages of section 22 (done);
 * a native handle (done).
 
 It does not expose fields or rows. Their shape is unknowable for a page the package has never
@@ -1780,7 +1780,7 @@ assert result.page.errors.fields == {
 
 ---
 
-# 22. Operation Messages
+# 22. Operation Messages (done)
 
 The admin reports the outcome of an operation to the user.
 
@@ -2211,9 +2211,9 @@ def test_create_product(admin_ui, admin_user):
 
     result = page.save()
 
-    assert result.success
-    assert result.redirected_to_list(Product)
-    assert result.page.messages.of_level("success")
+    assert result.success    # done
+    assert result.redirected_to_list(Product)    # done
+    assert result.page.messages.of_level("success")    # done
 ```
 
 ---
@@ -2642,7 +2642,7 @@ supported Django versions:
     (done)
 27. Inspect the admin's summary notice, form-level errors, and field-level errors as three
     distinct levels. (done)
-28. Read the messages displayed after an operation.
+28. Read the messages displayed after an operation. (done)
 29. Perform and verify a basic delete operation. (done)
 30. Read the contents of a deletion confirmation.
 31. Verify that a refused deletion is not offered or not performed.
