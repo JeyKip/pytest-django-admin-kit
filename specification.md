@@ -17,7 +17,7 @@ It should allow developers to verify:
 * submit actions and where the admin navigates after an operation; (done)
 * validation errors displayed by Django Admin; (done)
 * what a form renders back after an invalid submission; (done)
-* messages displayed after an operation;
+* messages displayed after an operation; (done)
 * the contents of a deletion confirmation.
 
 The package should emphasize readable tests using normal Python `assert` statements rather than
@@ -604,7 +604,7 @@ Such a page guarantees what does not depend on knowing the page's shape:
 * the access outcome of section 6.1 (done);
 * the page identity of section 6.2 (done);
 * the response status of section 6.4 (done);
-* the operation messages of section 22, once that section is built;
+* the operation messages of section 22 (done);
 * a native handle (done).
 
 It does not expose fields or rows. Their shape is unknowable for a page the package has never
@@ -1780,7 +1780,7 @@ assert result.page.errors.fields == {
 
 ---
 
-# 22. Operation Messages
+# 22. Operation Messages (done)
 
 The admin reports the outcome of an operation to the user.
 
@@ -1800,28 +1800,61 @@ assert result.page.messages == [
 ]
 ```
 
+`page.messages` is a sequence of messages in the order the page shows them, so it is
+indexed, iterated and compared like a list. Each message is a `Message` with a `level` and a
+`text`, and compares equal to a `(level, text)` pair written as a tuple or a list:
+
+```python
+message = result.page.messages[0]
+
+assert message.level == "success"
+assert message.text == "The product “Widget” was added successfully."
+```
+
 A level is the tag the project gives it, not a fixed name. Django's defaults are `debug`,
 `info`, `success`, `warning` and `error`, and a project renames them or adds levels of its own
 through `MESSAGE_TAGS`; the page shows only the tag, so a project that tags errors `danger`
 reads them as `danger`. The levels a page knows are Django's defaults merged with the
 project's `MESSAGE_TAGS`.
 
-The messages of one level are read by its name, as their texts in order:
+The messages of one level are read by its name, as their texts in order, and `[]` when the
+page shows none of that level:
 
 ```python
-assert result.page.messages["success"] == [
+assert result.page.messages.of_level("success") == [
     "The product “Widget” was added successfully.",
 ]
-assert not result.page.messages["error"]
+assert not result.page.messages.of_level("error")
 ```
 
-A level the project does not have raises an error that names the levels it does have, rather
-than reading as no messages. Otherwise a test asking for `error` in a project that renamed it
-would find none and pass whatever the page showed.
+A level the project does not have raises `KeyError` that lists the levels it does have,
+rather than reading as no messages. Otherwise a test asking for `error` in a project that
+renamed it would find none and pass whatever the page showed:
+
+```text
+KeyError: "The project has no message level 'error'. Levels: 'debug', 'info', 'success', 'warning', 'danger'."
+```
 
 A message's level is the one known level tag among the classes the admin draws for it. Any
 extra tags the project added are not part of it, and a message whose level has no tag reads
-with the level `""`.
+with the level `""`, which `of_level("")` reads too.
+
+Messages are read even from a page that did not open where it was asked, because the page
+the admin sent the user to is where it reports why. A user who asks for an object that does
+not exist is sent to the index with a warning (section 6.1), and the page that reports
+`missing` reads it:
+
+```python
+page = admin_ui.edit(product)    # deleted meanwhile
+
+assert page.missing
+assert page.messages.of_level("warning") == [
+    "Product with ID “1” doesn’t exist. Perhaps it was deleted?",
+]
+```
+
+Django shows a message once, so opening the index again would not show it. Every other reader
+still refuses a page that did not open.
 
 Messages are distinct from validation errors. A successful operation leads to a page with
 messages and no errors; a rejected one to a form with errors and possibly no messages at all.
@@ -1832,29 +1865,29 @@ messages and no errors; a rejected one to a form with errors and possibly no mes
 
 The package must support basic create, edit, and delete workflows.
 
-## 23.1 Create
+The result of an operation says whether the admin accepted it (section 16.2). What was stored
+is the test's to check, through the ORM it already uses: the test knows the object it edited
+and what it filled in for a new one. The package does not look stored objects up for it, since
+a plain "Save" redirects to the changelist and names no new object.
+
+## 23.1 Create (done)
 
 ```python
 page = admin_ui.create(Product)
 
-page.populate(name="Widget", price="10.00")
+page.populate(name="Widget", sku="SKU-1", price="10.00")
 
 result = page.save()
 
-assert result.success
-```
+assert result.success    # done
 
-Operation results expose the affected object:
-
-```python
-product = result.object
-
+product = Product.objects.get(sku="SKU-1")
 assert product.name == "Widget"
 ```
 
 ---
 
-## 23.2 Edit
+## 23.2 Edit (done)
 
 ```python
 page = admin_ui.edit(product)
@@ -1863,11 +1896,11 @@ page.populate(name="Updated widget")
 
 result = page.save()
 
-assert result.success
-assert result.object.name == "Updated widget"
-```
+assert result.success    # done
 
-The object exposed by an edit result reflects the stored state after the operation.
+product.refresh_from_db()
+assert product.name == "Updated widget"
+```
 
 ---
 
@@ -1996,6 +2029,7 @@ AdminSession
 │
 ├── ValidationErrors     (on a create or edit page)
 ├── Messages             (on any page)
+│   └── Message
 │
 └── SubmissionResult
     └── page             (the page the submission led to, one of the above)
@@ -2177,9 +2211,9 @@ def test_create_product(admin_ui, admin_user):
 
     result = page.save()
 
-    assert result.success
-    assert result.redirected_to_list(Product)
-    assert result.page.messages["success"]
+    assert result.success    # done
+    assert result.redirected_to_list(Product)    # done
+    assert result.page.messages.of_level("success")    # done
 ```
 
 ---
@@ -2608,7 +2642,7 @@ supported Django versions:
     (done)
 27. Inspect the admin's summary notice, form-level errors, and field-level errors as three
     distinct levels. (done)
-28. Read the messages displayed after an operation.
+28. Read the messages displayed after an operation. (done)
 29. Perform and verify a basic delete operation. (done)
 30. Read the contents of a deletion confirmation.
 31. Verify that a refused deletion is not offered or not performed.

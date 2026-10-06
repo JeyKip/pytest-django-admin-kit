@@ -303,6 +303,37 @@ A page the admin has not rejected shows no errors, so `assert not page.errors` h
 that was never submitted. The notice's wording depends on how many errors there are, so a test
 that only cares that the form was rejected asserts `result.page.errors.banner` is there.
 
+**Reading what the admin reported.** Every page reads the messages the admin shows after an
+operation, each with its level and its text. A level is the tag Django draws the message
+with, so a project that renames or adds levels through `MESSAGE_TAGS` reads them by its own
+tags.
+
+```python
+page = admin_ui.create(Product)
+page.populate(
+    name="Widget",
+    sku="SKU-1",
+    price="10.00",
+    released_on=date(2026, 1, 15),
+)
+
+result = page.save()
+
+assert result.page.messages == [
+    ("success", "The product “Widget” was added successfully."),
+]
+assert result.page.messages[0].level == "success"
+assert result.page.messages.of_level("success") == [
+    "The product “Widget” was added successfully.",
+]
+assert not result.page.messages.of_level("error")
+```
+
+`of_level` raises `KeyError` listing the project's levels for a name it does not have, so a
+level the project renamed never reads as "no messages". Messages are also read from a page
+that did not open, since the admin says there why: an object that no longer exists sends
+the user to the index with a warning, and `page.messages` on that page reads it.
+
 **Reading is live.** Nothing read from a page is kept, so every read is the page as it is
 now, including what the admin's own scripts changed in place. A field, row or cell taken from
 a page is an address, read each time it is used: a field by its name, a row by its position.
