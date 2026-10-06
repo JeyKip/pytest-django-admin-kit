@@ -204,3 +204,62 @@ def test_a_level_the_project_renames_reads_by_its_new_tag(message_tags, adding_f
     result = adding_feed.save()
 
     assert result.page.messages[0] == ("caution", NOT_CSV)
+
+
+def test_the_messages_of_one_level_read_by_its_name(saved_product):
+    assert saved_product.page.messages.of_level("success") == [ADDED]
+
+
+def test_several_messages_of_one_level_read_together_in_order(adding_feed):
+    adding_feed.populate(source="new feed.txt")
+
+    result = adding_feed.save()
+
+    assert result.page.messages.of_level("warning") == [NOT_CSV, SPACES]
+    assert result.page.messages.of_level("success") == [
+        "The feed “new feed.txt” was added successfully."
+    ]
+
+
+def test_a_level_the_page_shows_nothing_of_reads_empty(saved_product):
+    assert saved_product.page.messages.of_level("error") == []
+
+
+def test_the_messages_without_a_level_tag_read_by_the_empty_level(refreshing_feed):
+    result = refreshing_feed.submit("_refresh")
+
+    assert result.page.messages.of_level("") == ["The feed was refreshed."]
+
+
+def test_a_level_no_project_has_raises_naming_the_levels(saved_product):
+    with pytest.raises(KeyError) as failure:
+        saved_product.page.messages.of_level("urgent")
+
+    assert failure.value.args[0] == (
+        "The project has no message level 'urgent'. "
+        "Levels: 'debug', 'info', 'success', 'warning', 'error'."
+    )
+
+
+def test_a_renamed_level_reads_by_its_new_name(message_tags, adding_feed):
+    message_tags({30: "caution"})
+    adding_feed.populate(source="catalogue.txt")
+
+    result = adding_feed.save()
+
+    assert result.page.messages.of_level("caution") == [NOT_CSV]
+
+
+def test_a_renamed_level_raises_by_its_old_name(message_tags, adding_feed):
+    """Otherwise the warning shown as "caution" would read as no warnings at all."""
+    message_tags({30: "caution"})
+    adding_feed.populate(source="catalogue.txt")
+    result = adding_feed.save()
+
+    with pytest.raises(KeyError) as failure:
+        result.page.messages.of_level("warning")
+
+    assert failure.value.args[0] == (
+        "The project has no message level 'warning'. "
+        "Levels: 'debug', 'info', 'success', 'caution', 'error'."
+    )

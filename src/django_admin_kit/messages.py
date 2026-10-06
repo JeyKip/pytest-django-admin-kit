@@ -86,6 +86,22 @@ class Messages(Sequence[Message]):
 
     __hash__ = None  # type: ignore[assignment]
 
+    def of_level(self, level: str) -> list[str]:
+        """The texts of the messages of ``level``, in order; ``[]`` when there are none.
+
+        ``level`` is a tag the project knows, or ``""`` for messages whose level has no
+        tag. Any other name raises ``KeyError`` listing the levels there are, because a
+        level the project renamed would otherwise read as no messages and let a test pass.
+        """
+        # Django lists its own levels first, in their order, then the ones the project adds.
+        levels = list(dict.fromkeys(get_level_tags().values()))
+        if level and level not in levels:
+            raise KeyError(
+                f"The project has no message level {level!r}. Levels: "
+                f"{', '.join(repr(name) for name in levels)}."
+            )
+        return [message.text for message in self._read() if message.level == level]
+
     def __repr__(self) -> str:
         return f"Messages({self._read()!r})"
 
