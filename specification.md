@@ -1924,17 +1924,58 @@ assert result.success
 
 ## 23.4 Delete confirmation contents
 
-The confirmation page exposes the objects the admin says will be removed, including related
-ones:
+The confirmation page lists what the deletion will remove: the object itself, then every
+related object it takes with it, in the order the page shows them. Each one reads as the page
+writes it, the model's name and the object's text:
 
 ```python
-page = admin_ui.delete(customer)
+page = admin_ui.delete(product)
 
 assert page.works
 
-assert customer in page.objects
-assert len(page.objects) == 3
+assert page.deletions == [
+    "Product: Widget",
+    "Review: Great",
+    "Review: Fine",
+]
+assert "Review: Great" in page.deletions
 ```
+
+The entries are texts, not model instances. The admin links an entry to its object only when
+the site registers the object's model, and related objects of unregistered models are common,
+such as a many-to-many's through rows or models edited only inline, so a list of instances would
+leave them out. The page draws the list nested, each object over the related objects it takes
+with it; `deletions` reads it top to bottom and drops only the indentation.
+
+The page also counts what the deletion will remove, per model, as its "Summary" shows it:
+
+```python
+assert page.deletion_counts == {"Products": 1, "Reviews": 2}
+assert "Categories" not in page.deletion_counts
+```
+
+The keys are the labels the page shows, since the page names each model by nothing else. A
+model the deletion removes none of is not counted, and reading it raises `KeyError` listing the
+models the page does count, so a misspelt label fails rather than reading as none:
+
+```text
+KeyError: "The page counts no model 'Categories'. Models: 'Products', 'Reviews'."
+```
+
+The sentence the page starts with is read as shown:
+
+```python
+assert page.intro == (
+    "Are you sure you want to delete the product “Widget”? "
+    "All of the following related items will be deleted:"
+)
+```
+
+Its wording depends on whether the deletion can be confirmed, on the Django version, which
+changed its quote marks in 4.2, and on the language, so a project decides how far to rely on it.
+
+A page that cannot be confirmed (section 23.5) removes nothing: `deletions` is `[]` and
+`deletion_counts` is `{}`.
 
 ---
 
@@ -1954,10 +1995,26 @@ So is a confirmation page that offers no way to confirm, as when related objects
 one being deleted: (done)
 
 ```python
-page = admin_ui.delete(product)
+page = admin_ui.delete(category)
 
 assert not page.can_confirm_deleting    # done
+assert page.blockers == ["Product: Widget"]
 ```
+
+`blockers` is what the page lists in place of the deletions: the objects that protect the one
+being deleted, as above, or the kinds of object the deletion would take with it that the user
+may not delete, such as `["product"]`. The admin draws both lists alike and tells them apart
+only in its translated sentence, so `blockers` is one list and `intro` says which case it is:
+
+```python
+assert page.intro == (
+    "Deleting the category “Tools” would require deleting the following protected "
+    "related objects:"
+)
+```
+
+`blockers` is `[]` on a page that can be confirmed. Django collects both lists into sets, so the
+order of several entries is not fixed.
 
 So is a refused operation:
 
@@ -1965,6 +2022,20 @@ So is a refused operation:
 result = admin_ui.delete(product).confirm_deleting()
 
 assert not result.success
+```
+
+The admin refuses a confirmation it offered when things changed after the page opened: the
+object became protected, and the admin shows the confirmation again with its blockers, or the
+admin no longer lets the user delete it, and answers that the user is denied.
+
+A confirmation for an object someone else deleted after the page opened is not refused: the
+admin sends the user to the index with a warning, as for any missing object (section 6.1), so
+`result.success` is true and the result's page says what happened:
+
+```python
+assert result.page.messages.of_level("warning") == [
+    "Product with ID “1” doesn’t exist. Perhaps it was deleted?",
+]
 ```
 
 ---
