@@ -37,6 +37,7 @@ PAGE_READERS = {
     "required_fields": lambda page: page.required_fields,
     "optional_fields": lambda page: page.optional_fields,
     "errors": lambda page: page.errors,
+    "messages": lambda page: page.messages,
     "actions": lambda page: page.actions,
     "has_action": lambda page: page.has_action("_save"),
     "can_save": lambda page: page.can_save,

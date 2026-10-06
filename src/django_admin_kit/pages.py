@@ -26,6 +26,7 @@ from playwright.sync_api import Locator, Page, Response
 from . import matching
 from .errors import ValidationErrors
 from .fields import Fields, FormField
+from .messages import Messages
 from .normalize import integer
 from .results import SubmissionResult
 from .rows import Row
@@ -150,6 +151,17 @@ class AdminPage:
         return _text(self._shown().locator("#content h1 + h2"))
 
     @property
+    def messages(self) -> Messages:
+        """The messages the page shows, in order, each with its level and its text.
+
+        Unlike everything else on a page, they are read even when the page did not open
+        where it was asked. A missing object is the case in point: the admin sends the user
+        to the index with a warning, and Django shows a message only once.
+        """
+        self._check()
+        return Messages(self._message_items)
+
+    @property
     def _destination(self) -> str:
         return urlsplit(self._page.url).path
 
@@ -174,6 +186,13 @@ class AdminPage:
                 f"Status {self._status_code}, at {self._destination}."
             )
         return self._page
+
+    def _message_items(self) -> Locator:
+        # `_check` and not `_shown`: the messages of a page that did not open are where the
+        # admin says why, so they are read from wherever the page landed. A page the browser
+        # has left still fails, so held messages never read the next page's.
+        self._check()
+        return self._page.locator("ul.messagelist > li")
 
     def _landed(self) -> None:
         """Remember where the browser is now, as the page this object stands for.
