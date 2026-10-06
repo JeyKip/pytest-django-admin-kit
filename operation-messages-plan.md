@@ -92,9 +92,10 @@ a space; either may be missing. The level tag comes from Django's defaults merge
    exception and its reason are written in a comment next to it.
 8. **The test project's own messages come from `FeedAdmin`**, so Django's built-in messages
    stay untouched:
-   * `save_model` warns "The source is not a CSV file." with the extra tag `source` when the
-     source does not end in `.csv`, and "The source contains spaces." when it does. Saving
-     `"new feed.txt"` therefore shows two warnings and Django's success message at once:
+   * `save_model` warns "The source should be a CSV file." with the extra tag `source` when the
+     source does not end in `.csv`, and "The source should not contain spaces." with the
+     extra tag `info`, which names a level, when it has any. Saving `"new feed.txt"` therefore shows two warnings and Django's success message
+     at once:
      several messages of one level, and several levels, on one page. Every feed the suite
      saves today ends in `.csv` and has no spaces;
    * "Refresh" adds "The feed was refreshed." at level 35, which has no tag until a project
@@ -167,8 +168,10 @@ All read-only; nothing here is filled by a user.
 * `tests/test_messages.py`: the `message_tags` fixture (decision 9), with the comment
   that explains the `LEVEL_TAGS` workaround, and:
   * several messages of several levels read in the order shown: saving `"new feed.txt"`
-    shows both warnings, then Django's success message;
-  * an extra tag is not part of the level: the warning reads `"warning"`;
+    shows both warnings, then Django's success message. The warnings' extra tags are drawn
+    as classes (checked through `native`) and are not part of their level;
+  * an extra tag that names a level does not change the level: saving `"new feed.csv"`
+    shows only the spaces warning, drawn `info warning`, and it reads `"warning"`;
   * by default, a level without a tag reads `""`, on the history page, a plain `AdminPage`
     (§6.5);
   * a level the project adds reads by its tag: with `{35: "notice"}` the refresh message

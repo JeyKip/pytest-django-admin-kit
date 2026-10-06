@@ -1,13 +1,16 @@
 from decimal import Decimal
 
 from django import forms
-from django.contrib import admin
+from django.contrib import admin, messages
 from django.core.validators import RegexValidator
 from django.http import HttpResponseRedirect
 from django.urls import reverse
 from django.utils.html import format_html
 
 from .models import Category, Feed, Product
+
+# A message level between Django's warning (30) and error (40), with no tag of its own.
+REFRESHED = 35
 
 
 class ProductForm(forms.ModelForm):
@@ -117,10 +120,30 @@ class ProductAdmin(admin.ModelAdmin):
 class FeedAdmin(admin.ModelAdmin):
     save_as = True
 
+    # Messages of the project's own next to the admin's. A source like "new feed.txt" gets
+    # both warnings and then the admin's success message: several messages of one level,
+    # and several levels, on one page. Each warning carries an extra tag, which is not part
+    # of its level; the second one's is "info", which happens to be the name of a level.
+    def save_model(self, request, obj, form, change):
+        super().save_model(request, obj, form, change)
+        if not obj.source.endswith(".csv"):
+            self.message_user(
+                request, "The source should be a CSV file.", messages.WARNING, extra_tags="source"
+            )
+        if " " in obj.source:
+            self.message_user(
+                request,
+                "The source should not contain spaces.",
+                messages.WARNING,
+                extra_tags="info",
+            )
+
     # "Refresh" saves as usual, then shows the feed's history rather than the changelist a
-    # plain save leads to, so a test sees that this code answered it.
+    # plain save leads to, so a test sees that this code answered it. It says so at level
+    # 35, which Django has no tag for, so the message has no level until a project adds one.
     def response_change(self, request, obj):
         if "_refresh" in request.POST:
+            self.message_user(request, "The feed was refreshed.", REFRESHED)
             return HttpResponseRedirect(
                 reverse("admin:shop_feed_history", args=[obj.pk], current_app=self.admin_site.name)
             )
