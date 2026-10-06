@@ -37,6 +37,10 @@ def message_tags(settings, monkeypatch):
     """
 
     def use(tags):
+        # Make monkeypatch save the table as it is now, before the setting changes. Django 4.1
+        # and 4.2 rebuild the table as soon as the setting changes, so saving it any later would
+        # save the changed table and put it back after the test.
+        monkeypatch.setattr(base, "LEVEL_TAGS", base.LEVEL_TAGS)
         settings.MESSAGE_TAGS = tags
         monkeypatch.setattr(base, "LEVEL_TAGS", get_level_tags())
 
