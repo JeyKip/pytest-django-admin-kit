@@ -1972,7 +1972,7 @@ assert page.intro == (
 ```
 
 Its wording depends on whether the deletion can be confirmed, on the Django version, which
-changed its quote marks in 4.2, and on the language, so a project decides how far to rely on it.
+changed its quote marks in 6.0, and on the language, so a project decides how far to rely on it.
 
 A page that cannot be confirmed (section 23.5) removes nothing: `deletions` is `[]` and
 `deletion_counts` is `{}`.

@@ -1,8 +1,13 @@
 """What a delete confirmation says the deletion will remove."""
 
+import django
 import pytest
 
 from project.shop.models import Product, Review
+
+# Django 6.0 quotes the object's name in the opening sentence with curly quotes; earlier
+# versions quote it with straight double quotes when asking and single quotes when refusing.
+CURLY = django.VERSION >= (6, 0)
 
 
 @pytest.fixture
@@ -126,6 +131,41 @@ def test_a_refused_page_has_no_deletion_counts_to_read(admin_ui, viewer, product
 
     with pytest.raises(LookupError) as failure:
         bool(page.deletion_counts)
+
+    assert str(failure.value) == (
+        "The page did not open, so there is nothing to read from it. "
+        f"Status 403, at {admin_ui.url.delete(product)}."
+    )
+
+
+def test_a_page_that_can_be_confirmed_asks_to_confirm(deleting_product, product):
+    page = deleting_product(product)
+
+    name = "“Widget”" if CURLY else '"Widget"'
+    assert page.intro == (
+        f"Are you sure you want to delete the product {name}? "
+        "All of the following related items will be deleted:"
+    )
+
+
+def test_a_protected_page_says_why_it_cannot_be_confirmed(admin_ui, superuser, protected):
+    admin_ui.login(superuser)
+
+    page = admin_ui.delete(protected)
+
+    name = "“Tools”" if CURLY else "'Tools'"
+    assert page.intro == (
+        f"Deleting the category {name} would require deleting the following protected "
+        "related objects:"
+    )
+
+
+def test_a_refused_page_has_no_intro_to_read(admin_ui, viewer, product):
+    admin_ui.login(viewer)
+    page = admin_ui.delete(product)
+
+    with pytest.raises(LookupError) as failure:
+        bool(page.intro)
 
     assert str(failure.value) == (
         "The page did not open, so there is nothing to read from it. "

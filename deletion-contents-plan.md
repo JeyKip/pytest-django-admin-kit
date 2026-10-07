@@ -49,7 +49,7 @@ this order, all direct children of it:
   change page when the admin site registers the model, and an `li` with related objects carries
   them in a nested `ul`. Protected objects read the same way; forbidden kinds are bare verbose
   names, such as `"product"`.
-* The sentence quotes the object's name. Its quote marks changed in 4.2: `"Widget"` (question),
+* The sentence quotes the object's name. Its quote marks changed in 6.0: `"Widget"` (question),
   `'Tools'` (refusals) before, `“Widget”` in all three after.
 * Django 6.1 added `ModelAdmin.delete_confirmation_max_display`. With it set, the admin shows only
   part of a list and adds an entry "…and N more objects."; with it set to 0, it shows no list.
@@ -224,9 +224,9 @@ apply it.
 * Tests in `tests/test_delete_contents.py`, exact strings, chosen by Django version as
   `test_the_confirmation_says_what_it_is` does:
   * a page that can be confirmed asks: `Are you sure you want to delete the product “Widget”? All
-    of the following related items will be deleted:` (`"Widget"` before 4.2);
+    of the following related items will be deleted:` (`"Widget"` before 6.0);
   * a protected page says why: `Deleting the category “Tools” would require deleting the following
-    protected related objects:` (`'Tools'` before 4.2);
+    protected related objects:` (`'Tools'` before 6.0);
   * a refused page raises `LookupError`.
 * Consistency: an added property.
 
@@ -243,7 +243,7 @@ apply it.
     by the released product reads `["product"]`, the protected product is not on the page, its
     `intro` says so (`Deleting the category “Tools” would result in deleting related objects,
     but your account doesn't have permission to delete the following types of objects:`,
-    `'Tools'` before 4.2), and `can_confirm_deleting` is false;
+    `'Tools'` before 6.0), and `can_confirm_deleting` is false;
   * a page blocked by kinds removes nothing: that category reads `deletions == []` and
     `deletion_counts == {}`, as the protected category does in C1 and C2;
   * a page that can be confirmed has no blockers: `[]`;

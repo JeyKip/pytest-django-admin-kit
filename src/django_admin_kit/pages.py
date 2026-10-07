@@ -637,6 +637,16 @@ class DeletePage(ModelPage):
         return [_own_text(item) for item in items]
 
     @property
+    def intro(self) -> str:
+        """The sentence the page starts with, as shown, or ``""`` when it has none.
+
+        It asks to confirm the deletion, or says why the page cannot. Its wording depends on
+        which, on the language, and on the Django version: 6.0 changed its quote marks.
+        """
+        sentence = self._shown().locator("#content > p").first
+        return text_of(sentence) if sentence.count() else ""
+
+    @property
     def deletion_counts(self) -> DeletionCounts:
         """How many objects of each model the deletion will remove, as the page's "Summary"
         counts them, such as ``{"Products": 1, "Reviews": 2}``.
