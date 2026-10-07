@@ -364,6 +364,42 @@ When deleting would also remove objects that are protected, or that the user may
 the admin offers no confirmation: a category a product uses reads `can_confirm_deleting` as
 `False`, and `confirm_deleting()` raises `LookupError`.
 
+If the admin refuses a confirmation it offered, because the object became protected or the user
+may no longer delete it after the page opened, the result reads `not result.success`.
+
+**Knowing what a deletion will remove, and what stops it.** The confirmation lists the object
+and every related object it takes with it, as the page writes them, and counts them per model.
+
+```python
+page = admin_ui.delete(product)
+
+assert page.deletions == [
+    "Product: Widget",
+    "Review: Great",
+    "Review: Fine",
+]
+assert page.deletion_counts == {
+    "Products": 1,
+    "Reviews": 2,
+}
+```
+
+A page that cannot be confirmed lists what blocks the deletion instead: the objects that
+protect it, or the kinds of object the user may not delete. `intro` is the sentence the page
+starts with, which says which of the two it is.
+
+```python
+page = admin_ui.delete(category)
+
+assert page.blockers == ["Product: Widget"]
+assert page.deletions == []
+```
+
+Entries are texts, since the admin links an object only when its model is registered.
+`deletion_counts` is keyed by the labels the page shows, and reading a model the deletion
+removes none of raises `KeyError` naming the models it does count. The wording of `intro`
+depends on the language and the Django version, which changed its quote marks in 6.0.
+
 **Knowing what the index shows a user.** Models and apps a user may not see are not listed,
 and the lists come back in the admin's order.
 
