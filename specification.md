@@ -2013,7 +2013,10 @@ assert page.intro == (
 )
 ```
 
-`blockers` is `[]` on a page that can be confirmed. Django collects both lists into sets, so the
+The page shows either what the deletion removes or what blocks it, never both: `blockers` is
+`[]` on a page that can be confirmed, and `deletions` is `[]` on one that cannot. When a deletion
+is blocked both ways, the admin lists only the kinds the user may not delete, so `blockers` reads
+those and the protected objects are not on the page. Django collects both lists into sets, so the
 order of several entries is not fixed.
 
 So is a refused operation:

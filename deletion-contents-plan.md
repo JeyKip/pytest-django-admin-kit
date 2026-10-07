@@ -65,8 +65,7 @@ this order, all direct children of it:
   reads a count however the locale groups it, as `ChangelistPage.count` does. The `deletions`
   entries need the `li`'s own text without its nested list,
   read with one `evaluate`, as `ChangelistPage._count_line` reads the paginator's own text nodes.
-* `tests/project/shop/models.py` and new migrations: a model a product takes with it (C1), and a
-  registered model that takes products with it (C4).
+* `tests/project/shop/models.py` and a new migration: a model a product takes with it (C1).
 * Tests: a new `tests/test_delete_contents.py`; refused confirmations in
   `tests/test_confirm_delete.py`, which already has the protected-category fixture.
 
@@ -105,9 +104,20 @@ this order, all direct children of it:
 5. **`blockers` is one list, not separate protected and forbidden ones.** The admin draws both
    lists the same way, so the page tells them apart only by the translated sentence above them.
    Reading the case from that sentence would tie the package to English. `blockers` reads
-   whichever list the page shows, and `intro` says which case it is. It is `[]` on a page that can
-   be confirmed. Entries are in the admin's order; Django collects both into sets, so with several
-   entries their order is not fixed.
+   whichever list the page shows, and `intro` says which case it is. Entries are in the admin's
+   order; Django collects both into sets, so with several entries their order is not fixed.
+   * The page shows exactly one of three things: the kinds the user may not delete, else the
+     protected objects, else the deletions with their counts and the form. So `blockers` and
+     `deletions` are never both non-empty: `blockers` is `[]` on a page that can be confirmed, and
+     `deletions` is `[]` on one that cannot (decision 6).
+   * When a deletion is blocked both ways, the admin shows only the kinds, so `blockers` reads
+     those and the protected objects are not on the page. A product that protects a category is
+     itself collected, so the shop's rule that a released product stays on record makes a
+     category used by a released product blocked both ways: the page lists `["product"]` and not
+     the product protecting it. C4 tests the blockers through categories alone.
+   * A deletion blocked only by kinds, with nothing protected, would need a cascade into an
+     object the user may not delete, which the test project does not have. Its list is drawn the
+     same way as the other two, so it is not tested on its own.
 6. **`deletions` is `[]` on a page that cannot be confirmed.** Such a page says nothing will be
    removed; what it lists there is `blockers`.
 7. **A page that did not open raises `LookupError` from all four**, as every reader but
@@ -118,15 +128,11 @@ this order, all direct children of it:
    set, the last entry of a list is "…and N more objects."; that is what the user reads.
    Documented in the docstrings, not tested: no project setting in the suite turns it on, and
    adding one per Django version is not worth it for a project's opt-in.
-10. **Two additions to the test project, each in the commit that first needs it:**
-   * `Review`, the smallest thing a product takes with it (C1). It is not registered with the
-     admin, so the index and every existing test stay unchanged, and its entries show the
-     unlinked form while the product's show the linked one.
-   * `Product.feed`, the feed a product was imported from, which deleting the feed takes with it
-     (C4). Deleting a feed that a released product came from meets the shop's rule that a
-     released product stays on record, so the admin lists `"product"` as a kind the user may not
-     delete, even for a superuser. `ProductAdmin.fields` and `list_display` name their fields, so
-     the product's form and changelist do not change.
+10. **One addition to the test project:** `Review`, the smallest thing a product takes with it
+    (C1). It is not registered with the admin, so the index and every existing test stay
+    unchanged, and its entries show the unlinked form while the product's show the linked one.
+    The blockers need nothing new: a category used by a product is protected, and by a released
+    product blocked both ways.
 11. **A confirmation for an object someone deleted after the page opened** (another user, another
     tab) is answered with a redirect to the index and a warning, so `result.success` reads `True`.
     It is left so: a user who may delete but not view is also sent to the index after a real
@@ -144,17 +150,8 @@ this order, all direct children of it:
   were made, on every database.
 * Not registered with the admin, so it is never edited there.
 
-### `Product.feed` (test project only, C4)
-
-| Field | Rules |
-| --- | --- |
-| `feed` | `ForeignKey("Feed", null=True, blank=True, on_delete=CASCADE)`; optional |
-
-* Not on the product's admin form, which names its fields, so it is never filled there. Existing
-  products and fixtures leave it empty.
-
-Both migrations (`0002_review.py`, `0003_product_feed.py`) are written in the form Django 3.2
-reads, so every tox env can apply them.
+The migration `0002_review.py` is written in the form Django 3.2 reads, so every tox env can
+apply it.
 
 ## Commit plan
 
@@ -235,33 +232,32 @@ reads, so every tox env can apply them.
 
 ### C4. Read what keeps a deletion from being confirmed
 
-* `tests/project/shop/models.py`: `Product.feed` as above, with a comment on why.
-  `tests/project/shop/migrations/0003_product_feed.py`.
 * `DeletePage.blockers`: the texts of the `li` entries under `#content > p + ul`, or `[]`.
-  Docstring: one list for both cases, `intro` says which, the order is the admin's.
-* `conftest.py` is left alone; the fixtures are local to the module: `imported` (the released
-  product, linked to the feed).
-* Tests in `tests/test_delete_contents.py`:
-  * a protected object lists what protects it: the category reads `["Product: Widget"]`;
-  * an object that would take with it what the user may not delete lists that kind: the feed reads
-    `["product"]`, and its `intro` says so (`Deleting the feed “catalogue.csv” would result in
-    deleting related objects, but your account doesn't have permission to delete the following
-    types of objects:`, `'catalogue.csv'` before 4.2), and `can_confirm_deleting` is false;
+  Docstring: one list for both cases, `intro` says which, the order is the admin's, never
+  non-empty next to `deletions`, and only the kinds when the deletion is blocked both ways.
+* Tests in `tests/test_delete_contents.py`, with the `category`, `product` and `released`
+  fixtures of `conftest.py`:
+  * a protected object lists what protects it: the category used by the product reads
+    `["Product: Widget"]`;
+  * an object blocked both ways lists only the kind the user may not delete: the category used
+    by the released product reads `["product"]`, the protected product is not on the page, its
+    `intro` says so (`Deleting the category “Tools” would result in deleting related objects,
+    but your account doesn't have permission to delete the following types of objects:`,
+    `'Tools'` before 4.2), and `can_confirm_deleting` is false;
+  * a page blocked by kinds removes nothing: that category reads `deletions == []` and
+    `deletion_counts == {}`, as the protected category does in C1 and C2;
   * a page that can be confirmed has no blockers: `[]`;
-  * a feed with an unreleased product lists the product among its `deletions`, after the feed:
-    `["Feed: catalogue.csv", "Product: Widget"]`, so a registered related model reads as well;
   * a refused page raises `LookupError`.
-* Consistency: a nullable field no existing form, changelist or fixture touches, and an added
-  property.
+* Consistency: an added property.
 
 ### C5. A confirmation the admin refuses when it is posted
 
 Tests only, in `tests/test_confirm_delete.py`, with no package change. Each case changes the
 database between opening the page and confirming:
 
-* the category becomes protected (a product starts using it): the admin shows the confirmation
+* the category becomes protected (an unreleased product starts using it): the admin shows the confirmation
   again, so `result.success` is false, `result.page is page`, `can_confirm_deleting` is false,
-  `blockers` lists the product, and the category is still there;
+  `blockers` reads `["Product: Widget"]`, and the category is still there;
 * the product is released, which the shop's rule forbids deleting: the admin answers 403, so
   `result.success` is false, `result.page.denied` is true, and the product is still there;
 * the product is deleted by someone else (decision 11): the admin sends the user to the index,
