@@ -10,6 +10,15 @@ from project.shop.models import Product, Review
 # versions quote it with straight double quotes when asking and single quotes when refusing.
 CURLY = django.VERSION >= (6, 0)
 
+# Everything the confirmation reads. Each fails on a page that did not open and on one the
+# browser has left.
+READERS = {
+    "deletions": lambda page: page.deletions,
+    "deletion_counts": lambda page: page.deletion_counts,
+    "intro": lambda page: page.intro,
+    "blockers": lambda page: page.blockers,
+}
+
 
 @pytest.fixture
 def reviewed(product):
@@ -69,31 +78,6 @@ def test_a_page_that_cannot_be_confirmed_lists_nothing_to_remove(admin_ui, super
     assert page.deletions == []
 
 
-def test_a_refused_page_has_no_deletions_to_read(admin_ui, viewer, product):
-    admin_ui.login(viewer)
-    page = admin_ui.delete(product)
-
-    with pytest.raises(LookupError) as failure:
-        bool(page.deletions)
-
-    assert str(failure.value) == (
-        "The page did not open, so there is nothing to read from it. "
-        f"Status 403, at {admin_ui.url.delete(product)}."
-    )
-
-
-def test_the_deletions_fail_once_the_browser_has_left_the_page(
-    admin_ui, left_for, deleting_product, product
-):
-    page = deleting_product(product)
-    page.confirm_deleting()
-
-    with pytest.raises(LookupError) as failure:
-        bool(page.deletions)
-
-    assert str(failure.value) == left_for(admin_ui.url.list(Product))
-
-
 def test_an_object_nothing_depends_on_counts_one_of_its_model(deleting_product, product):
     page = deleting_product(product)
 
@@ -126,19 +110,6 @@ def test_a_page_that_cannot_be_confirmed_counts_nothing(admin_ui, superuser, pro
     assert failure.value.args[0] == "The page counts no model 'Categories'. Models: none."
 
 
-def test_a_refused_page_has_no_deletion_counts_to_read(admin_ui, viewer, product):
-    admin_ui.login(viewer)
-    page = admin_ui.delete(product)
-
-    with pytest.raises(LookupError) as failure:
-        bool(page.deletion_counts)
-
-    assert str(failure.value) == (
-        "The page did not open, so there is nothing to read from it. "
-        f"Status 403, at {admin_ui.url.delete(product)}."
-    )
-
-
 def test_a_page_that_can_be_confirmed_asks_to_confirm(deleting_product, product):
     page = deleting_product(product)
 
@@ -158,19 +129,6 @@ def test_a_protected_page_says_why_it_cannot_be_confirmed(admin_ui, superuser, p
     assert page.intro == (
         f"Deleting the category {name} would require deleting the following protected "
         "related objects:"
-    )
-
-
-def test_a_refused_page_has_no_intro_to_read(admin_ui, viewer, product):
-    admin_ui.login(viewer)
-    page = admin_ui.delete(product)
-
-    with pytest.raises(LookupError) as failure:
-        bool(page.intro)
-
-    assert str(failure.value) == (
-        "The page did not open, so there is nothing to read from it. "
-        f"Status 403, at {admin_ui.url.delete(product)}."
     )
 
 
@@ -217,14 +175,28 @@ def test_a_page_that_can_be_confirmed_has_no_blockers(deleting_product, reviewed
     assert page.blockers == []
 
 
-def test_a_refused_page_has_no_blockers_to_read(admin_ui, viewer, product):
+@pytest.mark.parametrize("read", READERS.values(), ids=READERS.keys())
+def test_a_refused_page_has_nothing_to_read(admin_ui, viewer, product, read):
     admin_ui.login(viewer)
     page = admin_ui.delete(product)
 
     with pytest.raises(LookupError) as failure:
-        bool(page.blockers)
+        read(page)
 
     assert str(failure.value) == (
         "The page did not open, so there is nothing to read from it. "
         f"Status 403, at {admin_ui.url.delete(product)}."
     )
+
+
+@pytest.mark.parametrize("read", READERS.values(), ids=READERS.keys())
+def test_a_page_the_browser_left_fails_at_once_when_read(
+    admin_ui, left_for, deleting_product, product, read
+):
+    page = deleting_product(product)
+    page.confirm_deleting()
+
+    with pytest.raises(LookupError) as failure:
+        read(page)
+
+    assert str(failure.value) == left_for(admin_ui.url.list(Product))
