@@ -618,6 +618,23 @@ class DeletePage(ModelPage):
         """
         return self._confirm_button.count() > 0
 
+    @property
+    def deletions(self) -> list[str]:
+        """What the deletion will remove, as the page lists it: the object itself, then every
+        related object it takes with it, in the order shown.
+
+        Each entry is the text the page shows, such as ``"Product: Widget"``, whether or not
+        the admin links it. The page draws the list nested; it is read top to bottom. A page
+        that cannot be confirmed removes nothing, so it has none. On Django 6.1, an admin
+        that sets ``delete_confirmation_max_display`` shows only part of the list, ending in
+        an entry such as "…and 2 more objects.", which is read as shown too.
+        """
+        # The list of what is removed follows its heading, which follows the summary's list.
+        # The lists a page shows when it cannot be confirmed follow the opening sentence,
+        # and before Django 4.2 none of the lists has an id to tell them apart.
+        items = self._shown().locator("#content > ul + h2 + ul li").all()
+        return [_own_text(item) for item in items]
+
     def confirm_deleting(self) -> SubmissionResult:
         """Click "Yes, I'm sure", and wait for the next page.
 
@@ -712,6 +729,16 @@ def _value_of(source: Any, name: str) -> Any:
 
 def _text(element: Locator) -> str:
     return (element.text_content() or "").strip() if element.count() else ""
+
+
+def _own_text(item: Locator) -> str:
+    """The text of a list entry without the entries nested in it, whitespace collapsed."""
+    text = item.evaluate(
+        "el => Array.from(el.childNodes)"
+        ".filter(node => node.nodeName !== 'UL')"
+        ".map(node => node.textContent).join('')"
+    )
+    return " ".join(str(text).split())
 
 
 def _token(element: Locator, prefix: str) -> str:
