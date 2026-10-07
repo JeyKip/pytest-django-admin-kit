@@ -22,6 +22,21 @@ class Product(models.Model):
         return self.name
 
 
+class Review(models.Model):
+    """What a product takes with it when it is deleted, so its delete confirmation lists
+    related objects. Not registered with the admin, so the confirmation shows its entries
+    without a link, next to the product's, which has one."""
+
+    product = models.ForeignKey(Product, on_delete=models.CASCADE)
+    text = models.CharField(max_length=100)
+
+    class Meta:
+        ordering = ("pk",)
+
+    def __str__(self):
+        return self.text
+
+
 class Feed(models.Model):
     """A model whose own fields are named after the arguments `populate` takes, so the
     suite proves a project is not kept from filling them.

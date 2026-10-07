@@ -18,7 +18,7 @@ It should allow developers to verify:
 * validation errors displayed by Django Admin; (done)
 * what a form renders back after an invalid submission; (done)
 * messages displayed after an operation; (done)
-* the contents of a deletion confirmation.
+* the contents of a deletion confirmation. (done)
 
 The package should emphasize readable tests using normal Python `assert` statements rather than
 custom assertion methods wherever practical.
@@ -1861,7 +1861,7 @@ messages and no errors; a rejected one to a form with errors and possibly no mes
 
 ---
 
-# 23. CRUD Success Checks
+# 23. CRUD Success Checks (done)
 
 The package must support basic create, edit, and delete workflows.
 
@@ -1922,23 +1922,64 @@ assert result.success
 
 ---
 
-## 23.4 Delete confirmation contents
+## 23.4 Delete confirmation contents (done)
 
-The confirmation page exposes the objects the admin says will be removed, including related
-ones:
+The confirmation page lists what the deletion will remove: the object itself, then every
+related object it takes with it, in the order the page shows them. Each one reads as the page
+writes it, the model's name and the object's text:
 
 ```python
-page = admin_ui.delete(customer)
+page = admin_ui.delete(product)
 
 assert page.works
 
-assert customer in page.objects
-assert len(page.objects) == 3
+assert page.deletions == [    # done
+    "Product: Widget",
+    "Review: Great",
+    "Review: Fine",
+]
+assert "Review: Great" in page.deletions    # done
 ```
+
+The entries are texts, not model instances. The admin links an entry to its object only when
+the site registers the object's model, and related objects of unregistered models are common,
+such as a many-to-many's through rows or models edited only inline, so a list of instances would
+leave them out. The page draws the list nested, each object over the related objects it takes
+with it; `deletions` reads it top to bottom and drops only the indentation.
+
+The page also counts what the deletion will remove, per model, as its "Summary" shows it:
+
+```python
+assert page.deletion_counts == {"Products": 1, "Reviews": 2}    # done
+assert "Categories" not in page.deletion_counts             # done
+```
+
+The keys are the labels the page shows, since the page names each model by nothing else. A
+model the deletion removes none of is not counted, and reading it raises `KeyError` listing the
+models the page does count, so a misspelt label fails rather than reading as none:
+
+```text
+KeyError: "The page counts no model 'Categories'. Models: 'Products', 'Reviews'."
+```
+
+The sentence the page starts with is read as shown:
+
+```python
+assert page.intro == (    # done
+    "Are you sure you want to delete the product “Widget”? "
+    "All of the following related items will be deleted:"
+)
+```
+
+Its wording depends on whether the deletion can be confirmed, on the Django version, which
+changed its quote marks in 6.0, and on the language, so a project decides how far to rely on it.
+
+A page that cannot be confirmed (section 23.5) removes nothing: `deletions` is `[]` and
+`deletion_counts` is `{}`.
 
 ---
 
-## 23.5 Deletion refused
+## 23.5 Deletion refused (done)
 
 An admin may decline to offer or to perform a deletion.
 
@@ -1954,17 +1995,50 @@ So is a confirmation page that offers no way to confirm, as when related objects
 one being deleted: (done)
 
 ```python
-page = admin_ui.delete(product)
+page = admin_ui.delete(category)
 
 assert not page.can_confirm_deleting    # done
+assert page.blockers == ["Product: Widget"]    # done
 ```
 
-So is a refused operation:
+`blockers` is what the page lists in place of the deletions: the objects that protect the one
+being deleted, as above, or the kinds of object the deletion would take with it that the user
+may not delete, such as `["product"]`. The admin draws both lists alike and tells them apart
+only in its translated sentence, so `blockers` is one list and `intro` says which case it is:
+
+```python
+assert page.intro == (    # done
+    "Deleting the category “Tools” would require deleting the following protected "
+    "related objects:"
+)
+```
+
+The page shows either what the deletion removes or what blocks it, never both: `blockers` is
+`[]` on a page that can be confirmed, and `deletions` is `[]` on one that cannot. When a deletion
+is blocked both ways, the admin lists only the kinds the user may not delete, so `blockers` reads
+those and the protected objects are not on the page. Django collects both lists into sets, so the
+order of several entries is not fixed.
+
+So is a refused operation: (done)
 
 ```python
 result = admin_ui.delete(product).confirm_deleting()
 
-assert not result.success
+assert not result.success    # done
+```
+
+The admin refuses a confirmation it offered when things changed after the page opened: the
+object became protected, and the admin shows the confirmation again with its blockers, or the
+admin no longer lets the user delete it, and answers that the user is denied.
+
+A confirmation for an object someone else deleted after the page opened is not refused: the
+admin sends the user to the index with a warning, as for any missing object (section 6.1), so
+`result.success` is true and the result's page says what happened:
+
+```python
+assert result.page.messages.of_level("warning") == [    # done
+    "Product with ID “1” doesn’t exist. Perhaps it was deleted?",
+]
 ```
 
 ---
@@ -2644,8 +2718,8 @@ supported Django versions:
     distinct levels. (done)
 28. Read the messages displayed after an operation. (done)
 29. Perform and verify a basic delete operation. (done)
-30. Read the contents of a deletion confirmation.
-31. Verify that a refused deletion is not offered or not performed.
+30. Read the contents of a deletion confirmation. (done)
+31. Verify that a refused deletion is not offered or not performed. (done)
 32. Read the models the admin exposes to the current user, their grouping, and their order.
     (done)
 33. Run against a non-default admin site mounted under a non-default URL prefix. (done)

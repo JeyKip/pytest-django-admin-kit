@@ -15,7 +15,7 @@ from __future__ import annotations
 import re
 from collections.abc import Mapping
 from enum import Enum
-from typing import Any
+from typing import Any, Dict
 from urllib.parse import urlsplit
 
 from django.apps import apps
@@ -28,6 +28,7 @@ from .errors import ValidationErrors
 from .fields import Fields, FormField
 from .messages import Messages
 from .normalize import integer
+from .rendered import text_of
 from .results import SubmissionResult
 from .rows import Row
 from .urls import AdminUrls
@@ -618,6 +619,67 @@ class DeletePage(ModelPage):
         """
         return self._confirm_button.count() > 0
 
+    @property
+    def deletions(self) -> list[str]:
+        """What the deletion will remove, as the page lists it: the object itself, then every
+        related object it takes with it, in the order shown.
+
+        Each entry is the text the page shows, such as ``"Product: Widget"``, whether or not
+        the admin links it. The page draws the list nested; it is read top to bottom. A page
+        that cannot be confirmed removes nothing, so it has none. On Django 6.1, an admin
+        that sets ``delete_confirmation_max_display`` shows only part of the list, ending in
+        an entry such as "…and 2 more objects.", which is read as shown too.
+        """
+        # The list of what is removed follows its heading, which follows the summary's list.
+        # The lists a page shows when it cannot be confirmed follow the opening sentence,
+        # and before Django 4.2 none of the lists has an id to tell them apart.
+        items = self._shown().locator("#content > ul + h2 + ul li").all()
+        return [_own_text(item) for item in items]
+
+    @property
+    def intro(self) -> str:
+        """The sentence the page starts with, as shown, or ``""`` when it has none.
+
+        It asks to confirm the deletion, or says why the page cannot. Its wording depends on
+        which, on the language, and on the Django version: 6.0 changed its quote marks.
+        """
+        sentence = self._shown().locator("#content > p").first
+        return text_of(sentence) if sentence.count() else ""
+
+    @property
+    def blockers(self) -> list[str]:
+        """What keeps the deletion from being confirmed, as the page lists it in place of the
+        deletions: the objects that protect this one, such as ``"Product: Widget"``, or the
+        kinds of object it would take with it that the user may not delete, such as
+        ``"product"``.
+
+        The page draws both lists alike, so they are one list here; ``intro`` says which it is.
+        When both apply, the admin lists only the kinds. A page that can be confirmed has none.
+        Django gathers both lists without an order, so several entries come in the admin's.
+        """
+        # The list follows the opening sentence. On a page that can be confirmed, the
+        # summary's heading follows it instead.
+        items = self._shown().locator("#content > p + ul > li").all()
+        return [text_of(item) for item in items]
+
+    @property
+    def deletion_counts(self) -> DeletionCounts:
+        """How many objects of each model the deletion will remove, as the page's "Summary"
+        counts them, such as ``{"Products": 1, "Reviews": 2}``.
+
+        The keys are the labels the page shows, in the order shown; the page names a model by
+        nothing else. A model the deletion removes none of is not counted, so it is not a key.
+        A page that cannot be confirmed removes nothing, so it counts nothing. The counts stay
+        whole when Django 6.1 shows only part of the deletions.
+        """
+        # The summary's list follows its heading, which follows the opening sentence. A page
+        # that cannot be confirmed has a list right after the sentence, and no heading.
+        counts = DeletionCounts()
+        for item in self._shown().locator("#content > p + h2 + ul > li").all():
+            label, _, count = text_of(item).rpartition(": ")
+            counts[label] = integer(count)
+        return counts
+
     def confirm_deleting(self) -> SubmissionResult:
         """Click "Yes, I'm sure", and wait for the next page.
 
@@ -634,6 +696,20 @@ class DeletePage(ModelPage):
     @property
     def _confirm_button(self) -> Locator:
         return self._shown().locator('#content form input[type="submit"]')
+
+
+class DeletionCounts(Dict[str, int]):
+    """How many objects of each model a deletion removes, by the label the page shows.
+
+    A plain dict, so membership, ``set()`` and ``list()`` are what they always are; only a
+    miss says more than a bare ``KeyError`` would.
+    """
+
+    def __missing__(self, key: str) -> int:
+        raise KeyError(
+            f"The page counts no model {key!r}. Models: "
+            f"{', '.join(repr(label) for label in self) or 'none'}."
+        )
 
 
 # The page class for each admin view of a model, by the end of the view's URL name.
@@ -712,6 +788,16 @@ def _value_of(source: Any, name: str) -> Any:
 
 def _text(element: Locator) -> str:
     return (element.text_content() or "").strip() if element.count() else ""
+
+
+def _own_text(item: Locator) -> str:
+    """The text of a list entry without the entries nested in it, whitespace collapsed."""
+    text = item.evaluate(
+        "el => Array.from(el.childNodes)"
+        ".filter(node => node.nodeName !== 'UL')"
+        ".map(node => node.textContent).join('')"
+    )
+    return " ".join(str(text).split())
 
 
 def _token(element: Locator, prefix: str) -> str:
