@@ -1,6 +1,8 @@
 """Deleting an object in the admin's two steps: following the delete link from its edit page
 to the confirmation, and confirming there."""
 
+import datetime
+
 import pytest
 
 from django_admin_kit.pages import ChangelistPage, DeletePage
@@ -19,6 +21,13 @@ def confirming(admin_ui, superuser, product):
     """The page that asks whether to delete a product nothing depends on."""
     admin_ui.login(superuser)
     return admin_ui.delete(product)
+
+
+@pytest.fixture
+def confirming_category(admin_ui, superuser, category):
+    """The page that asks whether to delete a category no product uses yet."""
+    admin_ui.login(superuser)
+    return admin_ui.delete(category)
 
 
 @pytest.fixture
@@ -122,3 +131,50 @@ def test_a_refused_confirmation_has_nothing_to_confirm_to_read(admin_ui, viewer,
         "The page did not open, so there is nothing to read from it. "
         f"Status 403, at {admin_ui.url.delete(product)}."
     )
+
+
+def test_a_confirmation_for_an_object_protected_since_is_shown_again(
+    category, product, confirming_category
+):
+    """A product starts using the category after the page opened. The admin will not delete
+    a protected object, so it shows the confirmation again, now with nothing to confirm."""
+    product.category = category
+    product.save()
+
+    result = confirming_category.confirm_deleting()
+
+    assert not result.success
+    assert result.page is confirming_category
+    assert not confirming_category.can_confirm_deleting
+    assert confirming_category.blockers == ["Product: Widget"]
+    assert Category.objects.filter(pk=category.pk).exists()
+
+
+def test_a_confirmation_the_admin_no_longer_allows_is_denied(product, confirming):
+    """The product is released after the page opened, and the shop's rule keeps a released
+    product on record."""
+    product.released_on = datetime.date(2026, 1, 15)
+    product.save()
+
+    result = confirming.confirm_deleting()
+
+    assert not result.success
+    assert result.page.denied
+    assert result.page.status_code == 403
+    assert Product.objects.filter(pk=product.pk).exists()
+
+
+def test_a_confirmation_for_an_object_deleted_since_says_so_on_the_index(product, confirming):
+    """Someone else deleted the product after the page opened. The admin redirects to the
+    index with a warning, so the result reads as a success."""
+    Product.objects.filter(pk=product.pk).delete()
+
+    result = confirming.confirm_deleting()
+
+    assert result.success
+    assert result.redirected_to_index()
+    # The admin's text has a typographic apostrophe, which the check for look-alike
+    # characters would otherwise flag.
+    assert result.page.messages.of_level("warning") == [
+        f"Product with ID “{product.pk}” doesn’t exist. Perhaps it was deleted?"  # noqa: RUF001
+    ]
