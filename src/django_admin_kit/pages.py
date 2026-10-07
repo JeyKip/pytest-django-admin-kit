@@ -647,6 +647,22 @@ class DeletePage(ModelPage):
         return text_of(sentence) if sentence.count() else ""
 
     @property
+    def blockers(self) -> list[str]:
+        """What keeps the deletion from being confirmed, as the page lists it in place of the
+        deletions: the objects that protect this one, such as ``"Product: Widget"``, or the
+        kinds of object it would take with it that the user may not delete, such as
+        ``"product"``.
+
+        The page draws both lists alike, so they are one list here; ``intro`` says which it is.
+        When both apply, the admin lists only the kinds. A page that can be confirmed has none.
+        Django gathers both lists without an order, so several entries come in the admin's.
+        """
+        # The list follows the opening sentence. On a page that can be confirmed, the
+        # summary's heading follows it instead.
+        items = self._shown().locator("#content > p + ul > li").all()
+        return [text_of(item) for item in items]
+
+    @property
     def deletion_counts(self) -> DeletionCounts:
         """How many objects of each model the deletion will remove, as the page's "Summary"
         counts them, such as ``{"Products": 1, "Reviews": 2}``.

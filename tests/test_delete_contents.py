@@ -1,4 +1,5 @@
-"""What a delete confirmation says the deletion will remove."""
+"""What a delete confirmation says the deletion will remove, or what keeps it from being
+confirmed."""
 
 import django
 import pytest
@@ -166,6 +167,62 @@ def test_a_refused_page_has_no_intro_to_read(admin_ui, viewer, product):
 
     with pytest.raises(LookupError) as failure:
         bool(page.intro)
+
+    assert str(failure.value) == (
+        "The page did not open, so there is nothing to read from it. "
+        f"Status 403, at {admin_ui.url.delete(product)}."
+    )
+
+
+def test_a_protected_object_lists_what_protects_it(admin_ui, superuser, protected):
+    admin_ui.login(superuser)
+
+    page = admin_ui.delete(protected)
+
+    assert page.blockers == ["Product: Widget"]
+
+
+def test_an_object_blocked_both_ways_lists_only_the_kind_the_user_may_not_delete(
+    admin_ui, superuser, category, released
+):
+    """The released product protects the category, and the shop's rule keeps a released
+    product on record, so the user may not delete it either. The admin lists only the kind,
+    and the protected product is not on the page."""
+    admin_ui.login(superuser)
+
+    page = admin_ui.delete(category)
+
+    name = "“Tools”" if CURLY else "'Tools'"
+    assert not page.can_confirm_deleting
+    assert page.blockers == ["product"]
+    assert page.native.locator("#content li").all_text_contents() == ["product"]
+    assert page.intro == (
+        f"Deleting the category {name} would result in deleting related objects, but your "
+        "account doesn't have permission to delete the following types of objects:"
+    )
+
+
+def test_a_page_blocked_by_a_kind_removes_nothing(admin_ui, superuser, category, released):
+    admin_ui.login(superuser)
+
+    page = admin_ui.delete(category)
+
+    assert page.deletions == []
+    assert page.deletion_counts == {}
+
+
+def test_a_page_that_can_be_confirmed_has_no_blockers(deleting_product, reviewed):
+    page = deleting_product(reviewed)
+
+    assert page.blockers == []
+
+
+def test_a_refused_page_has_no_blockers_to_read(admin_ui, viewer, product):
+    admin_ui.login(viewer)
+    page = admin_ui.delete(product)
+
+    with pytest.raises(LookupError) as failure:
+        bool(page.blockers)
 
     assert str(failure.value) == (
         "The page did not open, so there is nothing to read from it. "
