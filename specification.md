@@ -18,7 +18,7 @@ It should allow developers to verify:
 * validation errors displayed by Django Admin; (done)
 * what a form renders back after an invalid submission; (done)
 * messages displayed after an operation; (done)
-* the contents of a deletion confirmation.
+* the contents of a deletion confirmation. (done)
 
 The package should emphasize readable tests using normal Python `assert` statements rather than
 custom assertion methods wherever practical.
@@ -1861,7 +1861,7 @@ messages and no errors; a rejected one to a form with errors and possibly no mes
 
 ---
 
-# 23. CRUD Success Checks
+# 23. CRUD Success Checks (done)
 
 The package must support basic create, edit, and delete workflows.
 
@@ -1922,7 +1922,7 @@ assert result.success
 
 ---
 
-## 23.4 Delete confirmation contents
+## 23.4 Delete confirmation contents (done)
 
 The confirmation page lists what the deletion will remove: the object itself, then every
 related object it takes with it, in the order the page shows them. Each one reads as the page
@@ -1933,12 +1933,12 @@ page = admin_ui.delete(product)
 
 assert page.works
 
-assert page.deletions == [
+assert page.deletions == [    # done
     "Product: Widget",
     "Review: Great",
     "Review: Fine",
 ]
-assert "Review: Great" in page.deletions
+assert "Review: Great" in page.deletions    # done
 ```
 
 The entries are texts, not model instances. The admin links an entry to its object only when
@@ -1950,8 +1950,8 @@ with it; `deletions` reads it top to bottom and drops only the indentation.
 The page also counts what the deletion will remove, per model, as its "Summary" shows it:
 
 ```python
-assert page.deletion_counts == {"Products": 1, "Reviews": 2}
-assert "Categories" not in page.deletion_counts
+assert page.deletion_counts == {"Products": 1, "Reviews": 2}    # done
+assert "Categories" not in page.deletion_counts             # done
 ```
 
 The keys are the labels the page shows, since the page names each model by nothing else. A
@@ -1965,7 +1965,7 @@ KeyError: "The page counts no model 'Categories'. Models: 'Products', 'Reviews'.
 The sentence the page starts with is read as shown:
 
 ```python
-assert page.intro == (
+assert page.intro == (    # done
     "Are you sure you want to delete the product “Widget”? "
     "All of the following related items will be deleted:"
 )
@@ -1979,7 +1979,7 @@ A page that cannot be confirmed (section 23.5) removes nothing: `deletions` is `
 
 ---
 
-## 23.5 Deletion refused
+## 23.5 Deletion refused (done)
 
 An admin may decline to offer or to perform a deletion.
 
@@ -1998,7 +1998,7 @@ one being deleted: (done)
 page = admin_ui.delete(category)
 
 assert not page.can_confirm_deleting    # done
-assert page.blockers == ["Product: Widget"]
+assert page.blockers == ["Product: Widget"]    # done
 ```
 
 `blockers` is what the page lists in place of the deletions: the objects that protect the one
@@ -2007,7 +2007,7 @@ may not delete, such as `["product"]`. The admin draws both lists alike and tell
 only in its translated sentence, so `blockers` is one list and `intro` says which case it is:
 
 ```python
-assert page.intro == (
+assert page.intro == (    # done
     "Deleting the category “Tools” would require deleting the following protected "
     "related objects:"
 )
@@ -2019,12 +2019,12 @@ is blocked both ways, the admin lists only the kinds the user may not delete, so
 those and the protected objects are not on the page. Django collects both lists into sets, so the
 order of several entries is not fixed.
 
-So is a refused operation:
+So is a refused operation: (done)
 
 ```python
 result = admin_ui.delete(product).confirm_deleting()
 
-assert not result.success
+assert not result.success    # done
 ```
 
 The admin refuses a confirmation it offered when things changed after the page opened: the
@@ -2036,7 +2036,7 @@ admin sends the user to the index with a warning, as for any missing object (sec
 `result.success` is true and the result's page says what happened:
 
 ```python
-assert result.page.messages.of_level("warning") == [
+assert result.page.messages.of_level("warning") == [    # done
     "Product with ID “1” doesn’t exist. Perhaps it was deleted?",
 ]
 ```
@@ -2718,8 +2718,8 @@ supported Django versions:
     distinct levels. (done)
 28. Read the messages displayed after an operation. (done)
 29. Perform and verify a basic delete operation. (done)
-30. Read the contents of a deletion confirmation.
-31. Verify that a refused deletion is not offered or not performed.
+30. Read the contents of a deletion confirmation. (done)
+31. Verify that a refused deletion is not offered or not performed. (done)
 32. Read the models the admin exposes to the current user, their grouping, and their order.
     (done)
 33. Run against a non-default admin site mounted under a non-default URL prefix. (done)
