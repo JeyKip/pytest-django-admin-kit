@@ -15,7 +15,7 @@ from __future__ import annotations
 import re
 from collections.abc import Mapping
 from enum import Enum
-from typing import Any
+from typing import Any, Dict
 from urllib.parse import urlsplit
 
 from django.apps import apps
@@ -28,6 +28,7 @@ from .errors import ValidationErrors
 from .fields import Fields, FormField
 from .messages import Messages
 from .normalize import integer
+from .rendered import text_of
 from .results import SubmissionResult
 from .rows import Row
 from .urls import AdminUrls
@@ -635,6 +636,24 @@ class DeletePage(ModelPage):
         items = self._shown().locator("#content > ul + h2 + ul li").all()
         return [_own_text(item) for item in items]
 
+    @property
+    def deletion_counts(self) -> DeletionCounts:
+        """How many objects of each model the deletion will remove, as the page's "Summary"
+        counts them, such as ``{"Products": 1, "Reviews": 2}``.
+
+        The keys are the labels the page shows, in the order shown; the page names a model by
+        nothing else. A model the deletion removes none of is not counted, so it is not a key.
+        A page that cannot be confirmed removes nothing, so it counts nothing. The counts stay
+        whole when Django 6.1 shows only part of the deletions.
+        """
+        # The summary's list follows its heading, which follows the opening sentence. A page
+        # that cannot be confirmed has a list right after the sentence, and no heading.
+        counts = DeletionCounts()
+        for item in self._shown().locator("#content > p + h2 + ul > li").all():
+            label, _, count = text_of(item).rpartition(": ")
+            counts[label] = integer(count)
+        return counts
+
     def confirm_deleting(self) -> SubmissionResult:
         """Click "Yes, I'm sure", and wait for the next page.
 
@@ -651,6 +670,20 @@ class DeletePage(ModelPage):
     @property
     def _confirm_button(self) -> Locator:
         return self._shown().locator('#content form input[type="submit"]')
+
+
+class DeletionCounts(Dict[str, int]):
+    """How many objects of each model a deletion removes, by the label the page shows.
+
+    A plain dict, so membership, ``set()`` and ``list()`` are what they always are; only a
+    miss says more than a bare ``KeyError`` would.
+    """
+
+    def __missing__(self, key: str) -> int:
+        raise KeyError(
+            f"The page counts no model {key!r}. Models: "
+            f"{', '.join(repr(label) for label in self) or 'none'}."
+        )
 
 
 # The page class for each admin view of a model, by the end of the view's URL name.
