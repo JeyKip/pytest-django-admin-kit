@@ -55,7 +55,13 @@ def test_a_project_gets_only_the_plugins_fixtures(tmp_path):
 
     assert result.returncode == 0, result.stdout + result.stderr
     listed = {line.split(" ")[0] for line in result.stdout.splitlines() if line[:1].isalpha()}
-    assert {"admin_ui", "admin_ui_config", "admin_ui_urls", "admin_ui_driving"} <= listed
+    assert {
+        "admin_ui",
+        "admin_ui_config",
+        "admin_ui_urls",
+        "admin_ui_normalizers",
+        "admin_ui_driving",
+    } <= listed
     assert not {"superuser", "viewer", "editor", "adder", "customer", "product"} & listed
 
 

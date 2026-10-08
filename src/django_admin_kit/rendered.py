@@ -7,12 +7,13 @@ never changes it, and the links it renders are kept next to it.
 
 from __future__ import annotations
 
-from typing import Any, Callable
+from typing import TYPE_CHECKING, Any, Callable
 from urllib.parse import SplitResult, urlsplit
 
 from playwright.sync_api import Locator
 
-from . import normalize
+if TYPE_CHECKING:
+    from .normalize import Normalizers
 
 
 class Link:
@@ -56,12 +57,15 @@ class RenderedValue:
     """One value the admin rendered, read from the element that holds it.
 
     ``check`` is run before every read, and fails when the browser no longer shows the
-    page the value is on.
+    page the value is on. ``normalizers`` read its value.
     """
 
-    def __init__(self, element: Locator, check: Callable[[], None]) -> None:
+    def __init__(
+        self, element: Locator, check: Callable[[], None], normalizers: Normalizers
+    ) -> None:
         self._element = element
         self._check = check
+        self._normalizers = normalizers
 
     @property
     def native(self) -> Locator:
@@ -76,9 +80,10 @@ class RenderedValue:
 
     @property
     def value(self) -> Any:
-        """What is shown, normalized: the text, unless the admin drew an icon."""
+        """What is shown, read by the rule for its kind: by default the text, or a boolean
+        where the admin drew one as an icon."""
         self._check()
-        return normalize.normalize(self)
+        return self._normalizers.read(self)
 
     @property
     def links(self) -> list[Link]:

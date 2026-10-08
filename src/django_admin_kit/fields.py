@@ -13,6 +13,7 @@ from django.db.models import Model
 from django.utils import translation
 from playwright.sync_api import Locator
 
+from .normalize import Normalizers
 from .rendered import Link, RenderedValue, text_of
 
 
@@ -56,16 +57,23 @@ class FormField:
 
     ``language`` is the one the page was rendered in, which decides what the admin put
     after the label. ``check`` is run before every read, and fails when the browser no
-    longer shows the page the field is on.
+    longer shows the page the field is on. ``normalizers`` read the value of a field the
+    user may only read.
     """
 
     def __init__(
-        self, element: Locator, name: str, language: str, check: Callable[[], None]
+        self,
+        element: Locator,
+        name: str,
+        language: str,
+        check: Callable[[], None],
+        normalizers: Normalizers,
     ) -> None:
         self._element = element
         self._name = name
         self._language = language
         self._check = check
+        self._normalizers = normalizers
 
     @property
     def name(self) -> str:
@@ -226,7 +234,7 @@ class FormField:
 
     @property
     def _rendered(self) -> RenderedValue:
-        return RenderedValue(self._element.locator("div.readonly"), self._check)
+        return RenderedValue(self._element.locator("div.readonly"), self._check, self._normalizers)
 
     def __repr__(self) -> str:
         return f"FormField({self._name!r})"

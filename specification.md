@@ -2356,17 +2356,21 @@ The name is deliberately explicit. It names what is under test rather than how i
 it does not collide with project fixtures named `admin` or with the `admin` module imported in
 most Django test modules.
 
-`admin_ui` is assembled from three session-scoped fixtures, and a project adjusts it by
+`admin_ui` is assembled from four session-scoped fixtures, and a project adjusts it by
 overriding one of them at whatever scope pytest allows, keeping the rest:
 
 ```python
-admin_ui_config     # the settings of section 28, resolved and validated once
-admin_ui_urls       # the URLs of section 6.3 for the site under test; see section 29
-admin_ui_driving    # keeps Django's ORM usable while a browser is running
+admin_ui_config         # the settings of section 28, resolved and validated once
+admin_ui_urls           # the URLs of section 6.3 for the site under test; see section 29
+admin_ui_normalizers    # the rules of section 28.3 that read rendered values
+admin_ui_driving        # keeps Django's ORM usable while a browser is running
 ```
 
-The first two are the intended extension points. The third exists so that it is set up before
-the test database and torn down after it, and a project has no reason to replace it. (done)
+The first three are the intended extension points. Overriding `admin_ui_normalizers` in a
+`conftest.py` or a test module replaces the rules for those tests without restating the rest of
+the settings; being session-scoped, it cannot be overridden for a single test. The fourth exists
+so that it is set up before the test database and torn down after it, and a project has no
+reason to replace it. (done)
 
 Public names are importable from the module that defines them:
 
@@ -2509,8 +2513,10 @@ Rules apply to what the admin renders for the user to read: changelist cells and
 form fields. An editable field's value is what its control holds (section 13), and goes through
 no rule.
 
-Overrides apply project-wide. Replacing a rule for a single test, and adding a rule for a
-representation the package does not know, are left for later (section 33).
+Overrides apply project-wide. The rules are built once per session into the
+`admin_ui_normalizers` fixture (section 27), which a project may override for a directory or a
+module of tests. Replacing a rule for a single test, and adding a rule for a representation the
+package does not know, are left for later (section 33).
 
 ---
 

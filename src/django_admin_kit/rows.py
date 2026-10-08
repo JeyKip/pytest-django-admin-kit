@@ -14,6 +14,7 @@ from django.db.models import Model
 from django.urls import Resolver404, resolve
 from playwright.sync_api import Locator
 
+from .normalize import Normalizers
 from .rendered import RenderedValue
 from .urls import AdminUrls
 
@@ -21,8 +22,14 @@ from .urls import AdminUrls
 class Cell(RenderedValue):
     """One cell of a changelist row."""
 
-    def __init__(self, element: Locator, column: str, check: Callable[[], None]) -> None:
-        super().__init__(element, check)
+    def __init__(
+        self,
+        element: Locator,
+        column: str,
+        check: Callable[[], None],
+        normalizers: Normalizers,
+    ) -> None:
+        super().__init__(element, check, normalizers)
         self._column = column
 
     @property
@@ -46,6 +53,7 @@ class Row:
         model: type[Model],
         urls: AdminUrls,
         check: Callable[[], None],
+        normalizers: Normalizers,
     ) -> None:
         self._element = element
         self._index = index
@@ -53,6 +61,7 @@ class Row:
         self._model = model
         self._urls = urls
         self._check = check
+        self._normalizers = normalizers
 
     @property
     def index(self) -> int:
@@ -114,7 +123,10 @@ class Row:
         # header cell.
         cells = self._element.locator(":scope > th, :scope > td").all()
         cells = [cell for cell in cells if "action-checkbox" not in _classes(cell)]
-        return [Cell(cell, column, self._check) for cell, column in zip(cells, self._columns)]
+        return [
+            Cell(cell, column, self._check, self._normalizers)
+            for cell, column in zip(cells, self._columns)
+        ]
 
 
 def _classes(element: Locator) -> list[str]:

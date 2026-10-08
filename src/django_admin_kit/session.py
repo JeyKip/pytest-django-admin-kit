@@ -15,6 +15,7 @@ from django.conf import settings
 from django.test import Client
 from playwright.sync_api import BrowserContext
 
+from .normalize import Normalizers
 from .pages import AdminPage, ChangelistPage, CreatePage, DeletePage, EditPage, IndexPage
 from .urls import AdminUrls
 
@@ -24,10 +25,17 @@ _P = TypeVar("_P", bound=AdminPage)
 class AdminSession:
     """One test's view of the admin: who is logged in, and where things live."""
 
-    def __init__(self, context: BrowserContext, urls: AdminUrls, base_url: str) -> None:
+    def __init__(
+        self,
+        context: BrowserContext,
+        urls: AdminUrls,
+        base_url: str,
+        normalizers: Normalizers,
+    ) -> None:
         self._context = context
         self._urls = urls
         self._base_url = base_url
+        self._normalizers = normalizers
 
     @property
     def native(self) -> BrowserContext:
@@ -123,4 +131,4 @@ class AdminSession:
         response = page.goto(self.absolute(path))
         # `goto` returns None only for same-document navigations, never for a URL.
         assert response is not None
-        return page_class(page, response.status, path, self._urls, *args)
+        return page_class(page, response.status, path, self._urls, self._normalizers, *args)

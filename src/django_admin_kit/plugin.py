@@ -11,8 +11,8 @@ everywhere else in the project. That also makes each admin test carry the browse
 ran on in its id.
 
 The fixtures are layered so one can be overridden without rewriting the rest. Point
-``admin_ui_urls`` at another ``AdminSite``, or ``admin_ui_config`` at different
-settings, and ``admin_ui`` follows.
+``admin_ui_urls`` at another ``AdminSite``, ``admin_ui_normalizers`` at other rules, or
+``admin_ui_config`` at different settings, and ``admin_ui`` follows.
 """
 
 from __future__ import annotations
@@ -32,6 +32,7 @@ if TYPE_CHECKING:
     from pytest_django.live_server_helper import LiveServer
     from pytest_playwright.pytest_playwright import CreateContextCallback
 
+    from .normalize import Normalizers
     from .session import AdminSession
     from .urls import AdminUrls
 
@@ -83,6 +84,15 @@ def admin_ui_urls(admin_ui_config: Config) -> AdminUrls:
 
 
 @pytest.fixture(scope="session")
+def admin_ui_normalizers(admin_ui_config: Config) -> Normalizers:
+    """The rules that read rendered values: the defaults, with the ones the settings
+    replace, built once."""
+    from .normalize import Normalizers
+
+    return Normalizers(admin_ui_config.normalizers)
+
+
+@pytest.fixture(scope="session")
 def admin_ui_driving() -> Iterator[None]:
     """Hold Django's async guard open around everything the admin session touches.
 
@@ -115,6 +125,7 @@ def admin_ui(
     new_context: CreateContextCallback,
     admin_ui_config: Config,
     admin_ui_urls: AdminUrls,
+    admin_ui_normalizers: Normalizers,
     browser_context_args: dict[str, Any],
 ) -> Iterator[AdminSession]:
     """A fresh, unauthenticated admin session per test.
@@ -141,4 +152,4 @@ def admin_ui(
     context.set_default_timeout(admin_ui_config.timeout)
 
     # No close here: the factory closes the contexts it made when the test ends.
-    yield AdminSession(context, admin_ui_urls, live_server.url)
+    yield AdminSession(context, admin_ui_urls, live_server.url, admin_ui_normalizers)

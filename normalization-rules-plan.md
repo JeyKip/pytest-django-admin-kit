@@ -103,9 +103,12 @@ wants it typed parses it in its `text` rule. Choosing a rule by column is left f
 7. **The settings are validated loudly**, like every other setting: a name that is not one of
    the kinds is rejected, naming it and listing the kinds; a value that is not a string, a path
    that does not import, and one that names no callable are each rejected, naming the kind.
-8. **The rules are built once per session**, from the configuration, into a table the session
-   hands to every page and everything taken from it, next to the `check` each already gets.
-   Nothing changes them during a test.
+8. **The rules are built once per session**, from the configuration, by a session-scoped
+   fixture, `admin_ui_normalizers`, the way `admin_ui_urls` is built. A project may override it
+   for a directory or a module of tests without restating the rest of the settings; a
+   function-scoped override fails, so it cannot replace rules for a single test. `admin_ui`
+   hands the table to the session, which hands it to every page and everything taken from it,
+   next to the `check` each already gets. Nothing changes them during a test.
 
 ### `Feed.refreshed_at` and `Feed.refresh_time` (test project only, C2)
 
@@ -141,8 +144,10 @@ The table, its plumbing and its settings, with the two rules there are today.
 * `config.py`: `normalizers` among the known keys; `Config.normalizers`, the kind names mapped to
   the rules, imported with `django.utils.module_loading.import_string` and validated as
   decision 7 says.
-* `plugin.py`, `session.py`: `admin_ui` builds the table from the configuration and hands it to
-  the session.
+* `plugin.py`: `admin_ui_normalizers`, a session-scoped fixture that builds the table from
+  `admin_ui_config`; `admin_ui` hands it to the session.
+* `specification.md` §27: `admin_ui_normalizers` among the fixtures `admin_ui` is assembled
+  from.
 * `pages.py`, `rows.py`, `fields.py`, `rendered.py`: the table is passed down from the session to
   each page, to the pages a page leads to (`_submitted`, `_page_at`, `EditPage.delete`), and to
   every `Row`, `Cell`, `FormField` and `RenderedValue`.
@@ -152,10 +157,11 @@ The table, its plumbing and its settings, with the two rules there are today.
   * `tests/test_config.py`: a path is imported; a name that is no kind, a value that is not a
     string, a path that does not import, and one that names no callable are each rejected with
     the exact message;
-  * a new `tests/test_normalizers.py`, which overrides `admin_ui_config` for the module with the
-    tagging rules, as a project overrides it (section 27): text cells read through `text`, icon
+  * a new `tests/test_normalizers.py`, which overrides `admin_ui_normalizers` for the module
+    with the tagging rules, as a project overrides it (section 27): text cells read through `text`, icon
     cells through `boolean`, a rendered-only form field through its rule, and the page a
     submission leads to reads through the same rules.
+* `tests/test_plugin.py`: `admin_ui_normalizers` among the fixtures the plugin registers.
 * Constructors that tests call directly (`tests/test_pages.py`'s `page_at`) gain the argument.
 * Consistency: without `normalizers` the defaults read as today, so every other test passes
   unchanged.
@@ -212,7 +218,8 @@ The table, its plumbing and its settings, with the two rules there are today.
 ### C4. README, spec marks and plan removal
 
 * `README.md`: an entry for replacing a rule for the whole project, with the kinds and the
-  order they are picked in.
+  order they are picked in; `admin_ui_normalizers` in the list of fixtures a project may
+  override.
 * `specification.md`: `(done)` on §28.3, the "value normalization" item of §28.1, the
   normalization half of §32 item 34 (the field-handling half waits for 28.5), and the references
   in §3.4.
