@@ -58,7 +58,7 @@ class FormField:
     ``language`` is the one the page was rendered in, which decides what the admin put
     after the label. ``check`` is run before every read, and fails when the browser no
     longer shows the page the field is on. ``normalizers`` read the value of a field the
-    user may only read.
+    user may only read, by the field of ``model`` behind it, if any.
     """
 
     def __init__(
@@ -68,12 +68,14 @@ class FormField:
         language: str,
         check: Callable[[], None],
         normalizers: Normalizers,
+        model: type[Model],
     ) -> None:
         self._element = element
         self._name = name
         self._language = language
         self._check = check
         self._normalizers = normalizers
+        self._model = model
 
     @property
     def name(self) -> str:
@@ -234,7 +236,13 @@ class FormField:
 
     @property
     def _rendered(self) -> RenderedValue:
-        return RenderedValue(self._element.locator("div.readonly"), self._check, self._normalizers)
+        return RenderedValue(
+            self._element.locator("div.readonly"),
+            self._check,
+            self._normalizers,
+            self._model,
+            self._name,
+        )
 
     def __repr__(self) -> str:
         return f"FormField({self._name!r})"

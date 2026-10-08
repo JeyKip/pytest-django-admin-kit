@@ -115,7 +115,8 @@ def test_a_rule_is_imported_from_its_dotted_path():
         (
             {"dates": "project.shop.rules.text"},
             "Unknown DJANGO_ADMIN_KIT['normalizers'] rule(s): 'dates'. "
-            "Valid rules are: 'boolean', 'text'.",
+            "Valid rules are: 'boolean', 'date', 'datetime', 'time', 'number', 'choice', "
+            "'text'.",
         ),
         (
             {"text": rules.text},

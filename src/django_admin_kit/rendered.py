@@ -10,6 +10,9 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any, Callable
 from urllib.parse import SplitResult, urlsplit
 
+from django.contrib.admin.utils import NotRelationField, get_fields_from_path
+from django.core.exceptions import FieldDoesNotExist
+from django.db.models import Field, Model
 from playwright.sync_api import Locator
 
 if TYPE_CHECKING:
@@ -57,20 +60,33 @@ class RenderedValue:
     """One value the admin rendered, read from the element that holds it.
 
     ``check`` is run before every read, and fails when the browser no longer shows the
-    page the value is on. ``normalizers`` read its value.
+    page the value is on. ``normalizers`` read its value, by what stands behind it: the
+    ``name`` the admin renders it under on a page about ``model``.
     """
 
     def __init__(
-        self, element: Locator, check: Callable[[], None], normalizers: Normalizers
+        self,
+        element: Locator,
+        check: Callable[[], None],
+        normalizers: Normalizers,
+        model: type[Model],
+        name: str,
     ) -> None:
         self._element = element
         self._check = check
         self._normalizers = normalizers
+        self._model = model
+        self._name = name
 
     @property
     def native(self) -> Locator:
         """The element, unwrapped, for anything the package does not model."""
         return self._element
+
+    @property
+    def field(self) -> Field | None:
+        """The model field the admin rendered the value from, or ``None``, as for a method."""
+        return _model_field(self._model, self._name)
 
     @property
     def text(self) -> str:
@@ -98,3 +114,16 @@ class RenderedValue:
 def text_of(element: Locator) -> str:
     """The document's text inside ``element``, with its whitespace collapsed."""
     return " ".join((element.text_content() or "").split())
+
+
+def _model_field(model: type[Model], name: str) -> Field | None:
+    """The model field the admin renders under ``name``, or ``None`` when it renders something
+    else there, such as a method.
+
+    The admin looks a name up as a field first, following a path such as ``category__name``,
+    and only then as a callable or a method, so a name that is a field is always that field.
+    """
+    try:
+        return get_fields_from_path(model, name)[-1]
+    except (FieldDoesNotExist, NotRelationField):
+        return None

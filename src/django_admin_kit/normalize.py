@@ -12,6 +12,7 @@ import re
 from typing import TYPE_CHECKING, Any, Callable, Mapping
 
 if TYPE_CHECKING:
+    from django.db.models import Field
     from playwright.sync_api import Locator
 
     from .rendered import RenderedValue
@@ -27,12 +28,45 @@ def boolean(rendered: RenderedValue) -> Any:
     return _ICONS[_icon(rendered).get_attribute("alt") or ""]
 
 
+def date(rendered: RenderedValue) -> Any:
+    """A date, as the text the project's formats render."""
+    return rendered.text
+
+
+def datetime(rendered: RenderedValue) -> Any:
+    """A date and time, as the text the project's formats render."""
+    return rendered.text
+
+
+def time(rendered: RenderedValue) -> Any:
+    """A time of day, as the text the project's formats render."""
+    return rendered.text
+
+
+def number(rendered: RenderedValue) -> Any:
+    """A number, as the text the project's formats render."""
+    return rendered.text
+
+
+def choice(rendered: RenderedValue) -> Any:
+    """A value from a fixed set of choices, as the label the admin shows for it."""
+    return rendered.text
+
+
 def text(rendered: RenderedValue) -> Any:
     """Anything else, as its text."""
     return rendered.text
 
 
-DEFAULTS: dict[str, Rule] = {"boolean": boolean, "text": text}
+DEFAULTS: dict[str, Rule] = {
+    "boolean": boolean,
+    "date": date,
+    "datetime": datetime,
+    "time": time,
+    "number": number,
+    "choice": choice,
+    "text": text,
+}
 """The default rule for each kind, by the name a project replaces it under."""
 
 
@@ -44,8 +78,41 @@ class Normalizers:
 
     def read(self, rendered: RenderedValue) -> Any:
         """The value of ``rendered``, read by the rule for its kind."""
-        kind = "boolean" if _draws_a_boolean(rendered) else "text"
-        return self._rules[kind](rendered)
+        return self._rules[_kind(rendered)](rendered)
+
+
+def _kind(rendered: RenderedValue) -> str:
+    """The kind of ``rendered``: by the model field behind it where it has one, then by what
+    the admin drew."""
+    field = rendered.field
+    if field is not None:
+        # The admin shows a field with choices as their labels, whatever the field's class.
+        if field.choices:
+            return "choice"
+        kind = _field_kind(field)
+        if kind is not None:
+            return kind
+    if _draws_a_boolean(rendered):
+        return "boolean"
+    return "text"
+
+
+def _field_kind(field: Field) -> str | None:
+    """The kind of the most specific class ``field`` is that has one, so a date-time field,
+    which is also a date field, is a date-time."""
+    # Imported here: this module loads at pytest startup, with the settings.
+    from django.db import models
+
+    kinds = {
+        models.BooleanField: "boolean",
+        models.DateTimeField: "datetime",
+        models.DateField: "date",
+        models.TimeField: "time",
+        models.IntegerField: "number",
+        models.DecimalField: "number",
+        models.FloatField: "number",
+    }
+    return next((kinds[cls] for cls in type(field).__mro__ if cls in kinds), None)
 
 
 def _icon(rendered: RenderedValue) -> Locator:

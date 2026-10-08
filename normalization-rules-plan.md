@@ -168,9 +168,10 @@ The table, its plumbing and its settings, with the two rules there are today.
 
 ### C2. Pick the rule by the model field behind a value
 
-* `RenderedValue.field`: `Cell` resolves its column with `get_fields_from_path`, the
-  rendered-only `FormField` its name, both from the page's model; `None` when the name is no
-  field.
+* `RenderedValue` takes the page's model and the name the value is rendered under (a `Cell`'s
+  column, a rendered-only `FormField`'s name), and `RenderedValue.field` resolves the model
+  field from them with `get_fields_from_path` when it is read; `None` when the name is no
+  field. C3 needs the model and the name again, for the empty display.
 * `normalize.py`: the kinds `choice`, `date`, `datetime`, `time` and `number`, each returning the
   text; the table maps field classes to kinds, most specific first; `read` picks the kind in the order of
   decision 2, steps 2, 3, 4 (boolean only) and 5. `boolean` is also picked by `BooleanField`.
@@ -178,7 +179,8 @@ The table, its plumbing and its settings, with the two rules there are today.
   (`TimeField`), both optional, and a migration `0003_feed_refresh.py`, so a changelist shows a
   date-time and a time. No test reads the feed's form fields or columns by name.
 * `tests/project/shop/admin.py`: `FeedAdmin.list_display = ("source", "mode", "refreshed_at",
-  "refresh_time")`, so a changelist shows a field with choices, a date-time and a time.
+  "refresh_time", "refreshed")`, so a changelist shows a field with choices, a date-time, a time
+  and a method drawn as a boolean icon.
 * `tests/project/shop/rules.py`: a tagging rule for each new kind.
 * Tests in `tests/test_normalizers.py`, through the tagging rules:
   * `date` receives the release date cells, and no other column;
@@ -187,8 +189,9 @@ The table, its plumbing and its settings, with the two rules there are today.
   * `time` receives the feed's `refresh_time` cells;
   * `number` receives the price cells;
   * `choice` receives the feed's mode cells, read by their label;
-  * `boolean` receives `is_active` and `featured` by their field, and `is_released`, a method,
-    by its icon;
+  * `boolean` receives `is_active` and `featured` by their field, and the feed's `refreshed`, a
+    method with `boolean=True`, by its icon (`is_released` sets no `boolean`, so the admin
+    renders it as text and `text` reads it);
   * a rendered-only form field is read by its field's kind (a viewer's product page: the date by
     `date`, the quantity by `number`);
   * the value a rule receives has `field`, the model field, and `None` for a method column.

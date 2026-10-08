@@ -28,8 +28,9 @@ class Cell(RenderedValue):
         column: str,
         check: Callable[[], None],
         normalizers: Normalizers,
+        model: type[Model],
     ) -> None:
-        super().__init__(element, check, normalizers)
+        super().__init__(element, check, normalizers, model, column)
         self._column = column
 
     @property
@@ -124,7 +125,7 @@ class Row:
         cells = self._element.locator(":scope > th, :scope > td").all()
         cells = [cell for cell in cells if "action-checkbox" not in _classes(cell)]
         return [
-            Cell(cell, column, self._check, self._normalizers)
+            Cell(cell, column, self._check, self._normalizers, self._model)
             for cell, column in zip(cells, self._columns)
         ]
 

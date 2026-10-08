@@ -4,13 +4,24 @@ Each returns the name of the rule with what it read, so a test sees which rule r
 """
 
 
+def _tagged(kind):
+    def rule(rendered):
+        return kind, rendered.text
+
+    rule.__name__ = kind
+    return rule
+
+
 def boolean(rendered):
-    return ("boolean", rendered.native.locator("img").get_attribute("alt"))
+    return "boolean", rendered.native.locator("img").get_attribute("alt")
 
 
-def text(rendered):
-    return ("text", rendered.text)
-
+date = _tagged("date")
+datetime = _tagged("datetime")
+time = _tagged("time")
+number = _tagged("number")
+choice = _tagged("choice")
+text = _tagged("text")
 
 # Something a setting can name that is no rule at all.
 NOT_A_RULE = "boolean"

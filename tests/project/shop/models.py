@@ -50,6 +50,9 @@ class Feed(models.Model):
         choices=(("append", "Append"), ("replace", "Replace")),
         default="append",
     )
+    # A date-time and a time, so a changelist shows each next to the product's dates.
+    refreshed_at = models.DateTimeField(null=True, blank=True)
+    refresh_time = models.TimeField(null=True, blank=True)
 
     def __str__(self):
         return self.source

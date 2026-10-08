@@ -119,6 +119,13 @@ class ProductAdmin(admin.ModelAdmin):
 @admin.register(Feed)
 class FeedAdmin(admin.ModelAdmin):
     save_as = True
+    # A field with choices, a date-time and a time, each read by a rule of its own, and a
+    # method the admin draws as a boolean icon.
+    list_display = ("source", "mode", "refreshed_at", "refresh_time", "refreshed")
+
+    @admin.display(boolean=True, description="Refreshed")
+    def refreshed(self, feed):
+        return feed.refreshed_at is not None
 
     # Messages of the project's own next to the admin's. A source like "new feed.txt" gets
     # both warnings and then the admin's success message: several messages of one level,

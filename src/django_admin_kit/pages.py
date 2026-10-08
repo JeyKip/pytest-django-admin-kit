@@ -452,7 +452,9 @@ class FormPage(ModelPage):
                 if "hidden" in classes:
                     continue
                 for name in _field_names(box):
-                    fields[name] = FormField(box, name, language, self._check, self._normalizers)
+                    fields[name] = FormField(
+                        box, name, language, self._check, self._normalizers, self._model
+                    )
         return fields
 
     @property
