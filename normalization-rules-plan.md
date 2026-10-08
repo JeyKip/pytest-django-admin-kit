@@ -199,8 +199,13 @@ The table, its plumbing and its settings, with the two rules there are today.
 
 ### C3. Links and empty values
 
-* `normalize.py`: `link` (step 4) and `empty` (step 1), both returning the text. The empty
-  display is looked up per column as decision 4 says, once per page.
+* `normalize.py`: `link` (step 4) and `empty` (step 1), both returning the text.
+* `rendered.py`, `rows.py`, `fields.py`, `pages.py`: the pages hand the model admin down in
+  place of the model (the model is `model_admin.model`), and `RenderedValue.empty_display`
+  resolves the display as decision 4 says: the model admin's, and for a `Cell` first the
+  column's own display function, looked up as the admin looks it up (a callable in
+  `list_display`, then the model admin's attribute, then the model's). The spec's rule
+  description gains `empty_display`.
 * `urls.py`: `registered_models(site)` and `model_admin(site, model)` on one private accessor
   of the site's registry (decision 5); `AdminUrls._reverse_model`'s error lists the models
   through `registered_models`, so it reads the registry no longer on its own.
@@ -215,7 +220,11 @@ The table, its plumbing and its settings, with the two rules there are today.
   * a method column that sets its own `empty_value` is read as empty by it, not by the model
     admin's display: `FeedAdmin.last_refreshed`, added to the feed's columns with
     `@admin.display(empty_value="never")`, reads `"never"` through `empty` for a feed never
-    refreshed. No test reads the feed's columns by name, so the column changes nothing else.
+    refreshed, while `refreshed_at` reads the site's default `"-"`. No test reads the feed's
+    columns by name, so the column changes nothing else;
+  * a rendered-only form field with no value reads the model admin's display through `empty`;
+  * the linked `name` column, read by `text` in C1 and C2, is now read by `link`, so those tests
+    read the SKU instead.
 * Consistency: both defaults return the text.
 
 ### C4. README, spec marks and plan removal

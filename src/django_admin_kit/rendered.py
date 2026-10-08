@@ -10,9 +10,11 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any, Callable
 from urllib.parse import SplitResult, urlsplit
 
+from django.contrib.admin import ModelAdmin
 from django.contrib.admin.utils import NotRelationField, get_fields_from_path
 from django.core.exceptions import FieldDoesNotExist
-from django.db.models import Field, Model
+from django.db.models import Field
+from django.utils.html import strip_tags
 from playwright.sync_api import Locator
 
 if TYPE_CHECKING:
@@ -61,7 +63,7 @@ class RenderedValue:
 
     ``check`` is run before every read, and fails when the browser no longer shows the
     page the value is on. ``normalizers`` read its value, by what stands behind it: the
-    ``name`` the admin renders it under on a page about ``model``.
+    ``name`` the admin renders it under, on a page ``model_admin`` draws.
     """
 
     def __init__(
@@ -69,13 +71,13 @@ class RenderedValue:
         element: Locator,
         check: Callable[[], None],
         normalizers: Normalizers,
-        model: type[Model],
+        model_admin: ModelAdmin,
         name: str,
     ) -> None:
         self._element = element
         self._check = check
         self._normalizers = normalizers
-        self._model = model
+        self._model_admin = model_admin
         self._name = name
 
     @property
@@ -86,7 +88,13 @@ class RenderedValue:
     @property
     def field(self) -> Field | None:
         """The model field the admin rendered the value from, or ``None``, as for a method."""
-        return _model_field(self._model, self._name)
+        return _model_field(self._model_admin.model, self._name)
+
+    @property
+    def empty_display(self) -> str:
+        """The text the admin shows here for a value it has none of: the model admin's, which
+        falls back to the site's."""
+        return display_text(self._model_admin.get_empty_value_display())
 
     @property
     def text(self) -> str:
@@ -116,7 +124,12 @@ def text_of(element: Locator) -> str:
     return " ".join((element.text_content() or "").split())
 
 
-def _model_field(model: type[Model], name: str) -> Field | None:
+def display_text(display: str) -> str:
+    """``display`` as the page shows it: without markup, its whitespace collapsed."""
+    return " ".join(strip_tags(str(display)).split())
+
+
+def _model_field(model: type[Any], name: str) -> Field | None:
     """The model field the admin renders under ``name``, or ``None`` when it renders something
     else there, such as a method.
 

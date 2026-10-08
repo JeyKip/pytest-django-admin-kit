@@ -31,7 +31,7 @@ from .normalize import Normalizers, integer
 from .rendered import text_of
 from .results import SubmissionResult
 from .rows import Row
-from .urls import AdminUrls
+from .urls import AdminUrls, model_admin
 
 _NOTHING = object()
 """What a source has for a field it says nothing about, which `None` cannot stand for."""
@@ -444,6 +444,7 @@ class FormPage(ModelPage):
         # The admin says which language it rendered the page in, and the fields need
         # it to know what the form put after each label.
         language = page.locator("html").get_attribute("lang") or ""
+        admin = model_admin(self._urls.site, self._model)
         fields = Fields()
         for row in page.locator("form > div > fieldset.module .form-row").all():
             boxes = [row] if len(_field_names(row)) == 1 else row.locator(".fieldBox").all()
@@ -453,7 +454,7 @@ class FormPage(ModelPage):
                     continue
                 for name in _field_names(box):
                     fields[name] = FormField(
-                        box, name, language, self._check, self._normalizers, self._model
+                        box, name, language, self._check, self._normalizers, admin
                     )
         return fields
 

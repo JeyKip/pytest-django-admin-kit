@@ -16,6 +16,8 @@ def boolean(rendered):
     return "boolean", rendered.native.locator("img").get_attribute("alt")
 
 
+empty = _tagged("empty")
+link = _tagged("link")
 date = _tagged("date")
 datetime = _tagged("datetime")
 time = _tagged("time")

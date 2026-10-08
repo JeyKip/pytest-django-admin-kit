@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from typing import Any, Callable, Dict
 
+from django.contrib.admin import ModelAdmin
 from django.db.models import Model
 from django.utils import translation
 from playwright.sync_api import Locator
@@ -58,7 +59,7 @@ class FormField:
     ``language`` is the one the page was rendered in, which decides what the admin put
     after the label. ``check`` is run before every read, and fails when the browser no
     longer shows the page the field is on. ``normalizers`` read the value of a field the
-    user may only read, by the field of ``model`` behind it, if any.
+    user may only read, by what stands behind it on the page ``model_admin`` draws.
     """
 
     def __init__(
@@ -68,14 +69,14 @@ class FormField:
         language: str,
         check: Callable[[], None],
         normalizers: Normalizers,
-        model: type[Model],
+        model_admin: ModelAdmin,
     ) -> None:
         self._element = element
         self._name = name
         self._language = language
         self._check = check
         self._normalizers = normalizers
-        self._model = model
+        self._model_admin = model_admin
 
     @property
     def name(self) -> str:
@@ -240,7 +241,7 @@ class FormField:
             self._element.locator("div.readonly"),
             self._check,
             self._normalizers,
-            self._model,
+            self._model_admin,
             self._name,
         )
 

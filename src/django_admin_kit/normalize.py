@@ -28,6 +28,16 @@ def boolean(rendered: RenderedValue) -> Any:
     return _ICONS[_icon(rendered).get_attribute("alt") or ""]
 
 
+def empty(rendered: RenderedValue) -> Any:
+    """A value the admin has none of, as the text it shows in its place."""
+    return rendered.text
+
+
+def link(rendered: RenderedValue) -> Any:
+    """A value the admin renders as links, as their text; the links are in ``links``."""
+    return rendered.text
+
+
 def date(rendered: RenderedValue) -> Any:
     """A date, as the text the project's formats render."""
     return rendered.text
@@ -60,6 +70,8 @@ def text(rendered: RenderedValue) -> Any:
 
 DEFAULTS: dict[str, Rule] = {
     "boolean": boolean,
+    "empty": empty,
+    "link": link,
     "date": date,
     "datetime": datetime,
     "time": time,
@@ -84,6 +96,9 @@ class Normalizers:
 def _kind(rendered: RenderedValue) -> str:
     """The kind of ``rendered``: by the model field behind it where it has one, then by what
     the admin drew."""
+    # The admin marks a value it has none of only by the text it shows instead.
+    if rendered.text == rendered.empty_display:
+        return "empty"
     field = rendered.field
     if field is not None:
         # The admin shows a field with choices as their labels, whatever the field's class.
@@ -94,6 +109,8 @@ def _kind(rendered: RenderedValue) -> str:
             return kind
     if _draws_a_boolean(rendered):
         return "boolean"
+    if rendered.links:
+        return "link"
     return "text"
 
 

@@ -40,10 +40,7 @@ def feed_row(admin_ui, superuser, refreshed):
 
 
 def test_a_cell_drawn_as_text_is_read_by_the_text_rule(listing):
-    row = listing.rows[0]
-
-    assert row["name"].value == ("text", "Bolt")
-    assert row["sku"].value == ("text", "SKU-Bolt")
+    assert listing.rows[0]["sku"].value == ("text", "SKU-Bolt")
 
 
 def test_a_cell_drawn_as_a_boolean_icon_is_read_by_the_boolean_rule(listing):
@@ -82,7 +79,7 @@ def test_the_page_a_submission_leads_to_reads_through_the_same_rules(admin_ui, s
 
     result = admin_ui.edit(released).save()
 
-    assert result.page.rows[0]["name"].value == ("text", "Widget")
+    assert result.page.rows[0]["sku"].value == ("text", "SKU-1")
 
 
 def test_a_number_field_is_read_by_the_number_rule(listing):
@@ -129,3 +126,48 @@ def test_a_value_knows_the_model_field_behind_it(listing):
 
     assert row["price"].field == Product._meta.get_field("price")
     assert row["price_with_tax"].field is None
+
+
+def test_a_cell_drawn_as_a_link_is_read_by_the_link_rule(listing):
+    """`name` is a field with no kind of its own, linked to its change page; `documents` is a
+    method that renders two links."""
+    row = listing.rows[0]
+
+    assert row["name"].value == ("link", "Bolt")
+    assert row["documents"].value == ("link", "Datasheet Manual")
+
+
+def test_a_value_the_admin_has_none_of_is_read_by_the_empty_rule(listing):
+    """The product admin shows "(none)" in place of a missing release date."""
+    assert listing.rows[0]["released_on"].value == ("empty", "(none)")
+
+
+def test_a_method_that_returns_no_value_is_read_by_the_empty_rule(admin_ui, superuser):
+    """On the add page `price_with_tax` has no price to work from."""
+    admin_ui.login(superuser)
+
+    page = admin_ui.create(Product)
+
+    assert page.fields["price_with_tax"].value == ("empty", "(none)")
+
+
+def test_a_column_with_an_empty_value_of_its_own_is_read_by_the_empty_rule(
+    admin_ui, superuser, feed
+):
+    """`last_refreshed` shows "never" in place of the model admin's display."""
+    admin_ui.login(superuser)
+
+    row = admin_ui.list(Feed).rows[0]
+
+    assert row["last_refreshed"].value == ("empty", "never")
+    assert row["refreshed_at"].value == ("empty", "-")
+
+
+def test_a_field_the_user_may_only_read_is_empty_by_the_model_admins_display(
+    admin_ui, viewer, product
+):
+    admin_ui.login(viewer)
+
+    page = admin_ui.edit(product)
+
+    assert page.fields["released_on"].value == ("empty", "(none)")

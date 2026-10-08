@@ -2458,7 +2458,8 @@ differently.
 A rule is a callable that takes the rendered value, the same object a changelist cell or a
 rendered-only field reads from (its `text`, `links` and `native`), and returns the value a test
 reads. It also gets `field`, the model field behind the value, or `None` for a value that has
-none, such as a method column.
+none, such as a method column, and `empty_display`, the text the admin shows there for a value
+it has none of.
 
 The rule for a value is picked by what stands behind it, first by the model field of its
 changelist column or of its rendered-only form field, then by what the admin drew. The first of

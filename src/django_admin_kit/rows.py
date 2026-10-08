@@ -9,14 +9,15 @@ from __future__ import annotations
 
 from typing import Any, Callable, Iterator
 
+from django.contrib.admin import ModelAdmin
 from django.contrib.admin.utils import unquote
 from django.db.models import Model
 from django.urls import Resolver404, resolve
 from playwright.sync_api import Locator
 
 from .normalize import Normalizers
-from .rendered import RenderedValue
-from .urls import AdminUrls
+from .rendered import RenderedValue, display_text
+from .urls import AdminUrls, model_admin
 
 
 class Cell(RenderedValue):
@@ -28,15 +29,34 @@ class Cell(RenderedValue):
         column: str,
         check: Callable[[], None],
         normalizers: Normalizers,
-        model: type[Model],
+        model_admin: ModelAdmin,
     ) -> None:
-        super().__init__(element, check, normalizers, model, column)
+        super().__init__(element, check, normalizers, model_admin, column)
         self._column = column
 
     @property
     def column(self) -> str:
         """The configured name of the column the cell is in."""
         return self._column
+
+    @property
+    def empty_display(self) -> str:
+        """The text the admin shows here for a value it has none of: the column's own, when
+        it is a method or a callable that sets one, else the model admin's or the site's."""
+        function = None if self.field is not None else self._display_function()
+        if function is not None and hasattr(function, "empty_value_display"):
+            return display_text(function.empty_value_display)
+        return super().empty_display
+
+    def _display_function(self) -> Any:
+        """What the admin calls to render the column, looked up as the admin looks it up: a
+        callable in ``list_display``, then the model admin's attribute, then the model's."""
+        for entry in self._model_admin.list_display:
+            if callable(entry) and getattr(entry, "__name__", None) == self._column:
+                return entry
+        if hasattr(self._model_admin, self._column):
+            return getattr(self._model_admin, self._column)
+        return getattr(self._model_admin.model, self._column, None)
 
 
 class Row:
@@ -124,8 +144,9 @@ class Row:
         # header cell.
         cells = self._element.locator(":scope > th, :scope > td").all()
         cells = [cell for cell in cells if "action-checkbox" not in _classes(cell)]
+        admin = model_admin(self._urls.site, self._model)
         return [
-            Cell(cell, column, self._check, self._normalizers, self._model)
+            Cell(cell, column, self._check, self._normalizers, admin)
             for cell, column in zip(cells, self._columns)
         ]
 
