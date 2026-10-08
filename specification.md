@@ -165,7 +165,7 @@ form posts and the label the user reads, each read by name (section 13.3). (done
 
 A project that wants such a value typed replaces the rule that reads it. Every normalization
 rule is a package setting with a documented default, and every one of them can be replaced by
-the project. Nothing about normalization is fixed inside the package. See section 28.3.
+the project. Nothing about normalization is fixed inside the package. See section 28.3. (done)
 
 ---
 
@@ -2419,7 +2419,7 @@ Configurable at minimum:
 * the admin site under test (done);
 * how long any single browser operation may take, and the time zone and locale the browser
   reports (done);
-* value normalization;
+* value normalization (done);
 * field handling.
 
 How the browser itself is chosen and shown is **not** configured here. See section 28.4. (done)
@@ -2433,7 +2433,7 @@ under test.
 
 ---
 
-## 28.3 Normalization rules
+## 28.3 Normalization rules (done)
 
 All normalization described in section 3.4 is defined by settings, not by package internals.
 
@@ -2762,8 +2762,8 @@ supported Django versions:
 32. Read the models the admin exposes to the current user, their grouping, and their order.
     (done)
 33. Run against a non-default admin site mounted under a non-default URL prefix. (done)
-34. Override a default normalization rule and extend field handling from a project, without
-    subclassing package internals.
+34. Override a default normalization rule (done) and extend field handling from a project,
+    without subclassing package internals.
 35. Reach a native handle from a page and from a field, and drive a project-specific widget
     with it.
 36. Open an arbitrary admin URL and read its access outcome and identity. (done)
