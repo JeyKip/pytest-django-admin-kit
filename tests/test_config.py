@@ -4,6 +4,7 @@ import pytest
 from django.core.exceptions import ImproperlyConfigured
 
 from django_admin_kit.config import build_config, from_django_settings
+from project.shop import rules
 
 
 def test_the_defaults_need_no_settings_at_all():
@@ -13,6 +14,7 @@ def test_the_defaults_need_no_settings_at_all():
     assert config.timeout == 30_000
     assert config.timezone is None
     assert config.locale is None
+    assert config.normalizers == {}
 
 
 def test_settings_override_the_defaults():
@@ -94,3 +96,49 @@ def test_a_site_must_be_a_dotted_path_not_an_instance():
 
 def test_a_site_path_is_carried_through_unresolved():
     assert build_config({"site": "project.ops.ops_site"}).site == "project.ops.ops_site"
+
+
+def test_a_rule_is_imported_from_its_dotted_path():
+    config = build_config({"normalizers": {"text": "project.shop.rules.text"}})
+
+    assert config.normalizers == {"text": rules.text}
+
+
+@pytest.mark.parametrize(
+    ("normalizers", "expected"),
+    [
+        (
+            ["text"],
+            "DJANGO_ADMIN_KIT['normalizers'] must be a dict of rule names to dotted paths, "
+            "not list.",
+        ),
+        (
+            {"dates": "project.shop.rules.text"},
+            "Unknown DJANGO_ADMIN_KIT['normalizers'] rule(s): 'dates'. "
+            "Valid rules are: 'boolean', 'empty', 'link', 'date', 'datetime', 'time', 'number', "
+            "'choice', 'text'.",
+        ),
+        (
+            {"text": rules.text},
+            "DJANGO_ADMIN_KIT['normalizers']['text'] must be a dotted path to a callable, "
+            "not function.",
+        ),
+        (
+            {"text": "project.shop.rules.missing"},
+            "DJANGO_ADMIN_KIT['normalizers']['text'] names 'project.shop.rules.missing', which "
+            'cannot be imported: Module "project.shop.rules" does not define a "missing" '
+            "attribute/class",
+        ),
+        (
+            {"text": "project.shop.rules.NOT_A_RULE"},
+            "DJANGO_ADMIN_KIT['normalizers']['text'] names 'project.shop.rules.NOT_A_RULE', "
+            "which is not callable.",
+        ),
+    ],
+    ids=["not a dict", "unknown rule", "not a path", "not importable", "not callable"],
+)
+def test_a_malformed_rule_is_rejected_by_name(normalizers, expected):
+    with pytest.raises(ImproperlyConfigured) as error:
+        build_config({"normalizers": normalizers})
+
+    assert str(error.value) == expected

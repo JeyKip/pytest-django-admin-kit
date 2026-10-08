@@ -412,6 +412,50 @@ assert page.apps == ["Authentication and Authorization", "Shop"]
 assert page.models_for("Shop") == [Product]
 ```
 
+**Reading values as your project wants them.** A cell, and a field the user may only read, is
+read by a rule for its kind. Every default returns the text the user reads, except `boolean`,
+which reads the admin's icon as `True`, `False` or `None`. Replace a rule in your settings and it
+receives only the values of its kind.
+
+```python
+DJANGO_ADMIN_KIT = {
+    "normalizers": {
+        "date": "shop.rules.as_date",
+    },
+}
+```
+
+```python
+# shop/rules.py, for a project whose DATE_FORMAT is "Y-m-d"
+from datetime import date
+
+
+def as_date(rendered):
+    return date.fromisoformat(rendered.text)
+```
+
+A missing date never reaches it: the admin shows its empty display there, which the `empty` rule
+reads.
+
+```python
+assert page.rows[0]["released_on"].value == date(2026, 1, 15)
+```
+
+The kind comes from the model field behind the value, then from what the admin drew. The first
+that applies wins:
+
+- `empty`: the text the admin shows for a value it has none of there;
+- `choice`: a field with choices, shown as its label;
+- `boolean`, `date`, `datetime`, `time` or `number`: by the field's class, the most specific
+  first, so a date-time field is a `datetime`;
+- `boolean` for a lone boolean icon, then `link` for a value that renders links;
+- `text`.
+
+A rule gets the rendered value: its `text`, `links`, `native`, `field` (the model field, or
+`None` for a method) and `empty_display`. A rule is named by its dotted path, and an unknown
+name or a path that does not import is an error. A form field the user can edit is read from
+its control and goes through no rule.
+
 **Reaching anything the package does not model.** Open any admin path, then use the Playwright
 page directly.
 
@@ -435,6 +479,9 @@ DJANGO_ADMIN_KIT = {
     "timeout": 30_000,                # ms for any single browser operation
     "timezone": "Europe/Kyiv",        # default: TIME_ZONE
     "locale": "uk",                   # default: LANGUAGE_CODE
+    "normalizers": {                  # rules that read values, by kind; see above
+        "date": "shop.rules.as_date",
+    },
 }
 ```
 
@@ -448,13 +495,15 @@ unset, whether the value under `DJANGO_ADMIN_KIT` was written by you or defaulte
 language as the rest of your browser tests, keep `timezone` and `locale` out of
 `DJANGO_ADMIN_KIT` and set them in `browser_context_args` only.
 
-`admin_ui` is put together from three session fixtures. Override one and the others stay as
+`admin_ui` is put together from four session fixtures. Override one and the others stay as
 they are:
 
 - `admin_ui_config`: the `DJANGO_ADMIN_KIT` settings, read and checked once. An override must
   be session-scoped too.
 - `admin_ui_urls`: the admin URLs for the site under test. Override it to point the session at
   another admin site.
+- `admin_ui_normalizers`: the rules that read values, built once from `normalizers`. Override
+  it in a `conftest.py` or a test module to read those tests' values differently.
 - `admin_ui_driving`: keeps Django's database access working while a browser runs. Leave it
   alone.
 

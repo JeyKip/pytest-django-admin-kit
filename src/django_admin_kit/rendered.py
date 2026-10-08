@@ -7,12 +7,18 @@ never changes it, and the links it renders are kept next to it.
 
 from __future__ import annotations
 
-from typing import Any, Callable
+from typing import TYPE_CHECKING, Any, Callable
 from urllib.parse import SplitResult, urlsplit
 
+from django.contrib.admin import ModelAdmin
+from django.contrib.admin.utils import NotRelationField, get_fields_from_path
+from django.core.exceptions import FieldDoesNotExist
+from django.db.models import Field
+from django.utils.html import strip_tags
 from playwright.sync_api import Locator
 
-from . import normalize
+if TYPE_CHECKING:
+    from .normalize import Normalizers
 
 
 class Link:
@@ -56,17 +62,39 @@ class RenderedValue:
     """One value the admin rendered, read from the element that holds it.
 
     ``check`` is run before every read, and fails when the browser no longer shows the
-    page the value is on.
+    page the value is on. ``normalizers`` read its value, by what stands behind it: the
+    ``name`` the admin renders it under, on a page ``model_admin`` draws.
     """
 
-    def __init__(self, element: Locator, check: Callable[[], None]) -> None:
+    def __init__(
+        self,
+        element: Locator,
+        check: Callable[[], None],
+        normalizers: Normalizers,
+        model_admin: ModelAdmin,
+        name: str,
+    ) -> None:
         self._element = element
         self._check = check
+        self._normalizers = normalizers
+        self._model_admin = model_admin
+        self._name = name
 
     @property
     def native(self) -> Locator:
         """The element, unwrapped, for anything the package does not model."""
         return self._element
+
+    @property
+    def field(self) -> Field | None:
+        """The model field the admin rendered the value from, or ``None``, as for a method."""
+        return _model_field(self._model_admin.model, self._name)
+
+    @property
+    def empty_display(self) -> str:
+        """The text the admin shows here for a value it has none of: the model admin's, which
+        falls back to the site's."""
+        return display_text(self._model_admin.get_empty_value_display())
 
     @property
     def text(self) -> str:
@@ -76,9 +104,10 @@ class RenderedValue:
 
     @property
     def value(self) -> Any:
-        """What is shown, normalized: the text, unless the admin drew an icon."""
+        """What is shown, read by the rule for its kind: by default the text, or a boolean
+        where the admin drew one as an icon."""
         self._check()
-        return normalize.normalize(self)
+        return self._normalizers.read(self)
 
     @property
     def links(self) -> list[Link]:
@@ -93,3 +122,21 @@ class RenderedValue:
 def text_of(element: Locator) -> str:
     """The document's text inside ``element``, with its whitespace collapsed."""
     return " ".join((element.text_content() or "").split())
+
+
+def display_text(display: str) -> str:
+    """``display`` as the page shows it: without markup, its whitespace collapsed."""
+    return " ".join(strip_tags(str(display)).split())
+
+
+def _model_field(model: type[Any], name: str) -> Field | None:
+    """The model field the admin renders under ``name``, or ``None`` when it renders something
+    else there, such as a method.
+
+    The admin looks a name up as a field first, following a path such as ``category__name``,
+    and only then as a callable or a method, so a name that is a field is always that field.
+    """
+    try:
+        return get_fields_from_path(model, name)[-1]
+    except (FieldDoesNotExist, NotRelationField):
+        return None

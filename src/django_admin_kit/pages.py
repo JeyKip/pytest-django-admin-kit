@@ -27,11 +27,11 @@ from . import matching
 from .errors import ValidationErrors
 from .fields import Fields, FormField
 from .messages import Messages
-from .normalize import integer
+from .normalize import Normalizers, integer
 from .rendered import text_of
 from .results import SubmissionResult
 from .rows import Row
-from .urls import AdminUrls
+from .urls import AdminUrls, model_admin
 
 _NOTHING = object()
 """What a source has for a field it says nothing about, which `None` cannot stand for."""
@@ -74,11 +74,20 @@ class AdminPage:
     # confirmation page of "Delete selected".
     _kind: str | None = None
 
-    def __init__(self, page: Page, status_code: int, requested: str, urls: AdminUrls) -> None:
+    def __init__(
+        self,
+        page: Page,
+        status_code: int,
+        requested: str,
+        urls: AdminUrls,
+        normalizers: Normalizers,
+    ) -> None:
         self._page = page
         self._status_code = status_code
         self._requested = requested
         self._urls = urls
+        # The rules that read the values the page renders, handed to everything that reads one.
+        self._normalizers = normalizers
         self._landed()
 
     @property
@@ -232,7 +241,7 @@ class AdminPage:
             # The browser loaded a new document here, so report its status.
             self._status_code = response.status
             return SubmissionResult(self, redirected, self._urls)
-        landed = _page_at(self._page, response.status, self._urls)
+        landed = _page_at(self._page, response.status, self._urls, self._normalizers)
         return SubmissionResult(landed, redirected, self._urls)
 
 
@@ -304,9 +313,15 @@ class ModelPage(AdminPage):
     """An admin page about one model, which it keeps for what reads it."""
 
     def __init__(
-        self, page: Page, status_code: int, requested: str, urls: AdminUrls, model: type[Model]
+        self,
+        page: Page,
+        status_code: int,
+        requested: str,
+        urls: AdminUrls,
+        normalizers: Normalizers,
+        model: type[Model],
     ) -> None:
-        super().__init__(page, status_code, requested, urls)
+        super().__init__(page, status_code, requested, urls, normalizers)
         self._model = model
 
 
@@ -343,7 +358,7 @@ class ChangelistPage(ModelPage):
         columns = self.columns
         elements = self._shown().locator("#result_list tbody tr").all()
         return [
-            Row(element, index, columns, self._model, self._urls, self._check)
+            Row(element, index, columns, self._model, self._urls, self._check, self._normalizers)
             for index, element in enumerate(elements)
         ]
 
@@ -429,6 +444,7 @@ class FormPage(ModelPage):
         # The admin says which language it rendered the page in, and the fields need
         # it to know what the form put after each label.
         language = page.locator("html").get_attribute("lang") or ""
+        admin = model_admin(self._urls.site, self._model)
         fields = Fields()
         for row in page.locator("form > div > fieldset.module .form-row").all():
             boxes = [row] if len(_field_names(row)) == 1 else row.locator(".fieldBox").all()
@@ -437,7 +453,9 @@ class FormPage(ModelPage):
                 if "hidden" in classes:
                     continue
                 for name in _field_names(box):
-                    fields[name] = FormField(box, name, language, self._check)
+                    fields[name] = FormField(
+                        box, name, language, self._check, self._normalizers, admin
+                    )
         return fields
 
     @property
@@ -601,7 +619,9 @@ class EditPage(FormPage):
         response = navigation.value
         # A navigation of the page always comes with a response.
         assert response is not None
-        return DeletePage(self._page, response.status, path, self._urls, self._model)
+        return DeletePage(
+            self._page, response.status, path, self._urls, self._normalizers, self._model
+        )
 
 
 class DeletePage(ModelPage):
@@ -721,7 +741,7 @@ _MODEL_PAGES: dict[str, type[ModelPage]] = {
 }
 
 
-def _page_at(page: Page, status_code: int, urls: AdminUrls) -> AdminPage:
+def _page_at(page: Page, status_code: int, urls: AdminUrls, normalizers: Normalizers) -> AdminPage:
     """A page object for the page the browser is on.
 
     The class comes from the URL, and is used only if the page's ``body`` class confirms
@@ -732,14 +752,14 @@ def _page_at(page: Page, status_code: int, urls: AdminUrls) -> AdminPage:
     try:
         match = resolve(path)
     except Resolver404:
-        return AdminPage(page, status_code, path, urls)
+        return AdminPage(page, status_code, path, urls, normalizers)
     # A view added to the admin without a name has no URL name.
     url_name = match.url_name or ""
     if match.namespace != urls.site.name:
-        return AdminPage(page, status_code, path, urls)
+        return AdminPage(page, status_code, path, urls, normalizers)
     # A view can render a different page at its own URL, so the URL alone is not trusted.
     if url_name == "index" and _is_kind(page, IndexPage._kind):
-        return IndexPage(page, status_code, path, urls)
+        return IndexPage(page, status_code, path, urls, normalizers)
     # Find the model by the full prefix of its URL names, such as "shop_product_",
     # because an app label may itself contain underscores.
     for model in apps.get_models():
@@ -749,8 +769,8 @@ def _page_at(page: Page, status_code: int, urls: AdminUrls) -> AdminPage:
         if url_name.startswith(prefix):
             page_class = _MODEL_PAGES.get(url_name[len(prefix) :])
             if page_class is not None and _is_kind(page, page_class._kind):
-                return page_class(page, status_code, path, urls, model)
-    return AdminPage(page, status_code, path, urls)
+                return page_class(page, status_code, path, urls, normalizers, model)
+    return AdminPage(page, status_code, path, urls, normalizers)
 
 
 def _is_kind(page: Page, kind: str | None) -> bool:

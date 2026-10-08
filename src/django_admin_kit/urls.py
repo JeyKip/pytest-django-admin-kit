@@ -12,10 +12,31 @@ from __future__ import annotations
 
 from typing import Any, Sequence
 
+from django.contrib.admin import ModelAdmin
 from django.contrib.admin.sites import AdminSite
 from django.core.exceptions import ImproperlyConfigured
 from django.urls import reverse
 from django.utils.module_loading import import_string
+
+
+def registered_models(site: AdminSite) -> list[type[Any]]:
+    """The models ``site`` registers, in the order they were registered."""
+    return list(_registry(site))
+
+
+def model_admin(site: AdminSite, model: type[Any]) -> ModelAdmin:
+    """The model admin ``site`` registers ``model`` with."""
+    # Django 5.0 added a public accessor; before it there is only the registry.
+    if hasattr(site, "get_model_admin"):
+        return site.get_model_admin(model)
+    return _registry(site)[model]
+
+
+def _registry(site: AdminSite) -> dict[type[Any], ModelAdmin]:
+    # The one place the site's registry is read: Django lists the registered models
+    # nowhere public on any version.
+    registry: dict[type[Any], ModelAdmin] = site._registry
+    return registry
 
 
 def resolve_site(site: str | None = None) -> AdminSite:
@@ -83,10 +104,11 @@ class AdminUrls:
         self, model: type[Any], action: str, args: Sequence[Any] | None = None
     ) -> str:
         if not self._site.is_registered(model):
+            labels = sorted(m._meta.label for m in registered_models(self._site))
             raise LookupError(
                 f"{model._meta.label} is not registered with the {self._site.name!r} admin "
                 f"site, so it has no admin URLs. Registered models: "
-                f"{', '.join(sorted(m._meta.label for m in self._site._registry)) or 'none'}."
+                f"{', '.join(labels) or 'none'}."
             )
         return self._reverse(f"{model._meta.app_label}_{model._meta.model_name}_{action}", args)
 

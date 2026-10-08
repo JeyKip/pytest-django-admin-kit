@@ -165,7 +165,7 @@ form posts and the label the user reads, each read by name (section 13.3). (done
 
 A project that wants such a value typed replaces the rule that reads it. Every normalization
 rule is a package setting with a documented default, and every one of them can be replaced by
-the project. Nothing about normalization is fixed inside the package. See section 28.3.
+the project. Nothing about normalization is fixed inside the package. See section 28.3. (done)
 
 ---
 
@@ -262,8 +262,7 @@ See section 28.
 The package keeps nothing it has read. Every value is read from the page, or from the database,
 when a test asks for it, so it is what the user would see at that moment. That includes what
 the admin's own scripts and a project's widgets change in place, such as an option added
-through the related-object popup, and a normalization rule replaced for one test (section
-28.3), which applies to everything read after it.
+through the related-object popup.
 
 An object taken from a page is an address, read each time it is used, the way the browser
 layer's own locators are:
@@ -2357,17 +2356,21 @@ The name is deliberately explicit. It names what is under test rather than how i
 it does not collide with project fixtures named `admin` or with the `admin` module imported in
 most Django test modules.
 
-`admin_ui` is assembled from three session-scoped fixtures, and a project adjusts it by
+`admin_ui` is assembled from four session-scoped fixtures, and a project adjusts it by
 overriding one of them at whatever scope pytest allows, keeping the rest:
 
 ```python
-admin_ui_config     # the settings of section 28, resolved and validated once
-admin_ui_urls       # the URLs of section 6.3 for the site under test; see section 29
-admin_ui_driving    # keeps Django's ORM usable while a browser is running
+admin_ui_config         # the settings of section 28, resolved and validated once
+admin_ui_urls           # the URLs of section 6.3 for the site under test; see section 29
+admin_ui_normalizers    # the rules of section 28.3 that read rendered values
+admin_ui_driving        # keeps Django's ORM usable while a browser is running
 ```
 
-The first two are the intended extension points. The third exists so that it is set up before
-the test database and torn down after it, and a project has no reason to replace it. (done)
+The first three are the intended extension points. Overriding `admin_ui_normalizers` in a
+`conftest.py` or a test module replaces the rules for those tests without restating the rest of
+the settings; being session-scoped, it cannot be overridden for a single test. The fourth exists
+so that it is set up before the test database and torn down after it, and a project has no
+reason to replace it. (done)
 
 Public names are importable from the module that defines them:
 
@@ -2416,7 +2419,7 @@ Configurable at minimum:
 * the admin site under test (done);
 * how long any single browser operation may take, and the time zone and locale the browser
   reports (done);
-* value normalization;
+* value normalization (done);
 * field handling.
 
 How the browser itself is chosen and shown is **not** configured here. See section 28.4. (done)
@@ -2430,55 +2433,91 @@ under test.
 
 ---
 
-## 28.3 Normalization rules
+## 28.3 Normalization rules (done)
 
 All normalization described in section 3.4 is defined by settings, not by package internals.
 
 The package ships a complete default rule set, one rule per kind of value the admin renders.
-The package decides which cells each rule sees, by the model field behind the column, so a
-rule handles one kind and never has to tell the kinds apart:
+The package decides which rule reads a value, so a rule handles one kind and never has to tell
+the kinds apart:
 
-* booleans drawn as icons, to a boolean;
-* empty and absent values, shown as the text the admin renders for them;
-* links, and their targets;
-* dates and times, shown as the text the project's formats render;
-* numbers, shown as the text the project's formats render;
-* the display value of a choice, shown as its label;
-* surrounding text and whitespace.
+* `boolean`: booleans drawn as icons, read as `True`, `False` or `None`;
+* `empty`: values the admin has none of, shown as the text it renders for them;
+* `link`: links, read as their text, with their targets in `links`;
+* `date`, `datetime` and `time`: dates, date-times and times, each shown as the text the
+  project's formats render;
+* `number`: numbers, shown as the text the project's formats render;
+* `choice`: the display value of a choice, shown as its label;
+* `text`: everything else, as its text with surrounding whitespace collapsed.
 
-Every rule in that set has a documented default and is individually addressable. A project
-that wants a date column read as a date replaces that one rule, and it receives only the
-cells of date, time and datetime fields:
+Every default but `boolean` returns the text, so a value reads as the user reads it until the
+project replaces the rule for its kind. Dates, date-times and times are three rules, because a
+project that types them wants a `date`, a `datetime` or a `time` back and parses each
+differently.
+
+A rule is a callable that takes the rendered value, the same object a changelist cell or a
+rendered-only field reads from (its `text`, `links` and `native`), and returns the value a test
+reads. It also gets `field`, the model field behind the value, or `None` for a value that has
+none, such as a method column, and `empty_display`, the text the admin shows there for a value
+it has none of.
+
+The rule for a value is picked by what stands behind it, first by the model field of its
+changelist column or of its rendered-only form field, then by what the admin drew. The first of
+these that applies wins:
+
+1. `empty`, when the text is what the admin shows for a value it has none of there: on a
+   changelist, the display function's own `empty_value` for a method or a callable that sets
+   one, else the model admin's empty value display, else the site's; on a form, the model
+   admin's, else the site's, as the admin itself resolves it;
+2. `choice`, when the field has choices, which the admin renders as their labels whatever the
+   field's class;
+3. the kind for the field's class, the most specific first: `boolean` for a boolean field, `date`
+   for a date field, `datetime` for a date-time field, which Django makes a kind of date field,
+   `time` for a time field, and `number` for an integer, decimal or float field;
+4. for a value no field gives a kind to: `boolean` when the admin drew a lone boolean icon, as
+   for a method with `boolean=True`, else `link` when the value renders links;
+5. `text`.
+
+A linked date column is therefore read by `date`, its links still in `links`. A value with no
+field behind it, such as a method's result, is never read by a field's kind: the admin renders
+it as text and says nothing of its type. An empty string is drawn as nothing, so it reads as
+`text`; and since the admin marks an empty value in no other way, a value whose text is the
+empty display itself reads as `empty`.
+
+A project replaces a rule in its settings, naming it by its dotted path, as it names the admin
+site: importing it in the settings module would import project code before Django's app
+registry is ready. A project that wants a date column read as a date replaces that one rule,
+and it receives only the values of date fields:
 
 ```python
 DJANGO_ADMIN_KIT = {
     "normalizers": {
-        "boolean": ...,
-        "empty": ...,
-        "link": ...,
-        "datetime": my_datetime_rule,
-        "number": ...,
-        "choice": ...,
-        "text": ...,
+        "date": "shop.rules.as_date",
     },
 }
 ```
 
-Three things must hold:
+The names are `boolean`, `empty`, `link`, `date`, `datetime`, `time`, `number`, `choice` and
+`text`. The rules are imported and checked once, with the rest of the settings (section 28.4):
+a name that is none of these, a value that is not a string, a path that does not import and
+one that names no callable are each rejected, naming the rule and, for a name, listing the
+names there are.
+
+Two things must hold:
 
 * **Any rule can be overridden.** A project replaces a single rule without restating the rest.
   The defaults it does not mention stay in force.
-* **New rules can be added.** A project registers normalization for a representation the package
-  does not know, and that representation then behaves like any other.
 * **No rule is privileged.** Nothing is hardcoded, and no override requires modifying or
   subclassing package internals.
 
-Overrides apply project-wide by default. It must also be possible to override a rule for a
-single test, so that a test covering unusual rendering does not force a project-wide change:
+Rules apply to what the admin renders for the user to read: changelist cells and rendered-only
+form fields. An editable field's value is what its control holds (section 13), and goes through
+no rule.
 
-```python
-admin_ui.normalizer("boolean", my_boolean_rule)
-```
+Overrides apply project-wide. The rules are built once per session into the
+`admin_ui_normalizers` fixture (section 27), which a project may override for a directory or a
+module of tests. Replacing a rule for a single test, and adding a rule for a representation the
+package does not know, are left for later (section 33).
 
 ---
 
@@ -2723,8 +2762,8 @@ supported Django versions:
 32. Read the models the admin exposes to the current user, their grouping, and their order.
     (done)
 33. Run against a non-default admin site mounted under a non-default URL prefix. (done)
-34. Override a default normalization rule, add a new one, and extend field handling from a
-    project, without subclassing package internals.
+34. Override a default normalization rule (done) and extend field handling from a project,
+    without subclassing package internals.
 35. Reach a native handle from a page and from a field, and drive a project-specific widget
     with it.
 36. Open an arbitrary admin URL and read its access outcome and identity. (done)
@@ -2782,4 +2821,10 @@ supported Django versions:
 
 * custom admin views and endpoints beyond the standard operations;
 * richer row and cell matchers;
-* verifying side effects triggered by an admin operation.
+* verifying side effects triggered by an admin operation;
+* a normalization rule for a value that has no model field behind it, such as a method column,
+  chosen by the column rather than by what the admin drew (section 28.3);
+* replacing a normalization rule for a single test, so that a test covering unusual rendering
+  does not force a project-wide change;
+* adding a normalization rule for a representation the package does not know, such as a model
+  field class of the project's own, which then behaves like any other.

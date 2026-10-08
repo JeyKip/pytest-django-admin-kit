@@ -11,11 +11,14 @@ duplicating its flags would give a project two places to say the same thing.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Iterable, Mapping
 
 from django.conf import settings as django_settings
 from django.core.exceptions import ImproperlyConfigured
+from django.utils.module_loading import import_string
+
+from .normalize import DEFAULTS, Rule
 
 SETTINGS_NAME = "DJANGO_ADMIN_KIT"
 
@@ -23,7 +26,7 @@ DEFAULT_TIMEOUT = 30_000
 
 # Settings this package owns. Anything the browser plugin already governs is absent
 # on purpose; see the module docstring.
-_KNOWN_KEYS = frozenset({"locale", "site", "timeout", "timezone"})
+_KNOWN_KEYS = frozenset({"locale", "normalizers", "site", "timeout", "timezone"})
 
 
 @dataclass(frozen=True)
@@ -36,6 +39,9 @@ class Config:
     timeout: int
     timezone: str | None
     locale: str | None
+    # The rules the project replaces, by kind, already imported. The kinds it leaves out
+    # keep their defaults.
+    normalizers: Mapping[str, Rule] = field(default_factory=dict)
 
 
 def _quote(values: Iterable[str]) -> str:
@@ -53,6 +59,41 @@ def _positive_int(value: Any, key: str, minimum: int) -> int:
     if value < minimum:
         raise ImproperlyConfigured(f"{SETTINGS_NAME}['{key}'] must be at least {minimum}.")
     return value
+
+
+def _rules(value: Any) -> dict[str, Rule]:
+    """The project's rules by kind, each imported from its dotted path.
+
+    A rule is named by its path, as the site is, so the settings module never imports
+    project code before the app registry is ready.
+    """
+    key = f"{SETTINGS_NAME}['normalizers']"
+    if not isinstance(value, Mapping):
+        raise ImproperlyConfigured(
+            f"{key} must be a dict of rule names to dotted paths, not {type(value).__name__}."
+        )
+    unknown = set(value) - set(DEFAULTS)
+    if unknown:
+        raise ImproperlyConfigured(
+            f"Unknown {key} rule(s): {_quote(sorted(unknown))}. "
+            f"Valid rules are: {_quote(DEFAULTS)}."
+        )
+    rules = {}
+    for name, path in value.items():
+        if not isinstance(path, str):
+            raise ImproperlyConfigured(
+                f"{key}[{name!r}] must be a dotted path to a callable, not {type(path).__name__}."
+            )
+        try:
+            rule = import_string(path)
+        except ImportError as error:
+            raise ImproperlyConfigured(
+                f"{key}[{name!r}] names {path!r}, which cannot be imported: {error}"
+            ) from error
+        if not callable(rule):
+            raise ImproperlyConfigured(f"{key}[{name!r}] names {path!r}, which is not callable.")
+        rules[name] = rule
+    return rules
 
 
 def build_config(
@@ -93,7 +134,11 @@ def build_config(
             f"not {type(site).__name__}."
         )
 
-    return Config(site=site, timeout=timeout, timezone=timezone, locale=locale)
+    normalizers = _rules(given.get("normalizers", {}))
+
+    return Config(
+        site=site, timeout=timeout, timezone=timezone, locale=locale, normalizers=normalizers
+    )
 
 
 def from_django_settings() -> Config:

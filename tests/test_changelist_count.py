@@ -6,13 +6,11 @@ element; these prove what is made of it.
 """
 
 import pytest
-from django.contrib import admin
 from django.test import override_settings
 from django.utils import translation
 from django.utils.formats import number_format
 
 from django_admin_kit.pages import ChangelistPage
-from django_admin_kit.urls import AdminUrls
 from project.shop.models import Product
 
 
@@ -52,9 +50,11 @@ class FakePage:
         return FakePaginator(self.text)
 
 
-def changelist(text):
-    return ChangelistPage(
-        FakePage(text), 200, "/admin/shop/product/", AdminUrls(admin.site), Product
+@pytest.fixture
+def changelist(urls, admin_ui_normalizers):
+    """Builds the product changelist around a paginator that shows ``text``."""
+    return lambda text: ChangelistPage(
+        FakePage(text), 200, "/admin/shop/product/", urls, admin_ui_normalizers, Product
     )
 
 
@@ -75,7 +75,7 @@ def changelist(text):
         ("1 000 products", 1000, "1 000 products"),
     ],
 )
-def test_the_count_and_its_wording_are_read_from_the_paginator(text, count, summary):
+def test_the_count_and_its_wording_are_read_from_the_paginator(changelist, text, count, summary):
     page = changelist(text)
 
     assert page.count == count
@@ -84,7 +84,7 @@ def test_the_count_and_its_wording_are_read_from_the_paginator(text, count, summ
 
 
 @pytest.mark.parametrize("language", ["en", "fr"])
-def test_a_grouped_count_is_read_as_the_project_renders_it(language):
+def test_a_grouped_count_is_read_as_the_project_renders_it(changelist, language):
     """The text comes from Django's own formatter, under a locale that groups with a
     comma and one that groups with a non-breaking space."""
     with override_settings(USE_THOUSAND_SEPARATOR=True), translation.override(language):
@@ -96,7 +96,7 @@ def test_a_grouped_count_is_read_as_the_project_renders_it(language):
     assert page.count == 1000
 
 
-def test_a_paginator_that_reports_no_count_is_a_loud_failure():
+def test_a_paginator_that_reports_no_count_is_a_loud_failure(changelist):
     """A template override that drops the count is a bug to see, not a zero."""
     page = changelist("Nothing to see")
 
