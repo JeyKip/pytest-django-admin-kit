@@ -2356,19 +2356,21 @@ The name is deliberately explicit. It names what is under test rather than how i
 it does not collide with project fixtures named `admin` or with the `admin` module imported in
 most Django test modules.
 
-`admin_ui` is assembled from four session-scoped fixtures, and a project adjusts it by
+`admin_ui` is assembled from five session-scoped fixtures, and a project adjusts it by
 overriding one of them at whatever scope pytest allows, keeping the rest:
 
 ```python
 admin_ui_config         # the settings of section 28, resolved and validated once
 admin_ui_urls           # the URLs of section 6.3 for the site under test; see section 29
 admin_ui_normalizers    # the rules of section 28.3 that read rendered values
+admin_ui_widgets        # the widget classes of section 28.5 that read and fill controls
 admin_ui_driving        # keeps Django's ORM usable while a browser is running
 ```
 
-The first three are the intended extension points. Overriding `admin_ui_normalizers` in a
-`conftest.py` or a test module replaces the rules for those tests without restating the rest of
-the settings; being session-scoped, it cannot be overridden for a single test. The fourth exists
+The first four are the intended extension points. Overriding `admin_ui_normalizers` or
+`admin_ui_widgets` in a `conftest.py` or a test module replaces the rules or the widget classes
+for those tests without restating the rest of the settings; being session-scoped, neither can be
+overridden for a single test. The fifth exists
 so that it is set up before the test database and torn down after it, and a project has no
 reason to replace it. (done)
 
@@ -2420,7 +2422,7 @@ Configurable at minimum:
 * how long any single browser operation may take, and the time zone and locale the browser
   reports (done);
 * value normalization (done);
-* field handling.
+* field handling, by widget class (section 28.5).
 
 How the browser itself is chosen and shown is **not** configured here. See section 28.4. (done)
 
@@ -2566,6 +2568,85 @@ the package does not know.
 
 Once registered, such a field participates in field inspection, population, and submission like
 any other.
+
+Most of what a field tells a test comes from the box the admin draws around it and holds for any
+widget: its name, label, requiredness, whether it is editable, and its errors. Only three things
+depend on the control inside: `value`, `fill` and `choices`. `populate` (section 14) fills
+through `fill`, and the check that a form rendered back what was submitted (section 26) reads
+through `value`, so a field whose control the package can read and fill takes part in all of
+them.
+
+The package reads and fills controls through *widget classes*. A widget class recognises its
+control and says how to read it, fill it and, where it has a fixed set, list its options. Every
+method takes the field, whose `native` is its box and `name` its name:
+
+```python
+class SwatchPickerWidget:
+    def selector(self, field):        # what marks the control inside the field's box
+        return ".swatch-picker"
+
+    def read(self, field):            # what `field.value` returns
+        return field.native.locator("input[type=hidden]").input_value()
+
+    def fill(self, field, value):     # what `field.fill(value)` and `populate` do
+        field.native.locator(f'button[data-value="{value}"]').click()
+
+    def choices(self, field):         # optional; `field.choices` is [] without it
+        return [
+            FieldChoice(button.get_attribute("data-value"), button.inner_text())
+            for button in field.native.locator("button").all()
+        ]
+```
+
+`selector`, `read` and `fill` are required and `choices` is optional. A widget class returns
+whatever value suits it, and the package passes it on untouched. It never uses `value`, `fill` or
+`choices` of the field it is given, which would ask the widget classes again; and `selector`,
+which runs for every field the package reads or fills, does not read the page.
+
+The package's own controls are widget classes of the same kind, public so that a project may
+build on one: `CheckboxWidget`, `SelectWidget` and `TextWidget`, the last reading and filling any
+single control that carries the field's name as text. They are importable from
+`django_admin_kit.widgets`.
+
+A widget of several components is one field and one widget class. The admin renders a whole
+widget inside its field's box, and fields are found by their box, never by their inputs, so a
+split date-time is one field however many inputs it has. Its widget class reaches each part
+through the box, a part the widget draws elsewhere on the page through `field.native.page`, and
+one inside a frame through `field.native.frame_locator`.
+
+The widget class for a field is the first, in order, whose selector matches something inside
+the field's box. The selectors of all widget classes are tried in one browser call, so a
+selector is plain CSS as the browser reads it, and the browser layer's own selector syntax is
+for `read` and `fill`. A project's widget classes come first, in the order it lists them, and the
+package's own after them, in the order checkbox, select, text. So a project replaces one of the
+package's own by listing a widget class that matches the same controls, and keeps the rest; one
+that matches only some of them, such as the selects a script enhances, takes those and leaves
+the others to the package. A field no widget class recognises is reported at once, naming the
+field and this setting, rather than after the timeout.
+
+A project lists its widget classes in its settings, by dotted path, as it names the admin site
+and its rules. The package makes one instance of each, with no arguments:
+
+```python
+DJANGO_ADMIN_KIT = {
+    "widgets": [
+        "tests.kit_widgets.SwatchPickerWidget",
+    ],
+}
+```
+
+The list is checked once, with the rest of the settings (section 28.4): a value that is not a
+list or a tuple of strings, a path that does not import, one that names no class, and a class
+without a callable `selector`, `read` or `fill`, or with a `choices` that is not callable, are
+each rejected, naming the position in the list. What `selector` returns is checked when it
+runs: anything but a non-empty string is reported, naming the widget class.
+
+Widget classes apply to controls, the fields a user may fill. A field the user may only read has
+no control, and its value goes through the rules of section 28.3.
+
+The widget classes are built once per session into the `admin_ui_widgets` fixture (section 27),
+which a project may override for a directory or a module of tests with its own classes; the
+package's own are added behind them.
 
 ---
 
@@ -2814,6 +2895,9 @@ supported Django versions:
 * custom and rich field representations;
 * conditionally displayed fields;
 * dependent choice sets.
+
+The controls among these arrive as more of the package's own widget classes (section 28.5).
+Until then a project reads and fills any of them through a widget class of its own.
 
 ---
 
