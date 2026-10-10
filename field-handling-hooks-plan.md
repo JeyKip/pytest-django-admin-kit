@@ -100,7 +100,7 @@ Each of these is a widget that real admins carry and that the package cannot rea
 
 8. **A control the package already knows, read differently.** A project that wants the date
    inputs read as `date` objects, the way 28.3 lets it type a rendered date, subclasses
-   `TextWidget` with a selector for `input.vDateField` and a `read` that parses. A select whose
+   `TextWidget` with a marker for `input.vDateField` and a `read` that parses. A select whose
    value should read as the bare value rather than a `FieldChoice` is a subclass of
    `SelectWidget` overriding `read`. The package's own controls are widget classes like the
    project's, behind them in the table, so this is the same mechanism as the rest.
@@ -132,6 +132,9 @@ Out of scope:
   split date-times, multiple selects, files, autocomplete): these stay planned for 1.3.0, where
   each becomes one more built-in widget class. Until then a project writes its own;
 * removing a built-in widget class from the table. A project puts its own in front instead;
+* recognising a widget by logic of the project's own, where a CSS selector cannot say it. It could
+  come later as an optional `matches(field)`, asked only of the classes that define it, so the
+  rest keep the single browser call. Nothing seen so far needs it (spec section 33, Later);
 * per-test or per-model tables;
 * a widget class for a whole field box, label and errors included. Those are widget-agnostic
   already.
@@ -158,39 +161,52 @@ Rows and cells need nothing: a changelist has no controls until `list_editable` 
    `TextWidget` rather than `TextInputWidget`, because it covers textareas, number and date
    inputs as well, and because Django's admin already has an `AdminTextInputWidget`.
 
-2. **A widget class recognises its control by a selector it builds for the field.**
-   `selector(field)` returns a CSS selector, and the first widget class whose selector matches
-   something inside the field's box reads and fills the field. It is a method taking the field,
-   because the package's own controls are known by the field's name; a project widget class with
-   a fixed selector returns a constant. It is called `selector` rather than `get_selector`:
-   Django spells a method `get_*` when it stands behind an attribute of the same name, and there
-   is no attribute here, so `selector(field)` reads like the `read(field)`, `fill(field, value)`
-   and `choices(field)` beside it.
+2. **A widget class recognises its widget by a marker it builds for the field.**
+   `marker(field)` returns a CSS selector, and the first widget class whose marker matches
+   something inside the field's box reads and fills the field. The marker only decides which
+   class handles the field, and the package keeps nothing of what it matched: `read` and `fill`
+   get the whole field, whose `native` is the box, and find their own elements in it. For most
+   widgets the marked element and the control are the same; for some the marker is a wrapper, or
+   a part that only some renderings have, such as the hidden input django-file-resubmit adds when
+   a form comes back with a cached upload (decision 6). A marker can combine conditions with
+   `:has()`, which every browser the package runs supports:
+
+   ```python
+   # a file input, only in a box that also holds the upload's cache key
+   f':scope:has(input[name="{field.name}_cache_key"]) input[type="file"]'
+   ```
+
+   It is called `marker` rather than `selector`, because "selector" reads as "the element the
+   class works with", which it is not. It is a method taking the field, because the package's
+   own controls are known by the field's name; a project widget class with a fixed marker
+   returns a constant. It is not `get_marker`: Django spells a method `get_*` when it stands
+   behind an attribute of the same name, and there is no attribute here, so `marker(field)` reads
+   like the `read(field)`, `fill(field, value)` and `choices(field)` beside it.
 
    Matching reads the page, as everything else does (3.9), so it sees what a script drew as well
    as what the server sent. It needs no request to build the form, and one widget class serves
    every form the widget appears on. A line with several fields gives each its own box, so a
-   selector never matches the neighbour's widget.
+   marker never matches the neighbour's widget.
 
-   **All selectors are tried in one browser call.** Each call into the browser costs a round
-   trip: about 6 ms here, whether a selector matches or not and whatever the size of the box,
+   **All markers are tried in one browser call.** Each call into the browser costs a round
+   trip: about 6 ms here, whether a marker matches or not and whatever the size of the box,
    which takes the browser microseconds to search. (Measured on the product form's `category`
    box, 14 elements: `count()` 5.8 ms with no match, 6.2 ms with one; `field.value` 34 ms for a
-   text field today.) Asking each widget class's selector in turn would add 6 ms per project
+   text field today.) Asking each widget class's marker in turn would add 6 ms per project
    class to every `value` and `fill`, about 180 ms on a ten-field `populate` with three classes.
-   So `widget_for` builds the selectors in Python and sends them in one call, which returns the
+   So `widget_for` builds the markers in Python and sends them in one call, which returns the
    position of the first that matches, or -1:
 
    ```python
    index = field.native.evaluate(
        "(box, selectors) => selectors.findIndex(s => box.querySelector(s))",
-       [widget.selector(field) for widget in self._widgets],
+       [widget.marker(field) for widget in self._widgets],
    )
    ```
 
    That costs one round trip however many classes there are. Today a text field makes three
    (checkbox, select, `input_value`); with the table it makes two (the match, `input_value`). The
-   price is that a selector is plain CSS as the browser's `querySelector` reads it, and the
+   price is that a marker is plain CSS as the browser's `querySelector` reads it, and the
    browser layer's own syntax, such as `text=` or `>>`, is not available. Where a widget class
    needs that, it uses it inside `read` and `fill`, which take locators as usual.
 
@@ -199,18 +215,21 @@ Rows and cells need nothing: a changelist has no controls until `list_editable` 
 
    ```python
    class CheckboxWidget:
-       def selector(self, field):
+       def marker(self, field):
            return f'input[type="checkbox"][name="{field.name}"]'
 
        def read(self, field):
-           return field.native.locator(self.selector(field)).is_checked()
+           return self._control(field).is_checked()
 
        def fill(self, field, value):
-           field.native.locator(self.selector(field)).set_checked(bool(value))
+           self._control(field).set_checked(bool(value))
+
+       def _control(self, field):
+           return field.native.locator(f'input[type="checkbox"][name="{field.name}"]')
 
 
    class SelectWidget:
-       def selector(self, field):
+       def marker(self, field):
            return f'select[name="{field.name}"]'
 
        # read: the FieldChoice chosen; fill: the option standing for the value, by
@@ -220,11 +239,14 @@ Rows and cells need nothing: a changelist has no controls until `list_editable` 
    class TextWidget:
        """Whatever one control carries the field's name, holding text."""
 
-       def selector(self, field):
+       def marker(self, field):
            return f'[name="{field.name}"]'
 
        # read: the control's text; fill: the value's text, None emptying it.
    ```
+
+   For the built-ins the mark and the control are the same element, but each still finds its
+   control on its own, so that no widget class reads the marker as "the element to act on".
 
    `FormField.value`, `fill` and `choices` each become "the widget class for this field, then its
    method", and the branches leave `fields.py`. `FieldChoice` stays in `fields.py`; `widgets.py`
@@ -241,14 +263,14 @@ Rows and cells need nothing: a changelist has no controls until `list_editable` 
    `refreshed_at`, and never two fields `refreshed_at_0` and `refreshed_at_1`. The probe above
    showed exactly that. Four cases follow from this:
 
-   * **Several inputs**, as in a `MultiWidget`: the selector needs to match only one thing that
+   * **Several inputs**, as in a `MultiWidget`: the marker needs to match only one thing that
      marks the widget, such as `p.datetime`. Matching several elements is fine, because the
      package only asks whether there is a match. The widget class then reaches each input by
      name through the box:
 
      ```python
      class SplitDateTimeWidget:
-         def selector(self, field):
+         def marker(self, field):
              return "p.datetime"
 
          def read(self, field):
@@ -266,7 +288,7 @@ Rows and cells need nothing: a changelist has no controls until `list_editable` 
      `fill` takes one value, such as a `datetime`, and spreads it over the parts, so
      `populate(feed)` hands it the instance's attribute as it does for any field.
    * **Parts drawn outside the box.** An autocomplete's results list and the admin's calendar
-     popup are appended to the page's `body`. The selector still matches what sits in the box;
+     popup are appended to the page's `body`. The marker still matches what sits in the box;
      the widget class reaches the rest through `field.native.page`, the browser layer's own page.
    * **Parts in a frame.** A rich text editor's body is an `iframe` inside the box, reached with
      `field.native.frame_locator("iframe")`.
@@ -280,7 +302,7 @@ Rows and cells need nothing: a changelist has no controls until `list_editable` 
 
    ```python
    class SwatchPickerWidget:
-       def selector(self, field):        # what marks the control inside the field's box
+       def marker(self, field):        # what marks the widget inside the field's box
            return ".swatch-picker"
 
        def read(self, field):            # what `field.value` returns
@@ -296,14 +318,14 @@ Rows and cells need nothing: a changelist has no controls until `list_editable` 
            ]
    ```
 
-   `selector`, `read` and `fill` are required. `choices` is optional, because most widgets offer
+   `marker`, `read` and `fill` are required. `choices` is optional, because most widgets offer
    no fixed set; `CheckboxWidget` and `TextWidget` have none. A widget class returns whatever
    value suits it: the package passes it through untouched, as it does a normalization rule's
    result.
 
    A widget class must not use `field.value`, `field.fill` or `field.choices` of the same field,
-   from any of its methods, `selector` included: that asks the table again and never ends. Nor
-   should `selector` read the page, since it runs for every field on every read. The README says
+   from any of its methods, `marker` included: that asks the table again and never ends. Nor
+   should `marker` read the page, since it runs for every field on every read. The README says
    both.
 
 6. **Order and replacing a built-in.** The table is the project's widget classes in the order
@@ -312,7 +334,43 @@ Rows and cells need nothing: a changelist has no controls until `list_editable` 
    naming and nothing is restated, as with the rules of 28.3. A built-in cannot be removed, only
    put behind; no use case needs more.
 
-7. **A field no widget class recognises is reported at once.** When no selector matches, `value`
+   Two rules follow, and the README states them:
+
+   * **A marker matches what is particular to the widget**, not the kind of control it shares
+     with others. A project class with `input[type="file"]` would take every file field, and every
+     one a later built-in would have handled.
+   * **Within the project's list, narrower classes come before broader ones**, since the first
+     match wins.
+
+   django-file-resubmit shows both. Its image widget renders exactly like the admin's file input,
+   until a submission fails: then it adds a hidden `<name>_cache_key` input and the cached file's
+   name, so the user need not pick the file again. A project marks its class by that hidden input
+   and lists it before a plain file class:
+
+   ```python
+   class ResubmitFileWidget:
+       def marker(self, field):        # only a form rendered back with a cached upload
+           return f'input[type="hidden"][name="{field.name}_cache_key"]'
+
+       def read(self, field):            # the name of the cached file
+           ...
+
+       def fill(self, field, value):     # a new upload wins over the cached one
+           field.native.locator(f'input[type="file"][name="{field.name}"]').set_input_files(value)
+
+
+   DJANGO_ADMIN_KIT = {
+       "widgets": [
+           "tests.kit_widgets.ResubmitFileWidget",
+           "tests.kit_widgets.FileWidget",   # any file input, until 1.3.0 has its own
+       ],
+   }
+   ```
+
+   When 1.3.0 brings a built-in file widget class, the project drops its `FileWidget`, and
+   `ResubmitFileWidget` keeps only the case it is about.
+
+7. **A field no widget class recognises is reported at once.** When no marker matches, `value`
    and `fill` raise `LookupError` naming the field and the setting, where today they wait out the
    timeout. `choices` keeps answering `[]`, as it does today for anything that is no select.
    Matching counts what the page holds without waiting, so a control a script adds after the page
@@ -374,13 +432,13 @@ Rows and cells need nothing: a changelist has no controls until `list_editable` 
   cannot be imported: {error}"`.
 * **Class:** the path must name a class: `"... names '...', which is not a class."`
 * **Shape**, checked on the instance:
-  * `selector`, `read` and `fill`: required, callable. `"... names '...', which has no read
+  * `marker`, `read` and `fill`: required, callable. `"... names '...', which has no read
     method."`
   * `choices`: optional; when present, callable.
-* **What `selector` returns** can only be checked when it runs: a non-empty string, or
-  `TypeError: "SwatchPickerWidget.selector() must return a non-empty CSS selector, not None."`
+* **What `marker` returns** can only be checked when it runs: a non-empty string, or
+  `TypeError: "SwatchPickerWidget.marker() must return a non-empty CSS selector, not None."`
   Whether it is valid CSS is only known to the browser: `querySelector` rejects it with a
-  `SyntaxError` quoting the selector, on first use.
+  `SyntaxError` quoting the marker, on first use.
 
 Errors are `ImproperlyConfigured`, raised once with the rest of the settings (28.4), naming the
 position in the list as the rules name their kind.
@@ -402,9 +460,9 @@ Consistent: documents only.
 
 ### C1: the package's controls as widget classes
 
-* `widgets.py` (new): `CheckboxWidget`, `SelectWidget` and `TextWidget` with `selector`, `read`,
+* `widgets.py` (new): `CheckboxWidget`, `SelectWidget` and `TextWidget` with `marker`, `read`,
   `fill`, and `choices` on `SelectWidget`; `_option` and `_option_spellings` move here from
-  `fields.py`; `Widgets()` holding the three and `widget_for(field)`: the first whose selector
+  `fields.py`; `Widgets()` holding the three and `widget_for(field)`: the first whose marker
   matches, found in one browser call (decision 2), else `TextWidget`, which keeps today's
   behaviour for a control nobody recognises.
 * `fields.py`: `value`, `fill` and `choices` ask a module-level `Widgets()` for the field's
@@ -417,7 +475,7 @@ Consistent: a pure move; every field reads and fills as before.
 
 ### C2: report a field no widget class recognises
 
-* `widgets.py`: `widget_for` returns `None` when no selector matches.
+* `widgets.py`: `widget_for` returns `None` when no marker matches.
 * `fields.py`: `value` and `fill` raise `LookupError` at once for `None`:
   `"The field 'refreshed_at' has no widget the package can read. A project teaches it one
   through DJANGO_ADMIN_KIT['widgets']."` (and "fill" for `fill`); `choices` answers `[]`.
@@ -431,10 +489,10 @@ that C3 adds; the two land on the same branch before any release.
 ### C3: read a field through a project's widget class
 
 * `config.py`: `widgets` in `_KNOWN_KEYS`; `Config.widgets: tuple[Any, ...] = ()`; `_widgets()`
-  importing, instantiating and checking `selector` and `read` (validation rules above, minus
+  importing, instantiating and checking `marker` and `read` (validation rules above, minus
   `fill` and `choices`).
 * `widgets.py`: `Widgets(project=())` puts the project's classes in front of the built-ins;
-  `widget_for` checks what `selector` returns.
+  `widget_for` checks what `marker` returns.
 * `plugin.py`: session fixture `admin_ui_widgets(admin_ui_config)`; `admin_ui` takes it and passes
   it to `AdminSession`.
 * `session.py`, `pages.py`: `widgets` beside `normalizers` through `AdminSession`, `AdminPage`,
@@ -450,7 +508,7 @@ that C3 adds; the two land on the same branch before any release.
     * the first of two matching widget classes wins;
     * a project's subclass of `SelectWidget` that reads the bare value replaces the built-in on
       `category`;
-    * a selector that returns `None` is reported, exact message;
+    * a marker that returns `None` is reported, exact message;
     * a rendered-only field is read by its rule, not a widget class (a viewer on the feed).
   * `tests/test_config.py`: `widgets` accepted and instantiated in order; each rejection above.
   * `tests/test_plugin.py`: the fixture is listed.
@@ -490,7 +548,14 @@ Consistent: the built-ins keep their choices; only project classes are affected.
 ### C6: README and spec
 
 * `README.md`: an entry "Teaching the package a widget" with the swatch class, the setting, the
-  fixture override, replacing a built-in by subclassing one, and the warnings of decision 5;
+  fixture override, replacing a built-in by subclassing one, the warnings of decision 5, and the
+  two rules of decision 6 with the resubmit example. The entry explains, in the README's own
+  voice, that matching and acting are two steps: first the package tries every class's marker in
+  one browser call, the first that matches inside the box picks the class, and what it matched
+  is not kept; then it calls `read(field)` or `fill(field, value)` on that class, and
+  `field.native` is the whole box (for the resubmit image: the label, the file input, the
+  "Currently" link, the cached file's name and the hidden input), from which each method finds
+  the parts it needs;
   `widgets` in the settings example; five fixtures.
 * `specification.md`: 28.5 and 28.1's "field handling" marked done, criterion 34 fully done,
   and criterion 35 done.

@@ -2582,7 +2582,7 @@ method takes the field, whose `native` is its box and `name` its name:
 
 ```python
 class SwatchPickerWidget:
-    def selector(self, field):        # what marks the control inside the field's box
+    def marker(self, field):        # what marks the widget inside the field's box
         return ".swatch-picker"
 
     def read(self, field):            # what `field.value` returns
@@ -2598,9 +2598,9 @@ class SwatchPickerWidget:
         ]
 ```
 
-`selector`, `read` and `fill` are required and `choices` is optional. A widget class returns
+`marker`, `read` and `fill` are required and `choices` is optional. A widget class returns
 whatever value suits it, and the package passes it on untouched. It never uses `value`, `fill` or
-`choices` of the field it is given, which would ask the widget classes again; and `selector`,
+`choices` of the field it is given, which would ask the widget classes again; and `marker`,
 which runs for every field the package reads or fills, does not read the page.
 
 The package's own controls are widget classes of the same kind, public so that a project may
@@ -2614,14 +2614,27 @@ split date-time is one field however many inputs it has. Its widget class reache
 through the box, a part the widget draws elsewhere on the page through `field.native.page`, and
 one inside a frame through `field.native.frame_locator`.
 
-The widget class for a field is the first, in order, whose selector matches something inside
-the field's box. The selectors of all widget classes are tried in one browser call, so a
-selector is plain CSS as the browser reads it, and the browser layer's own selector syntax is
-for `read` and `fill`. A project's widget classes come first, in the order it lists them, and the
+The widget class for a field is the first, in order, whose marker matches something inside the
+field's box. Recognising and acting are two steps. First the package tries the markers of all
+widget classes in one browser call, and the first that matches picks the class; what it matched
+is not kept. Then it calls `read` or `fill` on that class with the field, whose `native` is the
+whole box, and each method finds there the parts it needs. So the marker may be a wrapper around
+the controls, or a part that only some renderings of the widget have, and need not be what
+`read` and `fill` act on. Since the markers go to the browser together, a marker is a plain CSS
+selector as the browser reads it, and the browser layer's own selector syntax is for `read` and
+`fill`. A marker combines conditions with `:has()`:
+
+```python
+# a file input, only in a box that also holds the upload's cache key
+f':scope:has(input[name="{field.name}_cache_key"]) input[type="file"]'
+```
+ A project's widget classes come first, in the order it lists them, and the
 package's own after them, in the order checkbox, select, text. So a project replaces one of the
 package's own by listing a widget class that matches the same controls, and keeps the rest; one
 that matches only some of them, such as the selects a script enhances, takes those and leaves
-the others to the package. A field no widget class recognises is reported at once, naming the
+the others to the package. Hence a marker matches what is particular to its widget rather
+than the kind of control it shares with others, which would take every field with that control,
+and a project lists its narrower classes before its broader ones. A field no widget class recognises is reported at once, naming the
 field and this setting, rather than after the timeout.
 
 A project lists its widget classes in its settings, by dotted path, as it names the admin site
@@ -2637,8 +2650,8 @@ DJANGO_ADMIN_KIT = {
 
 The list is checked once, with the rest of the settings (section 28.4): a value that is not a
 list or a tuple of strings, a path that does not import, one that names no class, and a class
-without a callable `selector`, `read` or `fill`, or with a `choices` that is not callable, are
-each rejected, naming the position in the list. What `selector` returns is checked when it
+without a callable `marker`, `read` or `fill`, or with a `choices` that is not callable, are
+each rejected, naming the position in the list. What `marker` returns is checked when it
 runs: anything but a non-empty string is reported, naming the widget class.
 
 Widget classes apply to controls, the fields a user may fill. A field the user may only read has
@@ -2912,3 +2925,5 @@ Until then a project reads and fills any of them through a widget class of its o
   does not force a project-wide change;
 * adding a normalization rule for a representation the package does not know, such as a model
   field class of the project's own, which then behaves like any other.
+* recognising a widget by logic of the project's own, where a marker cannot say it, through
+  an optional method asked only of the widget classes that define it (section 28.5).
