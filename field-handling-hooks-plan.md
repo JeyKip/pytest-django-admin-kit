@@ -143,11 +143,12 @@ Out of scope:
 
 | Layer | File | Change |
 |---|---|---|
+| Page tools | `src/django_admin_kit/tools.py` (new) | `PageTools(urls, normalizers, widgets)`, built in `admin_ui` |
 | Widget classes | `src/django_admin_kit/widgets.py` (new) | `CheckboxWidget`, `SelectWidget`, `TextWidget`; `Widgets(project=())` with `widget_for(field)` |
 | Field | `src/django_admin_kit/fields.py` | `value`, `fill`, `choices` ask the table; the three control branches, `_option` and `_option_spellings` move out |
 | Settings | `src/django_admin_kit/config.py` | `widgets` key, `_widgets()` validation, `Config.widgets` |
-| Fixture | `src/django_admin_kit/plugin.py` | `admin_ui_widgets(admin_ui_config)`, passed into `AdminSession` |
-| Plumbing | `session.py`, `pages.py` | `widgets` passed beside `normalizers` to `AdminPage`, `ModelPage`, `_page_at`, and into `FormField` from `FormPage.fields` |
+| Fixture | `src/django_admin_kit/plugin.py` | `admin_ui_widgets(admin_ui_config)`, put into the `PageTools` that `admin_ui` builds |
+| Plumbing | `session.py`, `pages.py` | `PageTools` through `AdminSession`, `AdminPage`, `ModelPage` and `_page_at`; `FormPage.fields` hands `tools.widgets` to `FormField` |
 | Test project | `tests/project/shop/` | `Feed.colour`, the swatch picker, its widget class |
 
 Rows and cells need nothing: a changelist has no controls until `list_editable` (1.2.0).
@@ -400,10 +401,52 @@ Rows and cells need nothing: a changelist has no controls until `list_editable` 
     overrides it with `Widgets([...])` of instances; the built-ins are added behind them by
     `Widgets` itself, so an override never restates them. Per-test tables are out of scope.
 
-11. **Plumbing beside `normalizers`.** `widgets` travels the same constructors `normalizers`
-    does, as one more argument, and stops at `FormField`. One object holding both would rename
-    the existing argument on every constructor for no gain, since only `FormField` reads the
-    widget classes.
+11. **What the session hands to every page travels in one object, `PageTools`.** Two kinds of
+    argument go through the constructors: what is the same for the whole session (`urls`,
+    `normalizers`, and now `widgets`) and what belongs to one page, row, cell or field (`page`,
+    `status_code`, `model`, `element`, `check`, `model_admin`, ...). Today the first kind is
+    passed one by one through `AdminSession`, `AdminPage`, `ModelPage`, `_page_at` and its
+    callers, so adding `normalizers` touched every one of them and `widgets` would again. A
+    frozen dataclass holds the first kind:
+
+    ```python
+    @dataclass(frozen=True)
+    class PageTools:
+        """What every page of a session reads by, built once per test by `admin_ui`."""
+
+        urls: AdminUrls
+        normalizers: Normalizers
+        widgets: Widgets
+    ```
+
+    * **Name.** It holds what a page needs from outside the browser: where the admin's pages
+      are, the rules that read rendered values, and the widget classes that read and fill
+      controls. `PageTools` says who uses it and that it is a set of instruments, not settings
+      (that is `Config`) and not state. `Toolkit` echoes the package's own name ("admin kit");
+      anything with "context" collides with Playwright's `BrowserContext` and Django's template
+      context; `Services` and `Environment` say nothing about pages.
+    * **What may go in.** Only what is built once from settings or session fixtures and is the
+      same for every page. Nothing per page or per object, or the container stops meaning
+      anything. Its docstring says so.
+    * **How far it travels.** Through the page layer only: `AdminSession`, `AdminPage`,
+      `ModelPage`, `_page_at`. Rows, cells, rendered values and fields keep taking just what they
+      use, handed over by their page: `Row` gets `urls` and `normalizers`, `Cell` and
+      `RenderedValue` get `normalizers`, `FormField` gets `normalizers` and `widgets`. Their
+      signatures still say what they depend on, and a test of one cell needs no container.
+    * **Where it is built: in `admin_ui`**, from `admin_ui_urls`, `admin_ui_normalizers` and
+      `admin_ui_widgets`, and handed to `AdminSession`. It is no fixture of its own.
+      * For: the fixture list of section 27 does not grow, and there is no fixture a project
+        could override by mistake, bypassing the three it is meant to override one at a time.
+        It is rebuilt for every test from those three, so an override at any scope is picked up
+        with nothing to keep in step. Building it costs nothing: three references.
+      * Against: whatever else builds pages has to assemble one itself. Inside the package that
+        is nothing, since every page comes from `AdminSession`. In this repository's tests it is
+        the two fake-page builders (`tests/test_pages.py`, `tests/test_changelist_count.py`),
+        which get it from a `page_tools` fixture in `tests/conftest.py` assembled the same way.
+        That is a second place that builds it, but a field added to the dataclass without a
+        default breaks it loudly, so the two cannot drift apart silently.
+      * Against: `admin_ui` takes one more fixture argument with each new tool. It already lists
+        each of them, and that is where a reader looks for what a session is made of.
 
 12. **The test project's widget.** `Feed` gains `colour`, a `CharField(max_length=10, blank=True,
     default="")` holding `"red"`, `"green"` or `"blue"`. `FeedAdmin` draws it with
@@ -414,7 +457,7 @@ Rows and cells need nothing: a changelist has no controls until `list_editable` 
     widget class, `SwatchPickerWidget`, lives in `shop/kit_widgets.py`, a module of its own so the
     Django widget and the package's class are not confused. A model field rather than a form-only
     one, so a save is checked in the database. Its widget class drives the swatches through
-    `field.native`, so the C4 tests also demonstrate criterion 35, driving a project-specific
+    `field.native`, so the C5 tests also demonstrate criterion 35, driving a project-specific
     widget through a field's native handle, and it is marked done with criterion 34.
 
 ## Validation rules for the new setting
@@ -458,14 +501,40 @@ position in the list as the rules name their kind.
 
 Consistent: documents only.
 
-### C1: the package's controls as widget classes
+### C1: one object for what the session hands to every page
+
+* `tools.py` (new): `PageTools(urls, normalizers)`, frozen, with the docstring rule of decision
+  11. `widgets` joins it in C2, the commit that first needs it.
+* `plugin.py`: `admin_ui` builds `PageTools(admin_ui_urls, admin_ui_normalizers)` and passes it
+  to `AdminSession`.
+* `session.py`: `AdminSession(context, tools, base_url)`; it reads `tools.urls` where it read
+  `urls`, and passes `tools` to the pages it opens.
+* `pages.py`: `AdminPage(page, status_code, requested, tools)`, `ModelPage(..., tools, model)`,
+  `_page_at(page, status_code, tools)`, and the places that build a page: `_page_at`'s caller
+  after a submission, the delete link, and `AdminSession._open`. `ChangelistPage.rows` hands
+  `tools.urls` and `tools.normalizers` to `Row`, `FormPage.fields` hands `tools.normalizers` to
+  `FormField`. `Row`, `Cell`, `RenderedValue` and `FormField` do not change.
+* `tests/conftest.py`: a `page_tools` fixture built from `urls` and `admin_ui_normalizers`, as
+  `admin_ui` builds it.
+* `tests/test_pages.py`, `tests/test_changelist_count.py`: the fake-page builders take
+  `page_tools` in place of `urls` and `admin_ui_normalizers`.
+* Tests: none new. The whole suite is the proof; it passes unchanged apart from the two
+  builders.
+
+Consistent: a pure refactor; the same objects reach the same places, in one argument instead of
+two.
+
+### C2: the package's controls as widget classes
 
 * `widgets.py` (new): `CheckboxWidget`, `SelectWidget` and `TextWidget` with `marker`, `read`,
   `fill`, and `choices` on `SelectWidget`; `_option` and `_option_spellings` move here from
   `fields.py`; `Widgets()` holding the three and `widget_for(field)`: the first whose marker
   matches, found in one browser call (decision 2), else `TextWidget`, which keeps today's
   behaviour for a control nobody recognises.
-* `fields.py`: `value`, `fill` and `choices` ask a module-level `Widgets()` for the field's
+* `tools.py`: `PageTools` gains `widgets`; `admin_ui` and the `page_tools` test fixture put
+  `Widgets()` in it, the built-ins only.
+* `pages.py`: `FormPage.fields` hands `tools.widgets` to `FormField`.
+* `fields.py`: `FormField(..., widgets)`; `value`, `fill` and `choices` ask it for the field's
   widget class. The three branches go.
 * Tests: none new. The field, choice and populate tests (`tests/test_fields.py`,
   `tests/test_choices.py`, `tests/test_populate.py`) are the proof that nothing changed, and they
@@ -473,7 +542,7 @@ Consistent: documents only.
 
 Consistent: a pure move; every field reads and fills as before.
 
-### C2: report a field no widget class recognises
+### C3: report a field no widget class recognises
 
 * `widgets.py`: `widget_for` returns `None` when no marker matches.
 * `fields.py`: `value` and `fill` raise `LookupError` at once for `None`:
@@ -484,20 +553,18 @@ Consistent: a pure move; every field reads and fills as before.
   tests do not otherwise change.
 
 Consistent: only fields that used to time out behave differently. The message names a setting
-that C3 adds; the two land on the same branch before any release.
+that C4 adds; the two land on the same branch before any release.
 
-### C3: read a field through a project's widget class
+### C4: read a field through a project's widget class
 
 * `config.py`: `widgets` in `_KNOWN_KEYS`; `Config.widgets: tuple[Any, ...] = ()`; `_widgets()`
   importing, instantiating and checking `marker` and `read` (validation rules above, minus
   `fill` and `choices`).
 * `widgets.py`: `Widgets(project=())` puts the project's classes in front of the built-ins;
   `widget_for` checks what `marker` returns.
-* `plugin.py`: session fixture `admin_ui_widgets(admin_ui_config)`; `admin_ui` takes it and passes
-  it to `AdminSession`.
-* `session.py`, `pages.py`: `widgets` beside `normalizers` through `AdminSession`, `AdminPage`,
-  `ModelPage`, `_page_at` and the three places that call it, and into `FormField` from
-  `FormPage.fields`, which replaces C1's module-level table.
+* `plugin.py`: session fixture `admin_ui_widgets(admin_ui_config)`; `admin_ui` takes it and puts
+  it into the `PageTools` it builds, in place of C2's built-ins-only `Widgets()`.
+* `tests/conftest.py`: `page_tools` takes `admin_ui_widgets` the same way.
 * Test project: `Feed.colour` and migration `0004_feed_colour.py`; `shop/widgets.py` with the
   `SwatchPicker` Django widget and its template under `shop/templates/shop/widgets/`; `FeedAdmin`
   draws `colour` with it; `shop/kit_widgets.py` with `SwatchPickerWidget`.
@@ -512,17 +579,15 @@ that C3 adds; the two land on the same branch before any release.
     * a rendered-only field is read by its rule, not a widget class (a viewer on the feed).
   * `tests/test_config.py`: `widgets` accepted and instantiated in order; each rejection above.
   * `tests/test_plugin.py`: the fixture is listed.
-  * `tests/test_pages.py`, `tests/test_changelist_count.py`: the fake-page builders pass
-    `admin_ui_widgets`.
   * Any test listing the feed form's fields gains `colour`.
 
-Consistent: with no `widgets` setting the table is the built-ins, as in C2; the swatch is read by
+Consistent: with no `widgets` setting the table is the built-ins, as in C3; the swatch is read by
 its widget class only where the test module installs it.
 
-### C4: fill a field through a project's widget class
+### C5: fill a field through a project's widget class
 
 * `config.py`: `fill` required and callable.
-* `fields.py`: nothing; `fill` already goes through the table since C1.
+* `fields.py`: nothing; `fill` already goes through the table since C2.
 * Tests in `tests/test_widgets.py`:
   * `fill` clicks the swatch through `field.native`, and `value` reads it back;
   * `populate` from a dictionary and from a namespace fills `colour` with the rest;
@@ -533,10 +598,10 @@ its widget class only where the test module installs it.
   * an invalid save (blank `source`) renders the colour back;
   * `test_config.py`: a widget class without `fill`.
 
-Consistent: C3 accepted a widget class without `fill`; from here it is rejected, and every class
+Consistent: C4 accepted a widget class without `fill`; from here it is rejected, and every class
 in the suite has one.
 
-### C5: a widget class's choices
+### C6: a widget class's choices
 
 * `config.py`: `choices`, when present, must be callable.
 * `fields.py`: `choices` returns `[]` for a widget class without the method.
@@ -545,7 +610,7 @@ in the suite has one.
 
 Consistent: the built-ins keep their choices; only project classes are affected.
 
-### C6: README and spec
+### C7: README and spec
 
 * `README.md`: an entry "Teaching the package a widget" with the swatch class, the setting, the
   fixture override, replacing a built-in by subclassing one, the warnings of decision 5, and the
