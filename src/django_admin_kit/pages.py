@@ -358,11 +358,11 @@ class ChangelistPage(ModelPage):
             Row(
                 element,
                 index,
-                columns,
-                self._model,
-                self._tools.urls,
-                self._check,
-                self._tools.normalizers,
+                columns=columns,
+                model=self._model,
+                urls=self._tools.urls,
+                check=self._check,
+                normalizers=self._tools.normalizers,
             )
             for index, element in enumerate(elements)
         ]
@@ -461,11 +461,11 @@ class FormPage(ModelPage):
                     fields[name] = FormField(
                         box,
                         name,
-                        language,
-                        self._check,
-                        self._tools.normalizers,
-                        admin,
-                        self._tools.widgets,
+                        language=language,
+                        check=self._check,
+                        normalizers=self._tools.normalizers,
+                        model_admin=admin,
+                        widgets=self._tools.widgets,
                     )
         return fields
 

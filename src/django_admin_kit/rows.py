@@ -27,11 +27,14 @@ class Cell(RenderedValue):
         self,
         element: Locator,
         column: str,
+        *,
         check: Callable[[], None],
         normalizers: Normalizers,
         model_admin: ModelAdmin,
     ) -> None:
-        super().__init__(element, check, normalizers, model_admin, column)
+        super().__init__(
+            element, column, check=check, normalizers=normalizers, model_admin=model_admin
+        )
         self._column = column
 
     @property
@@ -70,6 +73,7 @@ class Row:
         self,
         element: Locator,
         index: int,
+        *,
         columns: list[str],
         model: type[Model],
         urls: AdminUrls,
@@ -146,7 +150,13 @@ class Row:
         cells = [cell for cell in cells if "action-checkbox" not in _classes(cell)]
         admin = model_admin(self._urls.site, self._model)
         return [
-            Cell(cell, column, self._check, self._normalizers, admin)
+            Cell(
+                cell,
+                column,
+                check=self._check,
+                normalizers=self._normalizers,
+                model_admin=admin,
+            )
             for cell, column in zip(cells, self._columns)
         ]
 

@@ -69,6 +69,7 @@ class FormField:
         self,
         element: Locator,
         name: str,
+        *,
         language: str,
         check: Callable[[], None],
         normalizers: Normalizers,
@@ -221,10 +222,10 @@ class FormField:
     def _rendered(self) -> RenderedValue:
         return RenderedValue(
             self._element.locator("div.readonly"),
-            self._check,
-            self._normalizers,
-            self._model_admin,
             self._name,
+            check=self._check,
+            normalizers=self._normalizers,
+            model_admin=self._model_admin,
         )
 
     def __repr__(self) -> str:
