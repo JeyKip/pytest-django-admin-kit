@@ -27,11 +27,12 @@ from . import matching
 from .errors import ValidationErrors
 from .fields import Fields, FormField
 from .messages import Messages
-from .normalize import Normalizers, integer
+from .normalize import integer
 from .rendered import text_of
 from .results import SubmissionResult
 from .rows import Row
-from .urls import AdminUrls, model_admin
+from .tools import PageTools
+from .urls import model_admin
 
 _NOTHING = object()
 """What a source has for a field it says nothing about, which `None` cannot stand for."""
@@ -79,15 +80,12 @@ class AdminPage:
         page: Page,
         status_code: int,
         requested: str,
-        urls: AdminUrls,
-        normalizers: Normalizers,
+        tools: PageTools,
     ) -> None:
         self._page = page
         self._status_code = status_code
         self._requested = requested
-        self._urls = urls
-        # The rules that read the values the page renders, handed to everything that reads one.
-        self._normalizers = normalizers
+        self._tools = tools
         self._landed()
 
     @property
@@ -127,7 +125,7 @@ class AdminPage:
     def denied(self) -> bool:
         """Refused, whether by redirect to the login page or in place."""
         self._check()
-        return self._status_code == 403 or self._destination == self._urls.login()
+        return self._status_code == 403 or self._destination == self._tools.urls.login()
 
     @property
     def missing(self) -> bool:
@@ -144,8 +142,8 @@ class AdminPage:
             return True
         return (
             self._redirected
-            and self._destination == self._urls.index()
-            and self._requested != self._urls.login()
+            and self._destination == self._tools.urls.index()
+            and self._requested != self._tools.urls.login()
         )
 
     @property
@@ -240,9 +238,9 @@ class AdminPage:
         if self._still_shown():
             # The browser loaded a new document here, so report its status.
             self._status_code = response.status
-            return SubmissionResult(self, redirected, self._urls)
-        landed = _page_at(self._page, response.status, self._urls, self._normalizers)
-        return SubmissionResult(landed, redirected, self._urls)
+            return SubmissionResult(self, redirected, self._tools.urls)
+        landed = _page_at(self._page, response.status, self._tools)
+        return SubmissionResult(landed, redirected, self._tools.urls)
 
 
 class IndexPage(AdminPage):
@@ -306,7 +304,7 @@ class IndexPage(AdminPage):
             model = apps.get_model(app_label, _token(row, "model-"))
         except LookupError:
             return None
-        return model if self._urls.site.is_registered(model) else None
+        return model if self._tools.urls.site.is_registered(model) else None
 
 
 class ModelPage(AdminPage):
@@ -317,11 +315,10 @@ class ModelPage(AdminPage):
         page: Page,
         status_code: int,
         requested: str,
-        urls: AdminUrls,
-        normalizers: Normalizers,
+        tools: PageTools,
         model: type[Model],
     ) -> None:
-        super().__init__(page, status_code, requested, urls, normalizers)
+        super().__init__(page, status_code, requested, tools)
         self._model = model
 
 
@@ -358,7 +355,15 @@ class ChangelistPage(ModelPage):
         columns = self.columns
         elements = self._shown().locator("#result_list tbody tr").all()
         return [
-            Row(element, index, columns, self._model, self._urls, self._check, self._normalizers)
+            Row(
+                element,
+                index,
+                columns,
+                self._model,
+                self._tools.urls,
+                self._check,
+                self._tools.normalizers,
+            )
             for index, element in enumerate(elements)
         ]
 
@@ -444,7 +449,7 @@ class FormPage(ModelPage):
         # The admin says which language it rendered the page in, and the fields need
         # it to know what the form put after each label.
         language = page.locator("html").get_attribute("lang") or ""
-        admin = model_admin(self._urls.site, self._model)
+        admin = model_admin(self._tools.urls.site, self._model)
         fields = Fields()
         for row in page.locator("form > div > fieldset.module .form-row").all():
             boxes = [row] if len(_field_names(row)) == 1 else row.locator(".fieldBox").all()
@@ -454,7 +459,7 @@ class FormPage(ModelPage):
                     continue
                 for name in _field_names(box):
                     fields[name] = FormField(
-                        box, name, language, self._check, self._normalizers, admin
+                        box, name, language, self._check, self._tools.normalizers, admin
                     )
         return fields
 
@@ -619,9 +624,7 @@ class EditPage(FormPage):
         response = navigation.value
         # A navigation of the page always comes with a response.
         assert response is not None
-        return DeletePage(
-            self._page, response.status, path, self._urls, self._normalizers, self._model
-        )
+        return DeletePage(self._page, response.status, path, self._tools, self._model)
 
 
 class DeletePage(ModelPage):
@@ -741,7 +744,7 @@ _MODEL_PAGES: dict[str, type[ModelPage]] = {
 }
 
 
-def _page_at(page: Page, status_code: int, urls: AdminUrls, normalizers: Normalizers) -> AdminPage:
+def _page_at(page: Page, status_code: int, tools: PageTools) -> AdminPage:
     """A page object for the page the browser is on.
 
     The class comes from the URL, and is used only if the page's ``body`` class confirms
@@ -752,25 +755,25 @@ def _page_at(page: Page, status_code: int, urls: AdminUrls, normalizers: Normali
     try:
         match = resolve(path)
     except Resolver404:
-        return AdminPage(page, status_code, path, urls, normalizers)
+        return AdminPage(page, status_code, path, tools)
     # A view added to the admin without a name has no URL name.
     url_name = match.url_name or ""
-    if match.namespace != urls.site.name:
-        return AdminPage(page, status_code, path, urls, normalizers)
+    if match.namespace != tools.urls.site.name:
+        return AdminPage(page, status_code, path, tools)
     # A view can render a different page at its own URL, so the URL alone is not trusted.
     if url_name == "index" and _is_kind(page, IndexPage._kind):
-        return IndexPage(page, status_code, path, urls, normalizers)
+        return IndexPage(page, status_code, path, tools)
     # Find the model by the full prefix of its URL names, such as "shop_product_",
     # because an app label may itself contain underscores.
     for model in apps.get_models():
-        if not urls.site.is_registered(model):
+        if not tools.urls.site.is_registered(model):
             continue
         prefix = f"{model._meta.app_label}_{model._meta.model_name}_"
         if url_name.startswith(prefix):
             page_class = _MODEL_PAGES.get(url_name[len(prefix) :])
             if page_class is not None and _is_kind(page, page_class._kind):
-                return page_class(page, status_code, path, urls, normalizers, model)
-    return AdminPage(page, status_code, path, urls, normalizers)
+                return page_class(page, status_code, path, tools, model)
+    return AdminPage(page, status_code, path, tools)
 
 
 def _is_kind(page: Page, kind: str | None) -> bool:

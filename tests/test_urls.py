@@ -10,6 +10,12 @@ from project.shop.models import Product
 
 
 @pytest.fixture
+def urls():
+    """The default site's URLs, built here: this module tests the class itself."""
+    return AdminUrls(admin.site)
+
+
+@pytest.fixture
 def unsaved_product():
     """Has a primary key but was never saved: resolution needs no database."""
     return Product(pk=7, name="Widget", sku="W-1", price="9.99")

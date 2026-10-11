@@ -51,10 +51,10 @@ class FakePage:
 
 
 @pytest.fixture
-def changelist(urls, admin_ui_normalizers):
+def changelist(page_tools):
     """Builds the product changelist around a paginator that shows ``text``."""
     return lambda text: ChangelistPage(
-        FakePage(text), 200, "/admin/shop/product/", urls, admin_ui_normalizers, Product
+        FakePage(text), 200, "/admin/shop/product/", page_tools, Product
     )
 
 

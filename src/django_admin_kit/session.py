@@ -15,8 +15,8 @@ from django.conf import settings
 from django.test import Client
 from playwright.sync_api import BrowserContext
 
-from .normalize import Normalizers
 from .pages import AdminPage, ChangelistPage, CreatePage, DeletePage, EditPage, IndexPage
+from .tools import PageTools
 from .urls import AdminUrls
 
 _P = TypeVar("_P", bound=AdminPage)
@@ -28,14 +28,12 @@ class AdminSession:
     def __init__(
         self,
         context: BrowserContext,
-        urls: AdminUrls,
+        tools: PageTools,
         base_url: str,
-        normalizers: Normalizers,
     ) -> None:
         self._context = context
-        self._urls = urls
+        self._tools = tools
         self._base_url = base_url
-        self._normalizers = normalizers
 
     @property
     def native(self) -> BrowserContext:
@@ -45,7 +43,7 @@ class AdminSession:
     @property
     def url(self) -> AdminUrls:
         """Admin URLs resolved through the site under test, as paths."""
-        return self._urls
+        return self._tools.urls
 
     def absolute(self, path: str) -> str:
         """Turn an admin path into a full URL on the live server.
@@ -87,7 +85,7 @@ class AdminSession:
 
     def _login_with_form(self, user: Any, password: str) -> None:
         page = self._context.new_page()
-        page.goto(self.absolute(self._urls.login()))
+        page.goto(self.absolute(self._tools.urls.login()))
 
         # The admin's form names the identity input `username` whatever the user
         # model calls the field; only the value it expects follows the model.
@@ -108,27 +106,27 @@ class AdminSession:
 
     def index(self) -> IndexPage:
         """Open the admin index."""
-        return self._open(self._urls.index(), IndexPage)
+        return self._open(self._tools.urls.index(), IndexPage)
 
     def list(self, model: type[Any]) -> ChangelistPage:
         """Open a model's changelist."""
-        return self._open(self._urls.list(model), ChangelistPage, model)
+        return self._open(self._tools.urls.list(model), ChangelistPage, model)
 
     def create(self, model: type[Any]) -> CreatePage:
         """Open the page that adds a new instance of ``model``."""
-        return self._open(self._urls.create(model), CreatePage, model)
+        return self._open(self._tools.urls.create(model), CreatePage, model)
 
     def edit(self, instance: Any) -> EditPage:
         """Open the change page of ``instance``."""
-        return self._open(self._urls.edit(instance), EditPage, type(instance))
+        return self._open(self._tools.urls.edit(instance), EditPage, type(instance))
 
     def delete(self, instance: Any) -> DeletePage:
         """Open the page that asks whether to delete ``instance``."""
-        return self._open(self._urls.delete(instance), DeletePage, type(instance))
+        return self._open(self._tools.urls.delete(instance), DeletePage, type(instance))
 
     def _open(self, path: str, page_class: type[_P], *args: Any) -> _P:
         page = self._context.new_page()
         response = page.goto(self.absolute(path))
         # `goto` returns None only for same-document navigations, never for a URL.
         assert response is not None
-        return page_class(page, response.status, path, self._urls, self._normalizers, *args)
+        return page_class(page, response.status, path, self._tools, *args)
