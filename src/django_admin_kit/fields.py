@@ -17,7 +17,7 @@ from .normalize import Normalizers
 from .rendered import Link, RenderedValue, text_of
 
 if TYPE_CHECKING:
-    from .widgets import Widgets
+    from .widgets import Widget, Widgets
 
 
 class FieldChoice:
@@ -137,12 +137,13 @@ class FormField:
         A control is read by its widget class: a checkbox reads as ``True`` or
         ``False``, a select as the ``FieldChoice`` chosen, anything else as the text
         typed into it. A field the user may only read is read as a changelist cell is:
-        its text, or the boolean the admin drew as an icon.
+        its text, or the boolean the admin drew as an icon. A control no widget class
+        recognises raises ``LookupError``.
         """
         self._check()
         if not self.editable:
             return self._rendered.value
-        return self._widgets.widget_for(self).read(self)
+        return self._widget("read").read(self)
 
     @property
     def links(self) -> list[Link]:
@@ -176,14 +177,15 @@ class FormField:
         The field's widget class fills it: a checkbox is checked or cleared by the
         value's truth, a select is given the option that stands for the value, and every
         other control is filled with the value's text, ``None`` emptying it. A field the
-        user may only read has nothing to fill.
+        user may only read has nothing to fill, and a control no widget class recognises
+        cannot be filled: both raise ``LookupError``.
         """
         self._check()
         if not self.editable:
             raise LookupError(
                 f"The field {self._name!r} is rendered only, so there is nothing to fill."
             )
-        self._widgets.widget_for(self).fill(self, value)
+        self._widget("fill").fill(self, value)
 
     @property
     def choices(self) -> list[FieldChoice]:
@@ -197,6 +199,17 @@ class FormField:
             return []
         choices = getattr(self._widgets.widget_for(self), "choices", None)
         return [] if choices is None else choices(self)
+
+    def _widget(self, verb: str) -> Widget:
+        """The widget class that reads and fills the field. A field none of them
+        recognises is reported at once, where waiting for a control would time out."""
+        widget = self._widgets.widget_for(self)
+        if widget is None:
+            raise LookupError(
+                f"No widget class can {verb} the field {self._name!r}. Add one for it to "
+                "DJANGO_ADMIN_KIT['widgets']."
+            )
+        return widget
 
     @property
     def _label(self) -> Locator:

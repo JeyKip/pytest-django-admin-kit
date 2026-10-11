@@ -546,8 +546,8 @@ Consistent: a pure move; every field reads and fills as before.
 
 * `widgets.py`: `widget_for` returns `None` when no marker matches.
 * `fields.py`: `value` and `fill` raise `LookupError` at once for `None`:
-  `"The field 'refreshed_at' has no widget the package can read. A project teaches it one
-  through DJANGO_ADMIN_KIT['widgets']."` (and "fill" for `fill`); `choices` answers `[]`.
+  `"No widget class can read the field 'refreshed_at'. Add one for it to
+  DJANGO_ADMIN_KIT['widgets']."` (and "fill" for `fill`); `choices` answers `[]`.
 * Tests (`tests/test_fields.py`, `tests/test_populate.py`): `refreshed_at` read and filled,
   exact messages; `populate(feed)` reports the same rather than timing out. The feed's fields
   tests do not otherwise change.

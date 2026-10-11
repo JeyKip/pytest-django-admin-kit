@@ -113,17 +113,18 @@ class Widgets:
         # included, so it comes last.
         self._widgets: tuple[Widget, ...] = (CheckboxWidget(), SelectWidget(), TextWidget())
 
-    def widget_for(self, field: FormField) -> Widget:
-        """The first widget class whose marker matches inside the field's box.
+    def widget_for(self, field: FormField) -> Widget | None:
+        """The first widget class whose marker matches inside the field's box, or
+        ``None`` when none of them recognises the field.
 
         Every marker is tried in one browser call, since each call costs a round trip
-        whatever it asks. A field none of them recognises is taken for a text control.
+        whatever it asks.
         """
         index = field.native.evaluate(
             "(box, markers) => markers.findIndex(marker => box.querySelector(marker))",
             [widget.marker(field) for widget in self._widgets],
         )
-        return self._widgets[index] if index >= 0 else self._widgets[-1]
+        return self._widgets[index] if index >= 0 else None
 
 
 def _option_spellings(value: Any) -> list[str]:

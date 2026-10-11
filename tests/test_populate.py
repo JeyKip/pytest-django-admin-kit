@@ -212,6 +212,19 @@ def test_a_rendered_only_field_has_nothing_to_fill(admin_ui, superuser):
     )
 
 
+def test_a_control_no_widget_class_recognises_is_reported_when_filled(admin_ui, superuser):
+    admin_ui.login(superuser)
+
+    page = admin_ui.create(Feed)
+
+    with pytest.raises(LookupError) as failure:
+        page.fields["refreshed_at"].fill(datetime.datetime(2026, 1, 15, 9, 30))
+    assert str(failure.value) == (
+        "No widget class can fill the field 'refreshed_at'. Add one for it to "
+        "DJANGO_ADMIN_KIT['widgets']."
+    )
+
+
 def test_a_viewer_has_no_field_to_fill(admin_ui, viewer, product):
     """A user who may only view gets every field rendered only, so none of them takes
     a value, not even the ones an editor would type into."""
@@ -528,3 +541,20 @@ def test_a_field_named_after_an_argument_is_filled_by_keyword(admin_ui, superuse
 
     assert page.fields["source"].value == "catalogue.csv"
     assert page.fields["mode"].value == ("replace", "Replace")
+
+
+def test_populating_a_control_no_widget_class_recognises_is_reported(admin_ui, superuser):
+    admin_ui.login(superuser)
+    feed = Feed(
+        source="catalogue.csv",
+        refreshed_at=datetime.datetime(2026, 1, 15, 9, 30, tzinfo=datetime.timezone.utc),
+    )
+
+    page = admin_ui.create(Feed)
+
+    with pytest.raises(LookupError) as failure:
+        page.populate(feed)
+    assert str(failure.value) == (
+        "No widget class can fill the field 'refreshed_at'. Add one for it to "
+        "DJANGO_ADMIN_KIT['widgets']."
+    )
