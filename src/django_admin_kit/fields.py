@@ -7,15 +7,17 @@ every field has whether the user may fill it or only read it.
 
 from __future__ import annotations
 
-from typing import Any, Callable, Dict
+from typing import TYPE_CHECKING, Any, Callable, Dict
 
 from django.contrib.admin import ModelAdmin
-from django.db.models import Model
 from django.utils import translation
 from playwright.sync_api import Locator
 
 from .normalize import Normalizers
 from .rendered import Link, RenderedValue, text_of
+
+if TYPE_CHECKING:
+    from .widgets import Widgets
 
 
 class FieldChoice:
@@ -59,7 +61,8 @@ class FormField:
     ``language`` is the one the page was rendered in, which decides what the admin put
     after the label. ``check`` is run before every read, and fails when the browser no
     longer shows the page the field is on. ``normalizers`` read the value of a field the
-    user may only read, by what stands behind it on the page ``model_admin`` draws.
+    user may only read, by what stands behind it on the page ``model_admin`` draws, and
+    ``widgets`` read and fill the field's control.
     """
 
     def __init__(
@@ -70,6 +73,7 @@ class FormField:
         check: Callable[[], None],
         normalizers: Normalizers,
         model_admin: ModelAdmin,
+        widgets: Widgets,
     ) -> None:
         self._element = element
         self._name = name
@@ -77,6 +81,7 @@ class FormField:
         self._check = check
         self._normalizers = normalizers
         self._model_admin = model_admin
+        self._widgets = widgets
 
     @property
     def name(self) -> str:
@@ -129,23 +134,15 @@ class FormField:
     def value(self) -> Any:
         """What the field holds right now, as the user reads it.
 
-        A control holds its text: a checkbox reads as ``True`` or ``False``, a select as
-        the ``FieldChoice`` chosen, anything else as the text typed into it. A field the
-        user may only read is read as a changelist cell is: its text, or the boolean
-        the admin drew as an icon.
+        A control is read by its widget class: a checkbox reads as ``True`` or
+        ``False``, a select as the ``FieldChoice`` chosen, anything else as the text
+        typed into it. A field the user may only read is read as a changelist cell is:
+        its text, or the boolean the admin drew as an icon.
         """
         self._check()
         if not self.editable:
             return self._rendered.value
-        # Each kind of control is asked for by name and by what it is. A widget that
-        # renders several controls under the name, such as a group of radio buttons,
-        # is not read yet.
-        if (checkbox := self._control('input[type="checkbox"]')).count():
-            return checkbox.is_checked()
-        if (select := self._control("select")).count():
-            option = select.locator("option:checked")
-            return FieldChoice(option.get_attribute("value") or "", text_of(option))
-        return self._control("").input_value()
+        return self._widgets.widget_for(self).read(self)
 
     @property
     def links(self) -> list[Link]:
@@ -176,42 +173,17 @@ class FormField:
     def fill(self, value: Any) -> None:
         """Put ``value`` into the field, the way a user would.
 
-        A checkbox is checked or cleared by the value's truth, a select is given the
-        option that stands for the value, and every other control is filled with the
-        value's text, ``None`` emptying it. A field the user may only read has nothing
-        to fill.
+        The field's widget class fills it: a checkbox is checked or cleared by the
+        value's truth, a select is given the option that stands for the value, and every
+        other control is filled with the value's text, ``None`` emptying it. A field the
+        user may only read has nothing to fill.
         """
         self._check()
         if not self.editable:
             raise LookupError(
                 f"The field {self._name!r} is rendered only, so there is nothing to fill."
             )
-        # The control is picked the way `value` picks it, so a field is read back in the
-        # terms it was written in.
-        if (checkbox := self._control('input[type="checkbox"]')).count():
-            checkbox.set_checked(bool(value))
-        elif (select := self._control("select")).count():
-            option = self._option(value)
-            # An option is asked for by its value, except the blank one, whose value is
-            # the empty string: the browser layer reads that as "select nothing" on the
-            # versions that still run on Python 3.8, so it is asked for by its label.
-            if option.value:
-                select.select_option(value=option.value)
-            else:
-                select.select_option(label=option.label)
-        else:
-            self._control("").fill("" if value is None else str(value))
-
-    def _option(self, value: Any) -> FieldChoice:
-        """The option that stands for ``value``, among the ones the field offers."""
-        offered = {choice.value: choice for choice in self.choices}
-        for spelling in _option_spellings(value):
-            if spelling in offered:
-                return offered[spelling]
-        raise ValueError(
-            f"The field {self._name!r} offers no option for {value!r}. Options: "
-            f"{', '.join(repr(option) for option in offered) or 'none'}."
-        )
+        self._widgets.widget_for(self).fill(self, value)
 
     @property
     def choices(self) -> list[FieldChoice]:
@@ -221,13 +193,10 @@ class FormField:
         field the user may only read offers none.
         """
         self._check()
-        return [
-            FieldChoice(option.get_attribute("value") or "", text_of(option))
-            for option in self._control("select").locator("option").all()
-        ]
-
-    def _control(self, kind: str) -> Locator:
-        return self._element.locator(f'{kind}[name="{self._name}"]')
+        if not self.editable:
+            return []
+        choices = getattr(self._widgets.widget_for(self), "choices", None)
+        return [] if choices is None else choices(self)
 
     @property
     def _label(self) -> Locator:
@@ -247,31 +216,6 @@ class FormField:
 
     def __repr__(self) -> str:
         return f"FormField({self._name!r})"
-
-
-def _option_spellings(value: Any) -> list[str]:
-    """The option values ``value`` may be written as, in the order they are looked for.
-
-    A select's options are the choice values as ``str()`` renders them, with ``""`` for
-    the blank one. The exception is the widget Django gives a nullable boolean, whose
-    three options are spelled ``"unknown"``, ``"true"`` and ``"false"``. Both spellings
-    are Django's own and the page shows only which options it has, not which widget drew
-    them, so a boolean is looked for under either.
-    """
-    if isinstance(value, FieldChoice):
-        return [value.value]
-    # A select of related objects offers each one by its primary key, which is what the
-    # form posts for it.
-    if isinstance(value, Model):
-        return [str(value.pk)]
-    # `is`, because `1 == True` and a number is no boolean here.
-    if value is True:
-        return ["True", "true"]
-    if value is False:
-        return ["False", "false"]
-    if value is None:
-        return ["", "unknown"]
-    return [str(value)]
 
 
 class Fields(Dict[str, FormField]):

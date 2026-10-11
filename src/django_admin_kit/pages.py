@@ -459,7 +459,13 @@ class FormPage(ModelPage):
                     continue
                 for name in _field_names(box):
                     fields[name] = FormField(
-                        box, name, language, self._check, self._tools.normalizers, admin
+                        box,
+                        name,
+                        language,
+                        self._check,
+                        self._tools.normalizers,
+                        admin,
+                        self._tools.widgets,
                     )
         return fields
 

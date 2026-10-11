@@ -139,6 +139,7 @@ def admin_ui(
     """
     from .session import AdminSession
     from .tools import PageTools
+    from .widgets import Widgets
 
     # Only pass what the project has not set itself: the factory merges its own
     # arguments with these, and a duplicate key raises TypeError. `base_url` is
@@ -153,5 +154,5 @@ def admin_ui(
     context.set_default_timeout(admin_ui_config.timeout)
 
     # No close here: the factory closes the contexts it made when the test ends.
-    tools = PageTools(admin_ui_urls, admin_ui_normalizers)
+    tools = PageTools(admin_ui_urls, admin_ui_normalizers, Widgets())
     yield AdminSession(context, tools, live_server.url)

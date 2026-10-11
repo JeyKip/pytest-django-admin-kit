@@ -8,12 +8,14 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from .normalize import Normalizers
     from .urls import AdminUrls
+    from .widgets import Widgets
 
 
 @dataclass(frozen=True)
 class PageTools:
-    """What every page of a session reads by: where the admin's pages are, and the rules
-    that read the values they render.
+    """What every page of a session reads by: where the admin's pages are, the rules
+    that read the values they render, and the widget classes that read and fill their
+    controls.
 
     Only what is built once from the settings or the session's fixtures, and is the same
     for every page, belongs here. What belongs to one page, row, cell or field is passed
@@ -22,3 +24,4 @@ class PageTools:
 
     urls: AdminUrls
     normalizers: Normalizers
+    widgets: Widgets
