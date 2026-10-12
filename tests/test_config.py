@@ -192,8 +192,21 @@ def test_widget_classes_are_made_from_their_dotted_paths_in_order():
             "DJANGO_ADMIN_KIT['widgets'][0] names 'project.shop.kit_widgets.Unread', which has "
             "no read method.",
         ),
+        (
+            ["project.shop.kit_widgets.Unfilled"],
+            "DJANGO_ADMIN_KIT['widgets'][0] names 'project.shop.kit_widgets.Unfilled', which "
+            "has no fill method.",
+        ),
     ],
-    ids=["not a list", "not a path", "not importable", "not a class", "no marker", "no read"],
+    ids=[
+        "not a list",
+        "not a path",
+        "not importable",
+        "not a class",
+        "no marker",
+        "no read",
+        "no fill",
+    ],
 )
 def test_a_malformed_widget_class_is_rejected_by_position(widgets, expected):
     with pytest.raises(ImproperlyConfigured) as error:

@@ -3,4 +3,22 @@
   {% for color in widget.colors %}
     <button type="button" data-value="{{ color }}" aria-pressed="{% if color == widget.value %}true{% else %}false{% endif %}">{{ color|capfirst }}</button>
   {% endfor %}
+  <script>
+    // A click chooses the color, or clears it when it was the one chosen.
+    {
+      const picker = document.currentScript.parentElement;
+      const input = picker.querySelector("input");
+      const buttons = picker.querySelectorAll("button");
+      for (const button of buttons) {
+        button.addEventListener("click", () => {
+          const chosen = button.getAttribute("aria-pressed") !== "true";
+          for (const other of buttons) {
+            other.setAttribute("aria-pressed", "false");
+          }
+          button.setAttribute("aria-pressed", String(chosen));
+          input.value = chosen ? button.dataset.value : "";
+        });
+      }
+    }
+  </script>
 </div>

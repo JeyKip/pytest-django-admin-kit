@@ -125,7 +125,7 @@ def _widgets(value: Any) -> tuple[Any, ...]:
         if not isinstance(widget_class, type):
             raise ImproperlyConfigured(f"{key}[{index}] names {path!r}, which is not a class.")
         widget = widget_class()
-        for method in ("marker", "read"):
+        for method in ("marker", "read", "fill"):
             if not callable(getattr(widget, method, None)):
                 raise ImproperlyConfigured(
                     f"{key}[{index}] names {path!r}, which has no {method} method."
