@@ -212,7 +212,7 @@ def test_a_rendered_only_field_has_nothing_to_fill(admin_ui, superuser):
     )
 
 
-def test_a_control_no_widget_class_recognises_is_reported_when_filled(admin_ui, superuser):
+def test_a_control_no_widget_class_recognizes_is_reported_when_filled(admin_ui, superuser):
     admin_ui.login(superuser)
 
     page = admin_ui.create(Feed)
@@ -311,10 +311,10 @@ def test_a_key_the_form_has_no_field_for_is_ignored(admin_ui, superuser):
     admin_ui.login(superuser)
 
     page = admin_ui.create(Product)
-    page.populate({"colour": "red", "name": "Widget"})
+    page.populate({"color": "red", "name": "Widget"})
 
     assert page.fields["name"].value == "Widget"
-    assert "colour" not in page.fields
+    assert "color" not in page.fields
 
 
 def test_a_rendered_only_field_is_passed_over(admin_ui, superuser):
@@ -361,10 +361,10 @@ def test_a_keyword_the_form_has_no_field_for_is_ignored(admin_ui, superuser):
     admin_ui.login(superuser)
 
     page = admin_ui.create(Product)
-    page.populate(colour="red", name="Widget")
+    page.populate(color="red", name="Widget")
 
     assert page.fields["name"].value == "Widget"
-    assert "colour" not in page.fields
+    assert "color" not in page.fields
 
 
 def test_a_viewer_has_nothing_to_populate(admin_ui, viewer, product):
@@ -472,7 +472,7 @@ def test_an_object_without_the_forms_names_leaves_the_change_page_as_it_was(
     admin_ui.login(editor)
 
     page = admin_ui.edit(released)
-    page.populate(SimpleNamespace(colour="red"))
+    page.populate(SimpleNamespace(color="red"))
 
     assert page.fields["name"].value == "Widget"
     assert page.fields["sku"].value == "SKU-1"
@@ -537,16 +537,16 @@ def test_a_field_named_after_an_argument_is_filled_by_keyword(admin_ui, superuse
     admin_ui.login(superuser)
 
     page = admin_ui.create(Feed)
-    page.populate(source="catalogue.csv", mode="replace")
+    page.populate(source="catalog.csv", mode="replace")
 
-    assert page.fields["source"].value == "catalogue.csv"
+    assert page.fields["source"].value == "catalog.csv"
     assert page.fields["mode"].value == ("replace", "Replace")
 
 
-def test_populating_a_control_no_widget_class_recognises_is_reported(admin_ui, superuser):
+def test_populating_a_control_no_widget_class_recognizes_is_reported(admin_ui, superuser):
     admin_ui.login(superuser)
     feed = Feed(
-        source="catalogue.csv",
+        source="catalog.csv",
         refreshed_at=datetime.datetime(2026, 1, 15, 9, 30, tzinfo=datetime.timezone.utc),
     )
 

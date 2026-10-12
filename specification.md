@@ -179,7 +179,7 @@ The package uses one coordinate vocabulary everywhere it applies:
 
 A label is what the user sees, and a test reads it as data: `page.headers` for columns,
 section 13.1 for fields. It is never an address, because it is presentation, and the same
-column or field keeps its name across translations and relabelling.
+column or field keeps its name across translations and relabeling.
 
 ```python
 page.rows[0]             # done
@@ -212,7 +212,7 @@ Both tiers appear in the same test, without leaving the package:
 page = admin_ui.edit(product)
 
 assert page.fields["name"].required            # standard field, package vocabulary (done)
-page.fields["colour_picker"].native.click()    # the project's own widget, native handle (done)
+page.fields["color_picker"].native.click()    # the project's own widget, native handle (done)
 ```
 
 Reaching for a native handle is **expected and supported**, not a failure or a last resort. A
@@ -2532,7 +2532,7 @@ how far it is slowed down, and what is recorded while it runs.
 This is deliberate. A project that already tests through a browser has those options set and its
 authors know them; a second vocabulary meaning the same thing would give every such project two
 places to say one thing, and a test suite converted to this package would have to be reconfigured
-to get behaviour it already had.
+to get behavior it already had.
 
 What remains under `DJANGO_ADMIN_KIT` is what the package itself decides:
 
@@ -2550,7 +2550,7 @@ language the browser reports, so results do not depend on the machine running th
 section 31. They default to the project's own `TIME_ZONE` and `LANGUAGE_CODE`.
 
 Two consequences follow from not owning the browser. The package inherits whatever that plugin
-does to a test session, including behaviour a project did not ask for, and adopting the package
+does to a test session, including behavior a project did not ask for, and adopting the package
 means adopting it. And a test's identity carries the browser it ran on, per section 27.
 
 Configuration errors must be loud. An unrecognized setting is rejected, naming the key and
@@ -2576,7 +2576,7 @@ through `fill`, and the check that a form rendered back what was submitted (sect
 through `value`, so a field whose control the package can read and fill takes part in all of
 them.
 
-The package reads and fills controls through *widget classes*. A widget class recognises its
+The package reads and fills controls through *widget classes*. A widget class recognizes its
 control and says how to read it, fill it and, where it has a fixed set, list its options. Every
 method takes the field, whose `native` is its box and `name` its name:
 
@@ -2615,7 +2615,7 @@ through the box, a part the widget draws elsewhere on the page through `field.na
 one inside a frame through `field.native.frame_locator`.
 
 The widget class for a field is the first, in order, whose marker matches something inside the
-field's box. Recognising and acting are two steps. First the package tries the markers of all
+field's box. Recognizing and acting are two steps. First the package tries the markers of all
 widget classes in one browser call, and the first that matches picks the class; what it matched
 is not kept. Then it calls `read` or `fill` on that class with the field, whose `native` is the
 whole box, and each method finds there the parts it needs. So the marker may be a wrapper around
@@ -2634,7 +2634,7 @@ package's own by listing a widget class that matches the same controls, and keep
 that matches only some of them, such as the selects a script enhances, takes those and leaves
 the others to the package. Hence a marker matches what is particular to its widget rather
 than the kind of control it shares with others, which would take every field with that control,
-and a project lists its narrower classes before its broader ones. A field no widget class recognises is reported at once, naming the
+and a project lists its narrower classes before its broader ones. A field no widget class recognizes is reported at once, naming the
 field and this setting, rather than after the timeout.
 
 A project lists its widget classes in its settings, by dotted path, as it names the admin site
@@ -2925,5 +2925,5 @@ Until then a project reads and fills any of them through a widget class of its o
   does not force a project-wide change;
 * adding a normalization rule for a representation the package does not know, such as a model
   field class of the project's own, which then behaves like any other.
-* recognising a widget by logic of the project's own, where a marker cannot say it, through
+* recognizing a widget by logic of the project's own, where a marker cannot say it, through
   an optional method asked only of the widget classes that define it (section 28.5).

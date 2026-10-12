@@ -91,7 +91,7 @@ def test_the_context_and_the_page_are_reachable_natively(admin_ui):
 
 
 def test_the_login_page_sends_a_logged_in_user_to_the_index(admin_ui, superuser):
-    """Django's own behaviour, and not a missing page."""
+    """Django's own behavior, and not a missing page."""
     admin_ui.login(superuser)
 
     page = admin_ui.open(admin_ui.url.login())

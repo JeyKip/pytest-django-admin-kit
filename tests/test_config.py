@@ -4,7 +4,9 @@ import pytest
 from django.core.exceptions import ImproperlyConfigured
 
 from django_admin_kit.config import build_config, from_django_settings
+from django_admin_kit.widgets import TextWidget
 from project.shop import rules
+from project.shop.kit_widgets import SwatchPickerWidget
 
 
 def test_the_defaults_need_no_settings_at_all():
@@ -15,6 +17,7 @@ def test_the_defaults_need_no_settings_at_all():
     assert config.timezone is None
     assert config.locale is None
     assert config.normalizers == {}
+    assert config.widgets == ()
 
 
 def test_settings_override_the_defaults():
@@ -140,5 +143,60 @@ def test_a_rule_is_imported_from_its_dotted_path():
 def test_a_malformed_rule_is_rejected_by_name(normalizers, expected):
     with pytest.raises(ImproperlyConfigured) as error:
         build_config({"normalizers": normalizers})
+
+    assert str(error.value) == expected
+
+
+def test_widget_classes_are_made_from_their_dotted_paths_in_order():
+    config = build_config(
+        {
+            "widgets": [
+                "project.shop.kit_widgets.SwatchPickerWidget",
+                "django_admin_kit.widgets.TextWidget",
+            ]
+        }
+    )
+
+    assert [type(widget) for widget in config.widgets] == [SwatchPickerWidget, TextWidget]
+
+
+@pytest.mark.parametrize(
+    ("widgets", "expected"),
+    [
+        (
+            {"color": "project.shop.kit_widgets.SwatchPickerWidget"},
+            "DJANGO_ADMIN_KIT['widgets'] must be a list of dotted paths to widget classes, "
+            "not dict.",
+        ),
+        (
+            [SwatchPickerWidget],
+            "DJANGO_ADMIN_KIT['widgets'][0] must be a dotted path to a widget class, not type.",
+        ),
+        (
+            ["project.shop.kit_widgets.Missing"],
+            "DJANGO_ADMIN_KIT['widgets'][0] names 'project.shop.kit_widgets.Missing', which "
+            'cannot be imported: Module "project.shop.kit_widgets" does not define a "Missing" '
+            "attribute/class",
+        ),
+        (
+            ["project.shop.rules.text"],
+            "DJANGO_ADMIN_KIT['widgets'][0] names 'project.shop.rules.text', which is not a class.",
+        ),
+        (
+            ["project.shop.kit_widgets.SwatchPickerWidget", "project.shop.kit_widgets.Unmarked"],
+            "DJANGO_ADMIN_KIT['widgets'][1] names 'project.shop.kit_widgets.Unmarked', which "
+            "has no marker method.",
+        ),
+        (
+            ["project.shop.kit_widgets.Unread"],
+            "DJANGO_ADMIN_KIT['widgets'][0] names 'project.shop.kit_widgets.Unread', which has "
+            "no read method.",
+        ),
+    ],
+    ids=["not a list", "not a path", "not importable", "not a class", "no marker", "no read"],
+)
+def test_a_malformed_widget_class_is_rejected_by_position(widgets, expected):
+    with pytest.raises(ImproperlyConfigured) as error:
+        build_config({"widgets": widgets})
 
     assert str(error.value) == expected

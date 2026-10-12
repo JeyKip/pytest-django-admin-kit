@@ -139,7 +139,7 @@ class FormField:
         ``False``, a select as the ``FieldChoice`` chosen, anything else as the text
         typed into it. A field the user may only read is read as a changelist cell is:
         its text, or the boolean the admin drew as an icon. A control no widget class
-        recognises raises ``LookupError``.
+        recognizes raises ``LookupError``.
         """
         self._check()
         if not self.editable:
@@ -178,7 +178,7 @@ class FormField:
         The field's widget class fills it: a checkbox is checked or cleared by the
         value's truth, a select is given the option that stands for the value, and every
         other control is filled with the value's text, ``None`` emptying it. A field the
-        user may only read has nothing to fill, and a control no widget class recognises
+        user may only read has nothing to fill, and a control no widget class recognizes
         cannot be filled: both raise ``LookupError``.
         """
         self._check()
@@ -203,7 +203,7 @@ class FormField:
 
     def _widget(self, verb: str) -> Widget:
         """The widget class that reads and fills the field. A field none of them
-        recognises is reported at once, where waiting for a control would time out."""
+        recognizes is reported at once, where waiting for a control would time out."""
         widget = self._widgets.widget_for(self)
         if widget is None:
             raise LookupError(

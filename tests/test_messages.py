@@ -203,7 +203,7 @@ def test_a_level_the_project_adds_reads_by_its_tag(message_tags, refreshing_feed
 
 def test_a_level_the_project_renames_reads_by_its_new_tag(message_tags, adding_feed):
     message_tags({30: "caution"})
-    adding_feed.populate(source="catalogue.txt")
+    adding_feed.populate(source="catalog.txt")
 
     result = adding_feed.save()
 
@@ -247,7 +247,7 @@ def test_a_level_no_project_has_raises_naming_the_levels(saved_product):
 
 def test_a_renamed_level_reads_by_its_new_name(message_tags, adding_feed):
     message_tags({30: "caution"})
-    adding_feed.populate(source="catalogue.txt")
+    adding_feed.populate(source="catalog.txt")
 
     result = adding_feed.save()
 
@@ -257,7 +257,7 @@ def test_a_renamed_level_reads_by_its_new_name(message_tags, adding_feed):
 def test_a_renamed_level_raises_by_its_old_name(message_tags, adding_feed):
     """Otherwise the warning shown as "caution" would read as no warnings at all."""
     message_tags({30: "caution"})
-    adding_feed.populate(source="catalogue.txt")
+    adding_feed.populate(source="catalog.txt")
     result = adding_feed.save()
 
     with pytest.raises(KeyError) as failure:

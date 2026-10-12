@@ -68,10 +68,10 @@ project reuses across models (section 3.7). For that the package has to know the
 
 Each of these is a widget that real admins carry and that the package cannot read or fill today.
 
-1. **A widget of the project's own.** A colour swatch picker, a star rating or a toggle switch:
+1. **A widget of the project's own.** A color swatch picker, a star rating or a toggle switch:
    buttons drawn by the project that set a hidden input. A widget class reads the hidden input, fills
    by clicking the button for the value, and offers the buttons as choices. After that,
-   `populate(product)` sets the colour like any other field.
+   `populate(product)` sets the color like any other field.
 
 2. **Rich text editors** (TinyMCE, CKEditor, Quill-based widgets). The textarea the form posts is
    hidden, and the text lives in an editor frame. A widget class fills by typing into the editor, so
@@ -118,7 +118,7 @@ In scope:
 
 * the package's three controls rewritten as public widget classes, `CheckboxWidget`,
   `SelectWidget` and `TextWidget`, in one ordered table that `FormField` asks;
-* an immediate error for a field no widget class recognises, in place of the timeout;
+* an immediate error for a field no widget class recognizes, in place of the timeout;
 * a `widgets` setting naming a project's widget classes by dotted path, validated loudly with the
   rest, and put in front of the package's own;
 * a session fixture `admin_ui_widgets` built from it, overridable like `admin_ui_normalizers`;
@@ -132,7 +132,7 @@ Out of scope:
   split date-times, multiple selects, files, autocomplete): these stay planned for 1.3.0, where
   each becomes one more built-in widget class. Until then a project writes its own;
 * removing a built-in widget class from the table. A project puts its own in front instead;
-* recognising a widget by logic of the project's own, where a CSS selector cannot say it. It could
+* recognizing a widget by logic of the project's own, where a CSS selector cannot say it. It could
   come later as an optional `matches(field)`, asked only of the classes that define it, so the
   rest keep the single browser call. Nothing seen so far needs it (spec section 33, Later);
 * per-test or per-model tables;
@@ -144,12 +144,12 @@ Out of scope:
 | Layer | File | Change |
 |---|---|---|
 | Page tools | `src/django_admin_kit/tools.py` (new) | `PageTools(urls, normalizers, widgets)`, built in `admin_ui` |
-| Widget classes | `src/django_admin_kit/widgets.py` (new) | `CheckboxWidget`, `SelectWidget`, `TextWidget`; `Widgets(project=())` with `widget_for(field)` |
+| Widget classes | `src/django_admin_kit/widgets.py` (new) | `CheckboxWidget`, `SelectWidget`, `TextWidget`; `Widgets(custom=())` with `widget_for(field)` |
 | Field | `src/django_admin_kit/fields.py` | `value`, `fill`, `choices` ask the table; the three control branches, `_option` and `_option_spellings` move out |
 | Settings | `src/django_admin_kit/config.py` | `widgets` key, `_widgets()` validation, `Config.widgets` |
 | Fixture | `src/django_admin_kit/plugin.py` | `admin_ui_widgets(admin_ui_config)`, put into the `PageTools` that `admin_ui` builds |
 | Plumbing | `session.py`, `pages.py` | `PageTools` through `AdminSession`, `AdminPage`, `ModelPage` and `_page_at`; `FormPage.fields` hands `tools.widgets` to `FormField` |
-| Test project | `tests/project/shop/` | `Feed.colour`, the swatch picker, its widget class |
+| Test project | `tests/project/shop/` | `Feed.color`, the swatch picker, its widget class |
 
 Rows and cells need nothing: a changelist has no controls until `list_editable` (1.2.0).
 
@@ -162,7 +162,7 @@ Rows and cells need nothing: a changelist has no controls until `list_editable` 
    `TextWidget` rather than `TextInputWidget`, because it covers textareas, number and date
    inputs as well, and because Django's admin already has an `AdminTextInputWidget`.
 
-2. **A widget class recognises its widget by a marker it builds for the field.**
+2. **A widget class recognizes its widget by a marker it builds for the field.**
    `marker(field)` returns a CSS selector, and the first widget class whose marker matches
    something inside the field's box reads and fills the field. The marker only decides which
    class handles the field, and the package keeps nothing of what it matched: `read` and `fill`
@@ -187,7 +187,7 @@ Rows and cells need nothing: a changelist has no controls until `list_editable` 
    Matching reads the page, as everything else does (3.9), so it sees what a script drew as well
    as what the server sent. It needs no request to build the form, and one widget class serves
    every form the widget appears on. A line with several fields gives each its own box, so a
-   marker never matches the neighbour's widget.
+   marker never matches the neighbor's widget.
 
    **All markers are tried in one browser call.** Each call into the browser costs a round
    trip: about 6 ms here, whether a marker matches or not and whatever the size of the box,
@@ -371,7 +371,7 @@ Rows and cells need nothing: a changelist has no controls until `list_editable` 
    When 1.3.0 brings a built-in file widget class, the project drops its `FileWidget`, and
    `ResubmitFileWidget` keeps only the case it is about.
 
-7. **A field no widget class recognises is reported at once.** When no marker matches, `value`
+7. **A field no widget class recognizes is reported at once.** When no marker matches, `value`
    and `fill` raise `LookupError` naming the field and the setting, where today they wait out the
    timeout. `choices` keeps answering `[]`, as it does today for anything that is no select.
    Matching counts what the page holds without waiting, so a control a script adds after the page
@@ -448,10 +448,10 @@ Rows and cells need nothing: a changelist has no controls until `list_editable` 
       * Against: `admin_ui` takes one more fixture argument with each new tool. It already lists
         each of them, and that is where a reader looks for what a session is made of.
 
-12. **The test project's widget.** `Feed` gains `colour`, a `CharField(max_length=10, blank=True,
+12. **The test project's widget.** `Feed` gains `color`, a `CharField(max_length=10, blank=True,
     default="")` holding `"red"`, `"green"` or `"blue"`. `FeedAdmin` draws it with
     `SwatchPicker`, a Django widget of the project's own in `shop/widgets.py`: a hidden input
-    named `colour` and three buttons, which a short inline script turns into the hidden input's
+    named `color` and three buttons, which a short inline script turns into the hidden input's
     value and marks with `aria-pressed`. It fits use case 1, and without a widget class it is a
     real failure: `value` reads the hidden input through `TextWidget`, `fill` fails on it. Its
     widget class, `SwatchPickerWidget`, lives in `shop/kit_widgets.py`, a module of its own so the
@@ -530,7 +530,7 @@ two.
   `fill`, and `choices` on `SelectWidget`; `_option` and `_option_spellings` move here from
   `fields.py`; `Widgets()` holding the three and `widget_for(field)`: the first whose marker
   matches, found in one browser call (decision 2), else `TextWidget`, which keeps today's
-  behaviour for a control nobody recognises.
+  behavior for a control nobody recognizes.
 * `tools.py`: `PageTools` gains `widgets`; `admin_ui` and the `page_tools` test fixture put
   `Widgets()` in it, the built-ins only.
 * `pages.py`: `FormPage.fields` hands `tools.widgets` to `FormField`.
@@ -542,7 +542,7 @@ two.
 
 Consistent: a pure move; every field reads and fills as before.
 
-### C3: report a field no widget class recognises
+### C3: report a field no widget class recognizes
 
 * `widgets.py`: `widget_for` returns `None` when no marker matches.
 * `fields.py`: `value` and `fill` raise `LookupError` at once for `None`:
@@ -560,14 +560,14 @@ that C4 adds; the two land on the same branch before any release.
 * `config.py`: `widgets` in `_KNOWN_KEYS`; `Config.widgets: tuple[Any, ...] = ()`; `_widgets()`
   importing, instantiating and checking `marker` and `read` (validation rules above, minus
   `fill` and `choices`).
-* `widgets.py`: `Widgets(project=())` puts the project's classes in front of the built-ins;
+* `widgets.py`: `Widgets(custom=())` puts the project's classes in front of the built-ins;
   `widget_for` checks what `marker` returns.
 * `plugin.py`: session fixture `admin_ui_widgets(admin_ui_config)`; `admin_ui` takes it and puts
   it into the `PageTools` it builds, in place of C2's built-ins-only `Widgets()`.
 * `tests/conftest.py`: `page_tools` takes `admin_ui_widgets` the same way.
-* Test project: `Feed.colour` and migration `0004_feed_colour.py`; `shop/widgets.py` with the
+* Test project: `Feed.color` and migration `0004_feed_color.py`; `shop/widgets.py` with the
   `SwatchPicker` Django widget and its template under `shop/templates/shop/widgets/`; `FeedAdmin`
-  draws `colour` with it; `shop/kit_widgets.py` with `SwatchPickerWidget`.
+  draws `color` with it; `shop/kit_widgets.py` with `SwatchPickerWidget`.
 * Tests:
   * `tests/test_widgets.py` (new), overriding `admin_ui_widgets` at the top of the module:
     * a field whose box holds the widget class's control reads through it;
@@ -579,7 +579,7 @@ that C4 adds; the two land on the same branch before any release.
     * a rendered-only field is read by its rule, not a widget class (a viewer on the feed).
   * `tests/test_config.py`: `widgets` accepted and instantiated in order; each rejection above.
   * `tests/test_plugin.py`: the fixture is listed.
-  * Any test listing the feed form's fields gains `colour`.
+  * Any test listing the feed form's fields gains `color`.
 
 Consistent: with no `widgets` setting the table is the built-ins, as in C3; the swatch is read by
 its widget class only where the test module installs it.
@@ -590,12 +590,12 @@ its widget class only where the test module installs it.
 * `fields.py`: nothing; `fill` already goes through the table since C2.
 * Tests in `tests/test_widgets.py`:
   * `fill` clicks the swatch through `field.native`, and `value` reads it back;
-  * `populate` from a dictionary and from a namespace fills `colour` with the rest;
+  * `populate` from a dictionary and from a namespace fills `color` with the rest;
   * a widget of several inputs: with the test-local `SplitDateTimeWidget` of decision 4 next to
     the swatch one, `fill` spreads a `datetime` over `refreshed_at_0` and `refreshed_at_1`, `value`
     reads the pair back, and `populate(feed)` fills the feed's form from the instance;
-  * a save stores the colour;
-  * an invalid save (blank `source`) renders the colour back;
+  * a save stores the color;
+  * an invalid save (blank `source`) renders the color back;
   * `test_config.py`: a widget class without `fill`.
 
 Consistent: C4 accepted a widget class without `fill`; from here it is rejected, and every class

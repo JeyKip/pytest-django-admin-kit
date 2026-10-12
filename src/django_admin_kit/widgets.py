@@ -1,13 +1,13 @@
 """The widget classes that read and fill a form's controls.
 
-A widget class recognises its widget by a marker, a CSS selector found inside a field's
+A widget class recognizes its widget by a marker, a CSS selector found inside a field's
 box, and says how to read the field and how to fill it. The marker only picks the
 class: ``read`` and ``fill`` get the whole field and find their own elements in its box.
 """
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Protocol
+from typing import TYPE_CHECKING, Any, Iterable, Protocol
 
 from django.db.models import Model
 from playwright.sync_api import Locator
@@ -106,25 +106,45 @@ class TextWidget:
 
 class Widgets:
     """The widget classes a form's fields are read and filled through, in the order
-    they are tried."""
+    they are tried: the ``custom`` ones, then the built-in ones.
 
-    def __init__(self) -> None:
+    A built-in class is replaced by putting a custom class in front of it that
+    recognizes the same control.
+    """
+
+    def __init__(self, custom: Iterable[Widget] = ()) -> None:
         # A text control is any control with the field's name, a checkbox and a select
         # included, so it comes last.
-        self._widgets: tuple[Widget, ...] = (CheckboxWidget(), SelectWidget(), TextWidget())
+        self._widgets: tuple[Widget, ...] = (
+            *custom,
+            CheckboxWidget(),
+            SelectWidget(),
+            TextWidget(),
+        )
 
     def widget_for(self, field: FormField) -> Widget | None:
         """The first widget class whose marker matches inside the field's box, or
-        ``None`` when none of them recognises the field.
+        ``None`` when none of them recognizes the field.
 
         Every marker is tried in one browser call, since each call costs a round trip
         whatever it asks.
         """
         index = field.native.evaluate(
             "(box, markers) => markers.findIndex(marker => box.querySelector(marker))",
-            [widget.marker(field) for widget in self._widgets],
+            [_marker(widget, field) for widget in self._widgets],
         )
         return self._widgets[index] if index >= 0 else None
+
+
+def _marker(widget: Widget, field: FormField) -> str:
+    """The widget class's marker for the field, checked before the browser sees it."""
+    marker = widget.marker(field)
+    if not isinstance(marker, str) or not marker:
+        raise TypeError(
+            f"{type(widget).__name__}.marker() must return a non-empty CSS selector, "
+            f"not {marker!r}."
+        )
+    return marker
 
 
 def _option_spellings(value: Any) -> list[str]:

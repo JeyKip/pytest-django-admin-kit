@@ -287,7 +287,7 @@ def test_saving_as_new_stores_a_copy_and_leaves_the_original(admin_ui, superuser
     copy = Feed.objects.exclude(pk=feed.pk).get()
     feed.refresh_from_db()
     assert result.success
-    assert feed.source == "catalogue.csv"
+    assert feed.source == "catalog.csv"
     assert copy.source == "copy.csv"
 
 

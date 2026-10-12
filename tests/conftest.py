@@ -12,7 +12,6 @@ import pytest
 from django.contrib.auth.models import Permission, User
 
 from django_admin_kit.tools import PageTools
-from django_admin_kit.widgets import Widgets
 from project.shop.models import Category, Feed, Product
 
 
@@ -23,9 +22,9 @@ def grant(user, *codenames):
 
 
 @pytest.fixture
-def page_tools(admin_ui_urls, admin_ui_normalizers):
+def page_tools(admin_ui_urls, admin_ui_normalizers, admin_ui_widgets):
     """What ``admin_ui`` hands its pages, for the tests that build a page themselves."""
-    return PageTools(admin_ui_urls, admin_ui_normalizers, Widgets())
+    return PageTools(admin_ui_urls, admin_ui_normalizers, admin_ui_widgets)
 
 
 @pytest.fixture
@@ -112,7 +111,7 @@ def released(category):
 
 @pytest.fixture
 def feed(db):
-    return Feed.objects.create(source="catalogue.csv")
+    return Feed.objects.create(source="catalog.csv")
 
 
 @pytest.fixture

@@ -1,0 +1,6 @@
+<div class="swatch-picker">
+  <input type="hidden" name="{{ widget.name }}" value="{{ widget.value|default_if_none:'' }}"{% include "django/forms/widgets/attrs.html" %}>
+  {% for color in widget.colors %}
+    <button type="button" data-value="{{ color }}" aria-pressed="{% if color == widget.value %}true{% else %}false{% endif %}">{{ color|capfirst }}</button>
+  {% endfor %}
+</div>

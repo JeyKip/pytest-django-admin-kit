@@ -619,7 +619,7 @@ twice.
 autouse fixture that deletes the `--output` directory, `test-results/` by default, at the start
 of **every** pytest session, whether or not the session opens a browser. If your project keeps
 JUnit XML or coverage output there, move it or pass `--output` somewhere else. We inherit that
-behaviour by depending on the plugin, and there's no way to switch it off.
+behavior by depending on the plugin, and there's no way to switch it off.
 
 **Don't pin the live server's port.** `admin_ui` is built on pytest-django's `live_server`, which
 binds a free port for each process, so running the suite in parallel with `pytest-xdist` works
@@ -635,7 +635,7 @@ The suite runs against a small Django project in `tests/project/`, wired up by t
 no environment variables, no `manage.py`.
 
 It uses Django's defaults: the admin is at `/admin/` and the user model is `auth.User`. The
-things a project can customise are each proved by their own tests, which swap the custom
+things a project can customize are each proved by their own tests, which swap the custom
 setup in per test:
 
 - `tests/test_custom_user.py` sets `AUTH_USER_MODEL` to `accounts.User`, a model with no

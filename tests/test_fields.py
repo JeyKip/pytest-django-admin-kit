@@ -42,7 +42,7 @@ def test_fields_answer_membership_and_subset_checks(admin_ui, superuser):
     page = admin_ui.create(Product)
 
     assert "name" in page.fields
-    assert "colour" not in page.fields
+    assert "color" not in page.fields
     assert {"name", "price"} <= set(page.fields)
 
 
@@ -102,9 +102,9 @@ def test_an_unknown_field_is_reported_with_the_ones_there(admin_ui, superuser):
     page = admin_ui.create(Product)
 
     with pytest.raises(KeyError) as failure:
-        page.fields["colour"]
+        page.fields["color"]
     assert failure.value.args[0] == (
-        "The form has no field named 'colour'. Fields: 'name', 'sku', 'price', 'quantity', "
+        "The form has no field named 'color'. Fields: 'name', 'sku', 'price', 'quantity', "
         "'is_active', 'featured', 'released_on', 'category', 'price_with_tax'."
     )
 
@@ -276,9 +276,9 @@ def test_a_rendered_only_field_reads_as_its_text(admin_ui, editor, released):
     assert page.fields["price_with_tax"].value == "12.000"
 
 
-def test_a_control_no_widget_class_recognises_is_reported_when_read(admin_ui, superuser):
+def test_a_control_no_widget_class_recognizes_is_reported_when_read(admin_ui, superuser):
     """The admin draws a date-time as two inputs, neither named after the field, so no
-    built-in widget class recognises it."""
+    built-in widget class recognizes it."""
     admin_ui.login(superuser)
 
     page = admin_ui.create(Feed)
@@ -462,7 +462,7 @@ def test_a_rendered_only_field_offers_no_choices(admin_ui, viewer, released):
     assert page.fields["category"].choices == []
 
 
-def test_a_control_no_widget_class_recognises_offers_no_choices(admin_ui, superuser):
+def test_a_control_no_widget_class_recognizes_offers_no_choices(admin_ui, superuser):
     admin_ui.login(superuser)
 
     page = admin_ui.create(Feed)

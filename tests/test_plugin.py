@@ -60,6 +60,7 @@ def test_a_project_gets_only_the_plugins_fixtures(tmp_path):
         "admin_ui_config",
         "admin_ui_urls",
         "admin_ui_normalizers",
+        "admin_ui_widgets",
         "admin_ui_driving",
     } <= listed
     assert not {"superuser", "viewer", "editor", "adder", "customer", "product"} & listed
