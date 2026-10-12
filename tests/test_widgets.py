@@ -233,3 +233,24 @@ def test_a_rejected_save_renders_back_what_the_widget_class_filled(admin_ui, sup
 
     assert result.page.fields["source"].errors == ["This field is required."]
     assert result.page.fields["color"].value == ("green", "Green")
+
+
+def test_a_widget_class_offers_the_choices_of_its_widget(admin_ui, superuser, green):
+    admin_ui.login(superuser)
+
+    page = admin_ui.edit(green)
+
+    assert page.fields["color"].choices == [
+        ("red", "Red"),
+        ("green", "Green"),
+        ("blue", "Blue"),
+    ]
+    assert page.fields["color"].value in page.fields["color"].choices
+
+
+def test_a_widget_class_without_choices_offers_none(admin_ui, superuser):
+    admin_ui.login(superuser)
+
+    page = admin_ui.create(Feed)
+
+    assert page.fields["refreshed_at"].choices == []

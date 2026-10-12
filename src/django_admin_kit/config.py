@@ -130,6 +130,11 @@ def _widgets(value: Any) -> tuple[Any, ...]:
                 raise ImproperlyConfigured(
                     f"{key}[{index}] names {path!r}, which has no {method} method."
                 )
+        # A widget class offers choices only if its widget has a fixed set of them.
+        if hasattr(widget, "choices") and not callable(widget.choices):
+            raise ImproperlyConfigured(
+                f"{key}[{index}] names {path!r}, whose choices is not a method."
+            )
         widgets.append(widget)
     return tuple(widgets)
 

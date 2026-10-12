@@ -197,6 +197,11 @@ def test_widget_classes_are_made_from_their_dotted_paths_in_order():
             "DJANGO_ADMIN_KIT['widgets'][0] names 'project.shop.kit_widgets.Unfilled', which "
             "has no fill method.",
         ),
+        (
+            ["project.shop.kit_widgets.FixedChoices"],
+            "DJANGO_ADMIN_KIT['widgets'][0] names 'project.shop.kit_widgets.FixedChoices', "
+            "whose choices is not a method.",
+        ),
     ],
     ids=[
         "not a list",
@@ -206,6 +211,7 @@ def test_widget_classes_are_made_from_their_dotted_paths_in_order():
         "no marker",
         "no read",
         "no fill",
+        "choices not a method",
     ],
 )
 def test_a_malformed_widget_class_is_rejected_by_position(widgets, expected):

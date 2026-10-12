@@ -4,17 +4,17 @@ from django_admin_kit.fields import FieldChoice
 
 
 class SwatchPickerWidget:
-    """The swatch picker, read as the color whose button is pressed and filled by
-    pressing the button for a color."""
+    """The swatch picker, read as the color whose button is pressed, filled by pressing
+    the button for a color, and offering a choice for each button."""
 
     def marker(self, field):
         return ".swatch-picker"
 
     def read(self, field):
-        pressed = field.native.locator('button[aria-pressed="true"]')
+        pressed = self._pressed(field)
         if not pressed.count():
             return None
-        return FieldChoice(pressed.get_attribute("data-value"), pressed.inner_text())
+        return self._choice(pressed)
 
     def fill(self, field, value):
         if value:
@@ -23,9 +23,18 @@ class SwatchPickerWidget:
                 button.click()
             return
         # No color: pressing the chosen one again clears it.
-        pressed = field.native.locator('button[aria-pressed="true"]')
+        pressed = self._pressed(field)
         if pressed.count():
             pressed.click()
+
+    def choices(self, field):
+        return [self._choice(button) for button in field.native.locator("button").all()]
+
+    def _pressed(self, field):
+        return field.native.locator('button[aria-pressed="true"]')
+
+    def _choice(self, button):
+        return FieldChoice(button.get_attribute("data-value"), button.inner_text())
 
 
 # Classes a setting can name that are no widget class.
@@ -45,3 +54,7 @@ class Unfilled:
 
     def read(self, field):
         return None
+
+
+class FixedChoices(SwatchPickerWidget):
+    choices = ("red", "green", "blue")
