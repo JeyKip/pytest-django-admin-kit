@@ -211,6 +211,109 @@ page.populate(product, name="Renamed")      # everything it has, with one value 
 page.populate(SimpleNamespace(name="Widget", price="19.99"))
 ```
 
+**Teaching the package a widget.** The package reads and fills checkboxes, selects, and any
+single control named after its field. For any other widget, such as one your project draws
+itself, write a widget class and list it in your settings. From then on `value`, `fill`,
+`choices` and `populate` work on that field as on any other.
+
+```python
+# shop/kit_widgets.py
+from django_admin_kit.fields import FieldChoice
+
+
+class SwatchPickerWidget:
+    def marker(self, field):
+        return ".swatch-picker"
+
+    def read(self, field):
+        pressed = field.native.locator('button[aria-pressed="true"]')
+        return self._choice(pressed) if pressed.count() else None
+
+    def fill(self, field, value):
+        field.native.locator(f'button[data-value="{value}"]').click()
+
+    def choices(self, field):
+        return [self._choice(button) for button in field.native.locator("button").all()]
+
+    def _choice(self, button):
+        return FieldChoice(button.get_attribute("data-value"), button.inner_text())
+```
+
+```python
+DJANGO_ADMIN_KIT = {
+    "widgets": [
+        "shop.kit_widgets.SwatchPickerWidget",
+    ],
+}
+```
+
+```python
+page.fields["color"].fill("green")
+
+assert page.fields["color"].value == ("green", "Green")
+assert page.fields["color"].choices == [("red", "Red"), ("green", "Green"), ("blue", "Blue")]
+```
+
+The package handles a field in two steps:
+
+1. **Which class handles the field?** The package sends every class's marker to the browser in
+   one call. The first one that matches something inside the field's box picks the class. What
+   it matched is not kept.
+2. **Read or fill it.** The package calls `read(field)` or `fill(field, value)` on that class.
+   `field.native` is the whole box, label included, and each method finds the parts it needs
+   there.
+
+So a marker only has to recognize the widget. It can be a wrapper, or a part that only some
+renderings have. Take django-file-resubmit: its image widget looks like a plain file input until
+a save fails. Then it adds a hidden `image_cache_key` input and the cached file's name, so the
+user doesn't have to pick the file again. A class for that case is marked by the hidden input,
+and its `fill` works on the file input next to it:
+
+```python
+class ResubmitFileWidget:
+    def marker(self, field):        # only a form rendered back with a cached upload
+        return f'input[type="hidden"][name="{field.name}_cache_key"]'
+
+    def read(self, field):            # the cached file's name
+        ...
+
+    def fill(self, field, value):     # a new upload replaces the cached one
+        field.native.locator(f'input[type="file"][name="{field.name}"]').set_input_files(value)
+```
+
+Here `field.native` holds the label, the file input, the "Currently" link, the cached file's name
+and the hidden input. A marker is plain CSS as the browser reads it, so Playwright's own syntax,
+such as `text=`, belongs in `read` and `fill`. To combine conditions, use `:has()`:
+`':scope:has(input[name="image_cache_key"]) input[type="file"]'`.
+
+Your classes are tried first, in the order you list them, then the package's own:
+`CheckboxWidget`, `SelectWidget` and `TextWidget`, from `django_admin_kit.widgets`. Two rules
+follow from that:
+
+- A marker matches what is particular to its widget. A class marked by `input[type="file"]`
+  would take every file field in the project.
+- Narrower classes come before broader ones, since the first match wins. `ResubmitFileWidget`
+  goes before a class for any file input.
+
+To read a control the package knows differently, put a subclass of its class in front of it:
+
+```python
+class BareSelectWidget(SelectWidget):
+    def read(self, field):
+        return super().read(field).value    # "3" rather than ("3", "Tools")
+```
+
+`marker`, `read` and `fill` are required. `choices` is optional, and `field.choices` is `[]`
+without it. A class never calls `value`, `fill` or `choices` on the field it gets, since that
+asks the widget classes again and never ends. `marker` runs for every field read or filled, so
+it builds a selector and doesn't read the page.
+
+A widget made of several inputs, such as the admin's split date-time, is one field and one class.
+Parts drawn outside the box are reached through `field.native.page`, and parts in a frame
+through `field.native.frame_locator`. A field no class recognizes raises `LookupError` right
+away, naming the `widgets` setting. Widget classes only apply to fields the user can edit; a
+field the user may only read is read by the rules described below.
+
 **Knowing what a form lets the user do.** An action is a button that submits the form,
 named exactly by what it posts, which is what the admin's view checks for. The admin's own
 are constants in `FormAction`, from `django_admin_kit.pages`, and each has its own check.
@@ -482,6 +585,9 @@ DJANGO_ADMIN_KIT = {
     "normalizers": {                  # rules that read values, by kind; see above
         "date": "shop.rules.as_date",
     },
+    "widgets": [                      # widget classes, tried before the package's own
+        "shop.kit_widgets.SwatchPickerWidget",
+    ],
 }
 ```
 
@@ -495,7 +601,7 @@ unset, whether the value under `DJANGO_ADMIN_KIT` was written by you or defaulte
 language as the rest of your browser tests, keep `timezone` and `locale` out of
 `DJANGO_ADMIN_KIT` and set them in `browser_context_args` only.
 
-`admin_ui` is put together from four session fixtures. Override one and the others stay as
+`admin_ui` is put together from five session fixtures. Override one and the others stay as
 they are:
 
 - `admin_ui_config`: the `DJANGO_ADMIN_KIT` settings, read and checked once. An override must
@@ -504,6 +610,9 @@ they are:
   another admin site.
 - `admin_ui_normalizers`: the rules that read values, built once from `normalizers`. Override
   it in a `conftest.py` or a test module to read those tests' values differently.
+- `admin_ui_widgets`: the widget classes, built once from `widgets`. Override it in a
+  `conftest.py` or a test module with `Widgets([...])` of instances to use other classes there;
+  the package's own are added behind them.
 - `admin_ui_driving`: keeps Django's database access working while a browser runs. Leave it
   alone.
 

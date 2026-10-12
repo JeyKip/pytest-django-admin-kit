@@ -2422,7 +2422,7 @@ Configurable at minimum:
 * how long any single browser operation may take, and the time zone and locale the browser
   reports (done);
 * value normalization (done);
-* field handling, by widget class (section 28.5).
+* field handling, by widget class (section 28.5) (done).
 
 How the browser itself is chosen and shown is **not** configured here. See section 28.4. (done)
 
@@ -2561,7 +2561,7 @@ each is first read.
 
 ---
 
-## 28.5 Field handling hooks
+## 28.5 Field handling hooks (done)
 
 A project must be able to teach the package how to read and how to fill a field representation
 the package does not know.
@@ -2628,14 +2628,15 @@ selector as the browser reads it, and the browser layer's own selector syntax is
 # a file input, only in a box that also holds the upload's cache key
 f':scope:has(input[name="{field.name}_cache_key"]) input[type="file"]'
 ```
- A project's widget classes come first, in the order it lists them, and the
-package's own after them, in the order checkbox, select, text. So a project replaces one of the
-package's own by listing a widget class that matches the same controls, and keeps the rest; one
-that matches only some of them, such as the selects a script enhances, takes those and leaves
-the others to the package. Hence a marker matches what is particular to its widget rather
-than the kind of control it shares with others, which would take every field with that control,
-and a project lists its narrower classes before its broader ones. A field no widget class recognizes is reported at once, naming the
-field and this setting, rather than after the timeout.
+
+A project's widget classes come first, in the order it lists them, and the package's own after
+them, in the order checkbox, select, text. So a project replaces one of the package's own by
+listing a widget class that matches the same controls, and keeps the rest; one that matches only
+some of them, such as the selects a script enhances, takes those and leaves the others to the
+package. Hence a marker matches what is particular to its widget rather than the kind of control
+it shares with others, which would take every field with that control, and a project lists its
+narrower classes before its broader ones. A field no widget class recognizes is reported at
+once, naming the field and this setting, rather than after the timeout.
 
 A project lists its widget classes in its settings, by dotted path, as it names the admin site
 and its rules. The package makes one instance of each, with no arguments:
@@ -2856,10 +2857,10 @@ supported Django versions:
 32. Read the models the admin exposes to the current user, their grouping, and their order.
     (done)
 33. Run against a non-default admin site mounted under a non-default URL prefix. (done)
-34. Override a default normalization rule (done) and extend field handling from a project,
-    without subclassing package internals.
+34. Override a default normalization rule and extend field handling from a project, without
+    subclassing package internals. (done)
 35. Reach a native handle from a page and from a field, and drive a project-specific widget
-    with it.
+    with it. (done)
 36. Open an arbitrary admin URL and read its access outcome and identity. (done)
 37. Run the test suite in parallel. (done)
 38. Run the same public test syntax starting with Django 3.2. (done)
