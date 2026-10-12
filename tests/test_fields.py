@@ -7,7 +7,7 @@ from django.utils import translation
 from playwright.sync_api import Locator
 
 from django_admin_kit.fields import FieldChoice
-from project.shop.models import Product
+from project.shop.models import Feed, Product
 
 # The product form as the admin lays it out: the model's fields, then the rendered-only
 # one the admin appends. The hidden `source` field is on the page but never shown.
@@ -42,7 +42,7 @@ def test_fields_answer_membership_and_subset_checks(admin_ui, superuser):
     page = admin_ui.create(Product)
 
     assert "name" in page.fields
-    assert "colour" not in page.fields
+    assert "color" not in page.fields
     assert {"name", "price"} <= set(page.fields)
 
 
@@ -102,9 +102,9 @@ def test_an_unknown_field_is_reported_with_the_ones_there(admin_ui, superuser):
     page = admin_ui.create(Product)
 
     with pytest.raises(KeyError) as failure:
-        page.fields["colour"]
+        page.fields["color"]
     assert failure.value.args[0] == (
-        "The form has no field named 'colour'. Fields: 'name', 'sku', 'price', 'quantity', "
+        "The form has no field named 'color'. Fields: 'name', 'sku', 'price', 'quantity', "
         "'is_active', 'featured', 'released_on', 'category', 'price_with_tax'."
     )
 
@@ -276,6 +276,21 @@ def test_a_rendered_only_field_reads_as_its_text(admin_ui, editor, released):
     assert page.fields["price_with_tax"].value == "12.000"
 
 
+def test_a_control_no_widget_class_recognizes_is_reported_when_read(admin_ui, superuser):
+    """The admin draws a date-time as two inputs, neither named after the field, so no
+    built-in widget class recognizes it."""
+    admin_ui.login(superuser)
+
+    page = admin_ui.create(Feed)
+
+    with pytest.raises(LookupError) as failure:
+        _ = page.fields["refreshed_at"].value
+    assert str(failure.value) == (
+        "No widget class can read the field 'refreshed_at'. Add one for it to "
+        "DJANGO_ADMIN_KIT['widgets']."
+    )
+
+
 def test_a_viewer_reads_text_fields_as_the_admin_renders_them(admin_ui, viewer, released):
     """A viewer gets every field rendered only: a number and a date in the display
     format rather than the input format, and a category as the name it links to."""
@@ -445,6 +460,14 @@ def test_a_rendered_only_field_offers_no_choices(admin_ui, viewer, released):
     page = admin_ui.edit(released)
 
     assert page.fields["category"].choices == []
+
+
+def test_a_control_no_widget_class_recognizes_offers_no_choices(admin_ui, superuser):
+    admin_ui.login(superuser)
+
+    page = admin_ui.create(Feed)
+
+    assert page.fields["refreshed_at"].choices == []
 
 
 def test_a_rendered_only_foreign_key_links_to_the_object(admin_ui, viewer, released, category):

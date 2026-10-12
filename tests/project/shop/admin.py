@@ -8,6 +8,7 @@ from django.urls import reverse
 from django.utils.html import format_html
 
 from .models import Category, Feed, Product
+from .widgets import SwatchPicker
 
 # A message level between Django's warning (30) and error (40), with no tag of its own.
 REFRESHED = 35
@@ -129,6 +130,13 @@ class FeedAdmin(admin.ModelAdmin):
         "refreshed",
         "last_refreshed",
     )
+
+    # The color is picked with a widget of the project's own, which the package does not
+    # know.
+    def formfield_for_dbfield(self, db_field, request, **kwargs):
+        if db_field.name == "color":
+            kwargs["widget"] = SwatchPicker
+        return super().formfield_for_dbfield(db_field, request, **kwargs)
 
     @admin.display(boolean=True, description="Refreshed")
     def refreshed(self, feed):

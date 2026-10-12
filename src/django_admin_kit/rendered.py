@@ -69,16 +69,17 @@ class RenderedValue:
     def __init__(
         self,
         element: Locator,
+        name: str,
+        *,
         check: Callable[[], None],
         normalizers: Normalizers,
         model_admin: ModelAdmin,
-        name: str,
     ) -> None:
         self._element = element
+        self._name = name
         self._check = check
         self._normalizers = normalizers
         self._model_admin = model_admin
-        self._name = name
 
     @property
     def native(self) -> Locator:

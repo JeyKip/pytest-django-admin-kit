@@ -26,7 +26,7 @@ DEFAULT_TIMEOUT = 30_000
 
 # Settings this package owns. Anything the browser plugin already governs is absent
 # on purpose; see the module docstring.
-_KNOWN_KEYS = frozenset({"locale", "normalizers", "site", "timeout", "timezone"})
+_KNOWN_KEYS = frozenset({"locale", "normalizers", "site", "timeout", "timezone", "widgets"})
 
 
 @dataclass(frozen=True)
@@ -42,6 +42,8 @@ class Config:
     # The rules the project replaces, by kind, already imported. The kinds it leaves out
     # keep their defaults.
     normalizers: Mapping[str, Rule] = field(default_factory=dict)
+    # The project's widget classes, one instance of each, in the order they are tried.
+    widgets: tuple[Any, ...] = ()
 
 
 def _quote(values: Iterable[str]) -> str:
@@ -96,6 +98,47 @@ def _rules(value: Any) -> dict[str, Rule]:
     return rules
 
 
+def _widgets(value: Any) -> tuple[Any, ...]:
+    """The project's widget classes, each imported from its dotted path and made once.
+
+    A class is named by its path, as a rule is, and made with no arguments, as Django
+    makes an authentication backend.
+    """
+    key = f"{SETTINGS_NAME}['widgets']"
+    if not isinstance(value, (list, tuple)):
+        raise ImproperlyConfigured(
+            f"{key} must be a list of dotted paths to widget classes, not {type(value).__name__}."
+        )
+    widgets = []
+    for index, path in enumerate(value):
+        if not isinstance(path, str):
+            raise ImproperlyConfigured(
+                f"{key}[{index}] must be a dotted path to a widget class, "
+                f"not {type(path).__name__}."
+            )
+        try:
+            widget_class = import_string(path)
+        except ImportError as error:
+            raise ImproperlyConfigured(
+                f"{key}[{index}] names {path!r}, which cannot be imported: {error}"
+            ) from error
+        if not isinstance(widget_class, type):
+            raise ImproperlyConfigured(f"{key}[{index}] names {path!r}, which is not a class.")
+        widget = widget_class()
+        for method in ("marker", "read", "fill"):
+            if not callable(getattr(widget, method, None)):
+                raise ImproperlyConfigured(
+                    f"{key}[{index}] names {path!r}, which has no {method} method."
+                )
+        # A widget class offers choices only if its widget has a fixed set of them.
+        if hasattr(widget, "choices") and not callable(widget.choices):
+            raise ImproperlyConfigured(
+                f"{key}[{index}] names {path!r}, whose choices is not a method."
+            )
+        widgets.append(widget)
+    return tuple(widgets)
+
+
 def build_config(
     settings: Mapping[str, Any] | None = None,
     default_timezone: str | None = None,
@@ -135,9 +178,15 @@ def build_config(
         )
 
     normalizers = _rules(given.get("normalizers", {}))
+    widgets = _widgets(given.get("widgets", []))
 
     return Config(
-        site=site, timeout=timeout, timezone=timezone, locale=locale, normalizers=normalizers
+        site=site,
+        timeout=timeout,
+        timezone=timezone,
+        locale=locale,
+        normalizers=normalizers,
+        widgets=widgets,
     )
 
 

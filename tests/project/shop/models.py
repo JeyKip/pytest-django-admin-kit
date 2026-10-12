@@ -53,6 +53,8 @@ class Feed(models.Model):
     # A date-time and a time, so a changelist shows each next to the product's dates.
     refreshed_at = models.DateTimeField(null=True, blank=True)
     refresh_time = models.TimeField(null=True, blank=True)
+    # "red", "green" or "blue", picked with a widget of the project's own.
+    color = models.CharField(max_length=10, blank=True, default="")
 
     def __str__(self):
         return self.source

@@ -53,7 +53,7 @@ deps = [
     # pytest-django is pinned per Django version because no single release spans 3.2
     # to 6.1. 4.8.0 is the last that claims 3.2; 4.14.0 claims only 5.2 and 6.0.
     # Django 4.0 is claimed by nothing after 4.5.2, so its cells run on 4.8.0 and are
-    # expected to pass on behaviour rather than on a support claim.
+    # expected to pass on behavior rather than on a support claim.
     { replace = "if", condition = "factor.dj32 or factor.dj40 or factor.dj41", then = ["pytest-django==4.8.0"], extend = true },
     { replace = "if", condition = "factor.dj42", then = ["pytest-django==4.11.1"], extend = true },
     { replace = "if", condition = "factor.dj50 or factor.dj51", then = ["pytest-django==4.12.0"], extend = true },

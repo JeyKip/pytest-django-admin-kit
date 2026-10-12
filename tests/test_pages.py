@@ -16,13 +16,13 @@ class FakePage:
 
 
 @pytest.fixture
-def page_at(urls, admin_ui_normalizers):
+def page_at(page_tools):
     """Builds a page that answered ``status`` at ``path``, having been asked for
     ``requested``, or for ``path`` itself."""
 
     def build(path, status, requested=None):
         native = FakePage("http://localhost:8000" + path)
-        return AdminPage(native, status, requested or path, urls, admin_ui_normalizers)
+        return AdminPage(native, status, requested or path, page_tools)
 
     return build
 
@@ -31,19 +31,19 @@ def outcome(page):
     return {name for name in ("works", "denied", "missing", "redirected") if getattr(page, name)}
 
 
-def test_a_page_that_loads_where_it_was_asked_works(page_at, urls):
+def test_a_page_that_loads_where_it_was_asked_works(page_at, admin_ui_urls):
     page = page_at("/admin/", 200)
 
     assert outcome(page) == {"works"}
-    assert page.destination == urls.index()
+    assert page.destination == admin_ui_urls.index()
 
 
-def test_a_redirect_to_the_login_page_is_denied_whatever_it_carries(page_at, urls):
+def test_a_redirect_to_the_login_page_is_denied_whatever_it_carries(page_at, admin_ui_urls):
     """The URL is the only sign: the login page itself answers 200."""
     page = page_at("/admin/login/?next=/admin/", 200, requested="/admin/")
 
     assert outcome(page) == {"denied", "redirected"}
-    assert page.destination == urls.login()
+    assert page.destination == admin_ui_urls.login()
 
 
 def test_a_refusal_in_place_is_denied_though_the_url_did_not_change(page_at):
@@ -80,9 +80,9 @@ def test_a_server_error_is_none_of_the_outcomes(page_at):
     assert page.status_code == 500
 
 
-def test_the_status_and_the_page_are_exposed(urls, admin_ui_normalizers):
+def test_the_status_and_the_page_are_exposed(page_tools):
     native = FakePage("http://localhost:8000/admin/")
-    page = AdminPage(native, 200, "/admin/", urls, admin_ui_normalizers)
+    page = AdminPage(native, 200, "/admin/", page_tools)
 
     assert page.status_code == 200
     assert page.native is native

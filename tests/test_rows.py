@@ -65,8 +65,8 @@ def test_an_unknown_column_is_reported_with_the_ones_there(admin_ui, viewer, pro
 
     page = admin_ui.list(Product)
 
-    with pytest.raises(KeyError, match=r"no column named 'colour'\. Columns: 'name', 'sku'"):
-        page.rows[0]["colour"]
+    with pytest.raises(KeyError, match=r"no column named 'color'\. Columns: 'name', 'sku'"):
+        page.rows[0]["color"]
 
 
 def test_an_empty_changelist_has_no_rows(admin_ui, superuser):
@@ -306,8 +306,8 @@ def test_a_named_column_that_is_not_there_raises(admin_ui, viewer, products):
 
     page = admin_ui.list(Product)
 
-    with pytest.raises(KeyError, match=r"no column named 'colour'\. Columns: 'name'"):
-        page.contains({"colour": "red"})
+    with pytest.raises(KeyError, match=r"no column named 'color'\. Columns: 'name'"):
+        page.contains({"color": "red"})
 
 
 def test_the_whole_changelist_matches_in_the_admins_order(admin_ui, viewer, products):
