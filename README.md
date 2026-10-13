@@ -17,9 +17,9 @@ Install it as `pytest-django-admin-kit`; import it as `django_admin_kit`.
 
 ## Status
 
-Early development. The public API is written up in [specification.md](specification.md) and isn't
-implemented yet, so there's nothing here you can point at a real project. What you can do today is
-help build it.
+Version 1.0.0 implements the API written up in [specification.md](specification.md), and its
+public API is stable. What changed in each release is in [CHANGELOG.md](CHANGELOG.md), and what
+comes next is the roadmap in section 33 of the specification.
 
 ## What it solves today
 
@@ -847,10 +847,9 @@ uvx --from 'tox>=4.61' --with tox-uv tox list -m full --no-desc -q # what releas
 
 So editing `tox.toml` changes CI, and the two cannot disagree.
 
-Two things to know before the first release. Publishing uses PyPI's trusted publishing, which
-needs the project configured on PyPI to trust this repository and its `pypi` environment — there
-is no API token to add. And the build job refuses to run if the tag doesn't match the `version`
-in `pyproject.toml`, so bump the version in the same commit you tag.
+The build job refuses to run if the tag doesn't match the `version` in `pyproject.toml`, so bump
+the version in the same commit you tag. The steps of a release are in
+[RELEASING.md](RELEASING.md).
 
 ## Building
 
