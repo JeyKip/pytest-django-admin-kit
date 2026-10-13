@@ -17,9 +17,9 @@ Install it as `pytest-django-admin-kit`; import it as `django_admin_kit`.
 
 ## Status
 
-Early development. The public API is written up in [specification.md](specification.md) and isn't
-implemented yet, so there's nothing here you can point at a real project. What you can do today is
-help build it.
+Version 1.0.0 implements the API written up in [specification.md](specification.md), and its
+public API is stable. What changed in each release is in [CHANGELOG.md](CHANGELOG.md), and what
+comes next is the roadmap in section 33 of the specification.
 
 ## What it solves today
 
@@ -609,10 +609,12 @@ they are:
 - `admin_ui_urls`: the admin URLs for the site under test. Override it to point the session at
   another admin site.
 - `admin_ui_normalizers`: the rules that read values, built once from `normalizers`. Override
-  it in a `conftest.py` or a test module to read those tests' values differently.
+  it in a `conftest.py` or a test module to read those tests' values differently, or
+  parametrize it for one test, with `Normalizers` from `django_admin_kit.normalize`:
+  `@pytest.mark.parametrize("admin_ui_normalizers", [Normalizers({"date": as_date})])`.
 - `admin_ui_widgets`: the widget classes, built once from `widgets`. Override it in a
-  `conftest.py` or a test module with `Widgets([...])` of instances to use other classes there;
-  the package's own are added behind them.
+  `conftest.py` or a test module with `Widgets([...])` of instances to use other classes there,
+  or parametrize it for one test the same way; the package's own are added behind them.
 - `admin_ui_driving`: keeps Django's database access working while a browser runs. Leave it
   alone.
 
@@ -845,10 +847,9 @@ uvx --from 'tox>=4.61' --with tox-uv tox list -m full --no-desc -q # what releas
 
 So editing `tox.toml` changes CI, and the two cannot disagree.
 
-Two things to know before the first release. Publishing uses PyPI's trusted publishing, which
-needs the project configured on PyPI to trust this repository and its `pypi` environment — there
-is no API token to add. And the build job refuses to run if the tag doesn't match the `version`
-in `pyproject.toml`, so bump the version in the same commit you tag.
+The build job refuses to run if the tag doesn't match the `version` in `pyproject.toml`, so bump
+the version in the same commit you tag. The steps of a release are in
+[RELEASING.md](RELEASING.md).
 
 ## Building
 

@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "pytest-django-admin-kit"
-version = "1.0.0.dev0"
+version = "1.0.0"
 description = "A pytest toolkit for writing conscious tests against the Django admin."
 readme = "README.md"
 requires-python = ">=3.8"
@@ -12,7 +12,7 @@ license = { file = "LICENSE" }
 authors = [{ name = "Yevhen Nosolenko" }]
 keywords = ["pytest", "django", "admin", "testing"]
 classifiers = [
-    "Development Status :: 3 - Alpha",
+    "Development Status :: 5 - Production/Stable",
     "Framework :: Django",
     "Framework :: Django :: 3.2",
     "Framework :: Django :: 4.0",
@@ -57,6 +57,7 @@ django_admin_kit = "django_admin_kit.plugin"
 [project.urls]
 Homepage = "https://github.com/JeyKip/pytest-django-admin-kit"
 Source = "https://github.com/JeyKip/pytest-django-admin-kit"
+Changelog = "https://github.com/JeyKip/pytest-django-admin-kit/blob/main/CHANGELOG.md"
 
 # PEP 735 dependency groups. `uv sync` installs these by default; they are development
 # tooling and never reach anyone installing the package. Building is `uv build`, which

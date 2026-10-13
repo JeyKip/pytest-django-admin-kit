@@ -103,7 +103,7 @@ the way `assert_frame_equal` and `assertEqual` do, and pytest prints it line by 
 
 ---
 
-## 3.2 Explicit over implicit
+## 3.2 Explicit over implicit (done)
 
 Tests should clearly express:
 
@@ -117,7 +117,7 @@ Automatic behavior should remain predictable and inspectable.
 
 ---
 
-## 3.3 Stable public abstraction
+## 3.3 Stable public abstraction (done)
 
 Tests should interact with package-level abstractions rather than depending directly on Django
 Admin internals.
@@ -139,7 +139,7 @@ messages, and status.
 
 ---
 
-## 3.4 Normalized values
+## 3.4 Normalized values (done)
 
 The package compares **what the user reads**, not markup.
 
@@ -235,7 +235,7 @@ breaking changes.
 
 ---
 
-## 3.7 Reusable page contracts
+## 3.7 Reusable page contracts (done)
 
 Projects test many admin pages that differ only in their model and their expected shape.
 
@@ -246,7 +246,7 @@ package-provided test case in order to reuse expectations.
 
 ---
 
-## 3.8 Project-level adjustability
+## 3.8 Project-level adjustability (done)
 
 The package ships nothing project-specific.
 
@@ -368,7 +368,7 @@ admin_ui.logout()
 
 ---
 
-# 5. Permission Testing
+# 5. Permission Testing (done)
 
 Permissions are tested through what the admin shows the current user, never through the
 permission system directly. A test states what a user can see and do; the admin's own checks
@@ -887,8 +887,8 @@ assert page.contains({    # done
 ```
 
 This makes it possible to assert a few meaningful columns without enumerating a wide changelist.
-The keys are configured column names, as above. The values are cell patterns: literals, `ANY`
-and callables, exactly as in a tuple. `ANY` on a listed column says only that the column is
+The keys are configured column names, as above. The values are cell patterns: literals, links,
+`ANY` and callables, exactly as in a tuple. `ANY` on a listed column says only that the column is
 there, which a dictionary otherwise leaves unsaid.
 
 ---
@@ -2078,7 +2078,7 @@ an app none of whose models the user may see is not listed either. (done)
 
 ---
 
-# 25. Page Object Model
+# 25. Page Object Model (done)
 
 The public API should conceptually expose these page/result types.
 
@@ -2088,7 +2088,7 @@ AdminSession
 ├── AdminUrls
 │
 ├── AdminPage            (any admin URL — section 6.5)
-├── AdminIndexPage
+├── IndexPage
 ├── ChangelistPage
 ├── CreatePage
 ├── EditPage
@@ -2096,7 +2096,7 @@ AdminSession
 │
 ├── FormField
 │   └── FieldChoice
-├── SubmitActions
+├── actions              (a set of action names, section 16.1)
 ├── Row
 ├── Cell
 │
@@ -2112,8 +2112,8 @@ The exact Python class names are implementation details, but the public concepts
 recognizable and stable.
 
 Every type above that stands for something on the page exposes a native handle, as described
-in section 3.6. `AdminUrls` and `FieldChoice` are values with no element behind them, so they
-have none. (done)
+in section 3.6. `AdminUrls`, `FieldChoice` and `actions` are values with no element behind
+them, so they have none. (done)
 
 A `SubmissionResult` reports on a submission rather than standing for anything on the page, so
 it has none either; the page it carries has one. (done)
@@ -2157,7 +2157,7 @@ def test_shop_models_are_exposed(admin_ui, admin_user):
 
     page = admin_ui.index()
 
-    assert page.models_for("Shop") == [
+    assert page.models_for("Shop") == [    # done
         Product,
         Category,
     ]
@@ -2263,7 +2263,7 @@ def test_report_is_read_only(admin_ui, admin_user, report):
     page = admin_ui.edit(report)
 
     assert not page.fields["created_at"].editable    # done
-    assert page.actions == set()
+    assert page.actions == set()    # done
 ```
 
 ---
@@ -2369,10 +2369,17 @@ admin_ui_driving        # keeps Django's ORM usable while a browser is running
 
 The first four are the intended extension points. Overriding `admin_ui_normalizers` or
 `admin_ui_widgets` in a `conftest.py` or a test module replaces the rules or the widget classes
-for those tests without restating the rest of the settings; being session-scoped, neither can be
-overridden for a single test. The fifth exists
-so that it is set up before the test database and torn down after it, and a project has no
-reason to replace it. (done)
+for those tests without restating the rest of the settings. A single test replaces either by
+parametrizing the fixture's name, as pytest allows for any fixture:
+
+```python
+@pytest.mark.parametrize("admin_ui_normalizers", [Normalizers({"date": as_date})])
+def test_release_dates(admin_ui, admin_user):
+    ...
+```
+
+The fifth exists so that it is set up before the test database and torn down after it, and a
+project has no reason to replace it. (done)
 
 Public names are importable from the module that defines them:
 
@@ -2397,14 +2404,14 @@ adopting this package. (done)
 
 ---
 
-# 28. Configuration and Extensibility
+# 28. Configuration and Extensibility (done)
 
 The package must be generic and adjustable to every project's needs.
 
 Nothing project-specific ships in the package. Every project-specific behavior enters through a
 documented extension point.
 
-## 28.1 Configuration surface
+## 28.1 Configuration surface (done)
 
 Project-wide defaults are set in one place, so individual tests stay free of setup noise.
 
@@ -2518,8 +2525,8 @@ no rule.
 
 Overrides apply project-wide. The rules are built once per session into the
 `admin_ui_normalizers` fixture (section 27), which a project may override for a directory or a
-module of tests. Replacing a rule for a single test, and adding a rule for a representation the
-package does not know, are left for later (section 33).
+module of tests, or parametrize for a single test. Adding a rule for a representation the
+package does not know is left for later (section 33).
 
 ---
 
@@ -2659,8 +2666,8 @@ Widget classes apply to controls, the fields a user may fill. A field the user m
 no control, and its value goes through the rules of section 28.3.
 
 The widget classes are built once per session into the `admin_ui_widgets` fixture (section 27),
-which a project may override for a directory or a module of tests with its own classes; the
-package's own are added behind them.
+which a project may override for a directory or a module of tests with its own classes, or
+parametrize for a single test; the package's own are added behind them.
 
 ---
 
@@ -2764,7 +2771,7 @@ plain value, so pytest's own assertion rewriting shows what was compared. (done)
 
 ---
 
-# 31. Compatibility Requirement
+# 31. Compatibility Requirement (done)
 
 The minimum supported versions are:
 
@@ -2793,8 +2800,10 @@ assert page.contains((...))
 should remain unchanged across supported Django versions. (done)
 
 Version-specific normalization belongs inside the package. This includes differences in how
-values are rendered and, where practical, differences in the wording of the admin's own
-built-in messages.
+values are rendered. The admin's own built-in messages are read as the admin words them in the
+version under test, and a test that must not depend on that wording asserts what stays the
+same: `page.count` rather than `page.summary` (section 8.1), the truthiness of `errors.banner`
+(section 20.1), or the parts of `intro` it relies on (section 23.4). (done)
 
 Values render through the formats, time zone and locale the project has configured, and a test
 asserts that rendering as the user reads it. A test that covers several locales says which
@@ -2810,7 +2819,7 @@ cannot end up with admin tests running in a different zone from the rest of its 
 
 ---
 
-# 32. 1.0.0 Acceptance Criteria
+# 32. 1.0.0 Acceptance Criteria (done)
 
 1.0.0 is considered complete when a test project can demonstrate all of the following against
 supported Django versions:
@@ -2922,8 +2931,6 @@ Until then a project reads and fills any of them through a widget class of its o
 * verifying side effects triggered by an admin operation;
 * a normalization rule for a value that has no model field behind it, such as a method column,
   chosen by the column rather than by what the admin drew (section 28.3);
-* replacing a normalization rule for a single test, so that a test covering unusual rendering
-  does not force a project-wide change;
 * adding a normalization rule for a representation the package does not know, such as a model
   field class of the project's own, which then behaves like any other.
 * recognizing a widget by logic of the project's own, where a marker cannot say it, through
