@@ -103,7 +103,7 @@ the way `assert_frame_equal` and `assertEqual` do, and pytest prints it line by 
 
 ---
 
-## 3.2 Explicit over implicit
+## 3.2 Explicit over implicit (done)
 
 Tests should clearly express:
 
@@ -117,7 +117,7 @@ Automatic behavior should remain predictable and inspectable.
 
 ---
 
-## 3.3 Stable public abstraction
+## 3.3 Stable public abstraction (done)
 
 Tests should interact with package-level abstractions rather than depending directly on Django
 Admin internals.
@@ -139,7 +139,7 @@ messages, and status.
 
 ---
 
-## 3.4 Normalized values
+## 3.4 Normalized values (done)
 
 The package compares **what the user reads**, not markup.
 
@@ -235,7 +235,7 @@ breaking changes.
 
 ---
 
-## 3.7 Reusable page contracts
+## 3.7 Reusable page contracts (done)
 
 Projects test many admin pages that differ only in their model and their expected shape.
 
@@ -246,7 +246,7 @@ package-provided test case in order to reuse expectations.
 
 ---
 
-## 3.8 Project-level adjustability
+## 3.8 Project-level adjustability (done)
 
 The package ships nothing project-specific.
 
@@ -368,7 +368,7 @@ admin_ui.logout()
 
 ---
 
-# 5. Permission Testing
+# 5. Permission Testing (done)
 
 Permissions are tested through what the admin shows the current user, never through the
 permission system directly. A test states what a user can see and do; the admin's own checks
@@ -887,8 +887,8 @@ assert page.contains({    # done
 ```
 
 This makes it possible to assert a few meaningful columns without enumerating a wide changelist.
-The keys are configured column names, as above. The values are cell patterns: literals, `ANY`
-and callables, exactly as in a tuple. `ANY` on a listed column says only that the column is
+The keys are configured column names, as above. The values are cell patterns: literals, links,
+`ANY` and callables, exactly as in a tuple. `ANY` on a listed column says only that the column is
 there, which a dictionary otherwise leaves unsaid.
 
 ---
@@ -2078,7 +2078,7 @@ an app none of whose models the user may see is not listed either. (done)
 
 ---
 
-# 25. Page Object Model
+# 25. Page Object Model (done)
 
 The public API should conceptually expose these page/result types.
 
@@ -2088,7 +2088,7 @@ AdminSession
 ├── AdminUrls
 │
 ├── AdminPage            (any admin URL — section 6.5)
-├── AdminIndexPage
+├── IndexPage
 ├── ChangelistPage
 ├── CreatePage
 ├── EditPage
@@ -2096,7 +2096,7 @@ AdminSession
 │
 ├── FormField
 │   └── FieldChoice
-├── SubmitActions
+├── actions              (a set of action names, section 16.1)
 ├── Row
 ├── Cell
 │
@@ -2112,8 +2112,8 @@ The exact Python class names are implementation details, but the public concepts
 recognizable and stable.
 
 Every type above that stands for something on the page exposes a native handle, as described
-in section 3.6. `AdminUrls` and `FieldChoice` are values with no element behind them, so they
-have none. (done)
+in section 3.6. `AdminUrls`, `FieldChoice` and `actions` are values with no element behind
+them, so they have none. (done)
 
 A `SubmissionResult` reports on a submission rather than standing for anything on the page, so
 it has none either; the page it carries has one. (done)
@@ -2157,7 +2157,7 @@ def test_shop_models_are_exposed(admin_ui, admin_user):
 
     page = admin_ui.index()
 
-    assert page.models_for("Shop") == [
+    assert page.models_for("Shop") == [    # done
         Product,
         Category,
     ]
@@ -2263,7 +2263,7 @@ def test_report_is_read_only(admin_ui, admin_user, report):
     page = admin_ui.edit(report)
 
     assert not page.fields["created_at"].editable    # done
-    assert page.actions == set()
+    assert page.actions == set()    # done
 ```
 
 ---
@@ -2404,14 +2404,14 @@ adopting this package. (done)
 
 ---
 
-# 28. Configuration and Extensibility
+# 28. Configuration and Extensibility (done)
 
 The package must be generic and adjustable to every project's needs.
 
 Nothing project-specific ships in the package. Every project-specific behavior enters through a
 documented extension point.
 
-## 28.1 Configuration surface
+## 28.1 Configuration surface (done)
 
 Project-wide defaults are set in one place, so individual tests stay free of setup noise.
 
@@ -2771,7 +2771,7 @@ plain value, so pytest's own assertion rewriting shows what was compared. (done)
 
 ---
 
-# 31. Compatibility Requirement
+# 31. Compatibility Requirement (done)
 
 The minimum supported versions are:
 
@@ -2800,8 +2800,10 @@ assert page.contains((...))
 should remain unchanged across supported Django versions. (done)
 
 Version-specific normalization belongs inside the package. This includes differences in how
-values are rendered and, where practical, differences in the wording of the admin's own
-built-in messages.
+values are rendered. The admin's own built-in messages are read as the admin words them in the
+version under test, and a test that must not depend on that wording asserts what stays the
+same: `page.count` rather than `page.summary` (section 8.1), the truthiness of `errors.banner`
+(section 20.1), or the parts of `intro` it relies on (section 23.4). (done)
 
 Values render through the formats, time zone and locale the project has configured, and a test
 asserts that rendering as the user reads it. A test that covers several locales says which
@@ -2817,7 +2819,7 @@ cannot end up with admin tests running in a different zone from the rest of its 
 
 ---
 
-# 32. 1.0.0 Acceptance Criteria
+# 32. 1.0.0 Acceptance Criteria (done)
 
 1.0.0 is considered complete when a test project can demonstrate all of the following against
 supported Django versions:
