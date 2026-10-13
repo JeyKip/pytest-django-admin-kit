@@ -1,6 +1,6 @@
 # pytest-django-admin-kit
 
-A pytest toolkit for writing conscious tests against the Django admin.
+Pytest plugin for testing the Django admin in a real browser, with plain asserts.
 
 Tests describe admin pages, their fields, rows, permissions and errors, using ordinary `assert`
 statements, and stay unchanged across supported Django versions.
@@ -17,8 +17,10 @@ Install it as `pytest-django-admin-kit`; import it as `django_admin_kit`.
 
 ## Status
 
-Version 1.0.0 implements the API written up in [specification.md](specification.md), and its
-public API is stable. What changed in each release is in [CHANGELOG.md](CHANGELOG.md), and what
+Version 1.0.0 implements the API written up in
+[specification.md](https://github.com/JeyKip/pytest-django-admin-kit/blob/main/specification.md),
+and its public API is stable. What changed in each release is in
+[CHANGELOG.md](https://github.com/JeyKip/pytest-django-admin-kit/blob/main/CHANGELOG.md), and what
 comes next is the roadmap in section 33 of the specification.
 
 ## What it solves today
@@ -849,7 +851,7 @@ So editing `tox.toml` changes CI, and the two cannot disagree.
 
 The build job refuses to run if the tag doesn't match the `version` in `pyproject.toml`, so bump
 the version in the same commit you tag. The steps of a release are in
-[RELEASING.md](RELEASING.md).
+[RELEASING.md](https://github.com/JeyKip/pytest-django-admin-kit/blob/main/RELEASING.md).
 
 ## Building
 
@@ -885,4 +887,4 @@ specification.md         the public API this is built against
 
 ## License
 
-MIT. See [LICENSE](LICENSE).
+MIT. See [LICENSE](https://github.com/JeyKip/pytest-django-admin-kit/blob/main/LICENSE).
