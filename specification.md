@@ -2369,10 +2369,17 @@ admin_ui_driving        # keeps Django's ORM usable while a browser is running
 
 The first four are the intended extension points. Overriding `admin_ui_normalizers` or
 `admin_ui_widgets` in a `conftest.py` or a test module replaces the rules or the widget classes
-for those tests without restating the rest of the settings; being session-scoped, neither can be
-overridden for a single test. The fifth exists
-so that it is set up before the test database and torn down after it, and a project has no
-reason to replace it. (done)
+for those tests without restating the rest of the settings. A single test replaces either by
+parametrizing the fixture's name, as pytest allows for any fixture:
+
+```python
+@pytest.mark.parametrize("admin_ui_normalizers", [Normalizers({"date": as_date})])
+def test_release_dates(admin_ui, admin_user):
+    ...
+```
+
+The fifth exists so that it is set up before the test database and torn down after it, and a
+project has no reason to replace it. (done)
 
 Public names are importable from the module that defines them:
 
@@ -2518,8 +2525,8 @@ no rule.
 
 Overrides apply project-wide. The rules are built once per session into the
 `admin_ui_normalizers` fixture (section 27), which a project may override for a directory or a
-module of tests. Replacing a rule for a single test, and adding a rule for a representation the
-package does not know, are left for later (section 33).
+module of tests, or parametrize for a single test. Adding a rule for a representation the
+package does not know is left for later (section 33).
 
 ---
 
@@ -2659,8 +2666,8 @@ Widget classes apply to controls, the fields a user may fill. A field the user m
 no control, and its value goes through the rules of section 28.3.
 
 The widget classes are built once per session into the `admin_ui_widgets` fixture (section 27),
-which a project may override for a directory or a module of tests with its own classes; the
-package's own are added behind them.
+which a project may override for a directory or a module of tests with its own classes, or
+parametrize for a single test; the package's own are added behind them.
 
 ---
 
@@ -2922,8 +2929,6 @@ Until then a project reads and fills any of them through a widget class of its o
 * verifying side effects triggered by an admin operation;
 * a normalization rule for a value that has no model field behind it, such as a method column,
   chosen by the column rather than by what the admin drew (section 28.3);
-* replacing a normalization rule for a single test, so that a test covering unusual rendering
-  does not force a project-wide change;
 * adding a normalization rule for a representation the package does not know, such as a model
   field class of the project's own, which then behaves like any other.
 * recognizing a widget by logic of the project's own, where a marker cannot say it, through

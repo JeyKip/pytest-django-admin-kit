@@ -609,10 +609,12 @@ they are:
 - `admin_ui_urls`: the admin URLs for the site under test. Override it to point the session at
   another admin site.
 - `admin_ui_normalizers`: the rules that read values, built once from `normalizers`. Override
-  it in a `conftest.py` or a test module to read those tests' values differently.
+  it in a `conftest.py` or a test module to read those tests' values differently, or
+  parametrize it for one test, with `Normalizers` from `django_admin_kit.normalize`:
+  `@pytest.mark.parametrize("admin_ui_normalizers", [Normalizers({"date": as_date})])`.
 - `admin_ui_widgets`: the widget classes, built once from `widgets`. Override it in a
-  `conftest.py` or a test module with `Widgets([...])` of instances to use other classes there;
-  the package's own are added behind them.
+  `conftest.py` or a test module with `Widgets([...])` of instances to use other classes there,
+  or parametrize it for one test the same way; the package's own are added behind them.
 - `admin_ui_driving`: keeps Django's database access working while a browser runs. Leave it
   alone.
 

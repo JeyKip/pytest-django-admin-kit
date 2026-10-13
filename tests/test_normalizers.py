@@ -171,3 +171,12 @@ def test_a_field_the_user_may_only_read_is_empty_by_the_model_admins_display(
     page = admin_ui.edit(product)
 
     assert page.fields["released_on"].value == ("empty", "(none)")
+
+
+@pytest.mark.parametrize("admin_ui_normalizers", [Normalizers({"text": rules.text})])
+def test_a_single_test_replaces_the_rules_by_parametrizing_the_fixture(listing):
+    """Only the text rule is replaced, so a boolean icon is read by the package's rule."""
+    row = listing.rows[0]
+
+    assert row["sku"].value == ("text", "SKU-Bolt")
+    assert row["is_active"].value is True
