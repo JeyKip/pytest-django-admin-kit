@@ -2878,60 +2878,120 @@ supported Django versions:
 
 # 33. Roadmap Beyond 1.0.0
 
-## 1.1.0 — Relational and compound forms
+Releases after 1.0.0 are smaller: each brings a few features that belong together, sized by the
+work they take rather than by a fixed count, so a project gets each one as soon as it is ready.
+The order of the later releases may change as projects adopt the package.
 
-* many-to-many fields;
-* one-to-many relationships;
-* Django Admin inlines;
-* stacked inlines;
-* tabular inlines;
-* inline shape, including the row counts and the initial, minimum, and maximum the admin
-  declares;
-* inline creation, editing, and deletion;
-* inline validation errors at cell, row, and formset granularity;
-* rendered-only inlines;
-* related-object automatic population;
-* named field groups.
-
----
-
-## 1.2.0 — Changelist interaction
-
-* changelist search;
-* filters;
-* ordering and sortable columns;
-* pagination and page traversal;
-* actions;
-* `list_editable`.
-
----
-
-## 1.3.0 — Advanced form surfaces
-
-* autocomplete fields;
-* raw-ID fields;
-* horizontal and vertical selectors;
-* form controls that render several inputs under one name: radio buttons (`radio_fields`),
-  groups of checkboxes, multiple selects and split date-times, with their value and choices;
-* date hierarchy;
-* file and image upload fields;
-* custom and rich field representations;
-* conditionally displayed fields;
-* dependent choice sets.
+The roadmap covers what Django Admin offers out of the box. What a third-party admin
+application or a project's own scripts and templates add is reached through native handles
+(section 3.6) and widget classes (section 28.5), so it is not planned here. That includes
+nested inlines, which Django does not provide, and previews or other markup a project renders
+in a value.
 
 The controls among these arrive as more of the package's own widget classes (section 28.5).
 Until then a project reads and fills any of them through a widget class of its own.
 
 ---
 
+## 1.1.0: Field details and compound controls
+
+Field details:
+
+* a field's help text, as the admin shows it with the control: `field.help_text`, `""` for a
+  field without one;
+* named field groups: the fieldsets of a form, in order, each with its name, `None` for a
+  group without one, its description, and the names of its fields;
+* collapsed field groups: whether a group is collapsed, and reading and filling its fields
+  without opening it first.
+
+Compound controls:
+
+* form controls that render several inputs under one name, with their value and choices:
+  split date-times, which the admin draws for every editable date-time field, radio buttons
+  (`radio_fields`) and multiple selects.
+
+---
+
+## 1.2.0: Changelist interaction
+
+* search: searching a changelist through its search box, which leads to the changelist of the
+  results, the search term it shows, and the count and summary of its results; a changelist
+  whose admin declares no search fields reports that it offers no search;
+* filters: the filters a changelist offers, their choices, and applying them;
+* ordering: the order a changelist shows, sortable columns, and sorting by them;
+* pagination and page traversal;
+* actions: the actions a changelist offers, selecting rows, and running an action, including
+  the admin's own "delete selected" and its confirmation.
+
+---
+
+## 1.3.0: File and image fields
+
+* the package's own widget class for the admin's file inputs, with and without the
+  "Currently" and "Clear" parts;
+* reading a file field as the file it holds now, a link to it, or `None`;
+* filling a file field from a path, and clearing an optional one with an empty value;
+* populating a file field from a model instance, whose stored file is uploaded again;
+* what a rejected form renders back: a browser never keeps a chosen file, so the field reads as
+  it did before the submission.
+
+---
+
+## 1.4.0: Inlines
+
+Reading:
+
+* the inlines of a create or edit page, tabular and stacked, addressed by the prefix their
+  formset posts, the way fields are addressed by name, in the order the admin shows them;
+* an inline's forms by position, without the hidden template the admin copies new forms from,
+  each with the object it stands for and its fields by name, read through the field API of
+  sections 10 to 13;
+* rendered-only inline fields, read through the rules of section 28.3, links included;
+* inline shape: the number of forms, and the initial, minimum and maximum the admin declares;
+* what an inline offers: adding another form, and deleting each existing one.
+
+Editing:
+
+* filling and populating an inline form, through the widget classes of section 28.5;
+* adding a form through the admin's "Add another" link, up to the maximum the admin declares;
+* marking an existing form for deletion;
+* inline validation errors at field, form and formset level, the last being errors of the
+  whole inline such as a rule across its forms;
+* submitting the parent form saves the inlines with it, and a rejected submission renders the
+  inline forms back.
+
+One-to-many relationships are edited through inlines, so this release covers them.
+
+---
+
+## 1.5.0: Relational controls
+
+* many-to-many fields as horizontal and vertical selectors (`filter_horizontal` and
+  `filter_vertical`);
+* autocomplete fields;
+* raw-ID fields;
+* related-object popups: adding, changing and choosing a related object from the form;
+* related-object automatic population, building related objects from a source.
+
+---
+
+## 1.6.0: Editable changelists and date hierarchy
+
+* `list_editable`: reading and filling the editable cells of a changelist, and saving them,
+  with their validation errors;
+* date hierarchy: the levels a changelist offers, and drilling down through them.
+
+---
+
 ## Later
 
-* custom admin views and endpoints beyond the standard operations;
+* custom admin views and endpoints beyond the standard operations, such as an object's history
+  and a user's password change;
 * richer row and cell matchers;
 * verifying side effects triggered by an admin operation;
 * a normalization rule for a value that has no model field behind it, such as a method column,
   chosen by the column rather than by what the admin drew (section 28.3);
 * adding a normalization rule for a representation the package does not know, such as a model
-  field class of the project's own, which then behaves like any other.
+  field class of the project's own, which then behaves like any other;
 * recognizing a widget by logic of the project's own, where a marker cannot say it, through
   an optional method asked only of the widget classes that define it (section 28.5).
