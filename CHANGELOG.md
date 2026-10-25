@@ -5,6 +5,24 @@ All notable changes to this project are listed in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- Open the login page with `admin_ui.login()`, fill it with `page.fill(username=..., password=...)`
+  and submit it with `page.submit()`. A refused form is the same page, so it can be filled
+  again. Opening the login page logs nobody out.
+- `admin_ui.login(user, password=...)` returns the result of the submission, so
+  `result.success` says whether the admin let the user in.
+- A submission that ends on the login page has the login page as its `result.page`.
+- Read what a login page says with `page.errors`, the notes above the form such as why a login
+  was refused, and `page.field_errors`, the errors under each input.
+
+### Fixed
+
+- `admin_ui.login(user, password="")` no longer waits 30 seconds and fails. The browser does not
+  send a form with an empty input, so the result is no success, at once.
+
 ## [1.0.0] - 2026-10-13
 
 The first release. Tests open the Django admin in a real browser and check it with plain
@@ -80,4 +98,5 @@ The first release. Tests open the Django admin in a real browser and check it wi
 - Tests can run in parallel, and every test starts logged out.
 - Works with Python 3.8 to 3.14 and Django 3.2 to 6.1.
 
+[Unreleased]: https://github.com/JeyKip/pytest-django-admin-kit/compare/v1.0.0...HEAD
 [1.0.0]: https://github.com/JeyKip/pytest-django-admin-kit/releases/tag/v1.0.0

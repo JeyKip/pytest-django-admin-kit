@@ -53,9 +53,28 @@ def test_a_user_with_no_usable_password_still_logs_in(admin_ui, passwordless_sta
 
 def test_the_login_form_takes_the_email_as_the_identity(admin_ui, superuser):
     """The form's input is still called `username`; what goes in it is the email."""
-    admin_ui.login(superuser, password="pw")
+    result = admin_ui.login(superuser, password="pw")
 
+    assert result.success
     assert admin_ui.index().works
+
+
+def test_the_opened_form_logs_in_with_the_email(admin_ui, superuser):
+    page = admin_ui.login()
+    page.fill(username="root@example.com", password="pw")
+
+    assert page.submit().success
+    assert admin_ui.index().works
+
+
+def test_a_refused_login_names_the_field_the_model_identifies_users_by(admin_ui, superuser):
+    result = admin_ui.login(superuser, password="wrong")
+
+    assert not result.success
+    assert result.page.errors == [
+        "Please enter the correct email and password for a staff account. "
+        "Note that both fields may be case-sensitive."
+    ]
 
 
 def test_logout_returns_the_browser_to_anonymous(admin_ui, superuser):
