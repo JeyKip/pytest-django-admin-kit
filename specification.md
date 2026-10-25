@@ -339,7 +339,45 @@ admin_ui.login(user, password="secret")
 
 This drives the rendered login form, typing the value the user model identifies users by, such
 as an email address on a model without a `username`. It is an opt-in for testing the login page,
-never a requirement for logging in.
+never a requirement for logging in. It returns the result of the submission (section 16), which
+says whether the admin let the user in:
+
+```python
+result = admin_ui.login(user, password="secret")
+
+assert result.success
+assert result.redirected_to_index()
+```
+
+A refused login is no success, and its `result.page` is the login page the admin shows again.
+
+Both forms log out first, so the user given is the only one logged in. `login()` with no
+arguments opens the login page instead, and logs nobody out: the admin serves it as it would to
+whoever is logged in now. It sends a staff user on to the index, and shows a user who is not
+staff the form with a note saying so.
+
+The login page is filled and submitted in separate steps, so a test types whatever its subject
+needs, empty and whitespace values included, and tries again on the same page after a refusal:
+
+```python
+page = admin_ui.login()
+page.fill(username="alice", password="wrong")
+result = page.submit()
+
+assert not result.success
+
+result.page.fill(password="secret")
+
+assert result.page.submit().success
+```
+
+`fill` types each value given exactly as given and leaves an input it is not given as it is.
+`username` names the form's input, whatever the user model calls the value. The browser itself
+refuses to send the form while an input is empty; `submit` then returns at once with a result
+that is no success, on the same page.
+
+A submission from any other page that ends on the login page, such as a save after the session
+ended, also has the login page as its `result.page`.
 
 Example:
 
@@ -2893,7 +2931,7 @@ Until then a project reads and fills any of them through a widget class of its o
 
 ---
 
-## 1.1.0: Field details and compound controls
+## 1.1.0: Field details, compound controls and the login page
 
 Field details:
 
@@ -2902,13 +2940,25 @@ Field details:
 * named field groups: the fieldsets of a form, in order, each with its name, `None` for a
   group without one, its description, and the names of its fields;
 * collapsed field groups: whether a group is collapsed, and reading and filling its fields
-  without opening it first.
+  without opening it first;
+* read-only and editable fields: `page.readonly_fields`, the names of the fields the user may
+  only read, and `page.editable_fields`, the names of the fields with a control to fill, next to
+  the collections of section 12. They follow what the admin renders rather than
+  `ModelAdmin.readonly_fields`, so a user who may only view gets every field as read-only.
+  Every field is in exactly one of them, and the editable fields are the required and the
+  optional ones together.
 
 Compound controls:
 
 * form controls that render several inputs under one name, with their value and choices:
   split date-times, which the admin draws for every editable date-time field, radio buttons
   (`radio_fields`) and multiple selects.
+
+Login page:
+
+* a rejected login: when `login(user, password=...)` is refused, such as for a wrong password,
+  reading the error the login form shows, so a test of the login page checks the message as well
+  as that the session stayed anonymous.
 
 ---
 

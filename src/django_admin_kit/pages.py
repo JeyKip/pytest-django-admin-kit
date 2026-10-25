@@ -307,6 +307,49 @@ class IndexPage(AdminPage):
         return model if self._tools.urls.site.is_registered(model) else None
 
 
+class LoginPage(AdminPage):
+    """The admin's login form, filled and submitted in separate steps."""
+
+    _kind = "login"
+
+    def fill(self, *, username: str | None = None, password: str | None = None) -> None:
+        """Type into each input given, exactly as given, and leave the other one as it is.
+
+        ``username`` is what the user model identifies users by, such as an email address
+        on a model without a ``username`` field.
+        """
+        form = self._form
+        # The admin's form names the identity input `username` whatever the user
+        # model calls the field; only the value it expects follows the model.
+        if username is not None:
+            form.locator('input[name="username"]').fill(username)
+        if password is not None:
+            form.locator('input[name="password"]').fill(password)
+
+    def submit(self) -> SubmissionResult:
+        """Click the login button, and wait for the next page.
+
+        The admin redirects after a login it accepts and shows the form again after one it
+        refuses, so the result's page is then this same object, ready to fill again. The
+        browser itself refuses to send a form with an empty input: the result is then no
+        success, at once, on this same page.
+        """
+        form = self._form
+        button = form.locator('input[type="submit"]')
+        if not form.evaluate("form => form.checkValidity()"):
+            # The click still shows the browser's message, as a user would see it, but
+            # nothing is sent, so no next page comes.
+            button.click()
+            return SubmissionResult(self, False, self._tools.urls)
+        with self._page.expect_navigation() as navigation:
+            button.click()
+        return self._submitted(navigation.value)
+
+    @property
+    def _form(self) -> Locator:
+        return self._shown().locator("#login-form")
+
+
 class ModelPage(AdminPage):
     """An admin page about one model, which it keeps for what reads it."""
 
@@ -769,6 +812,8 @@ def _page_at(page: Page, status_code: int, tools: PageTools) -> AdminPage:
     # A view can render a different page at its own URL, so the URL alone is not trusted.
     if url_name == "index" and _is_kind(page, IndexPage._kind):
         return IndexPage(page, status_code, path, tools)
+    if url_name == "login" and _is_kind(page, LoginPage._kind):
+        return LoginPage(page, status_code, path, tools)
     # Find the model by the full prefix of its URL names, such as "shop_product_",
     # because an app label may itself contain underscores.
     for model in apps.get_models():

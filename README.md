@@ -58,10 +58,25 @@ project that mounts its admin elsewhere changes nothing.
 admin_ui.url.edit(product)
 ```
 
-**Testing the login page itself.** Typing into the form is an opt-in, never the default.
+**Testing the login page itself.** Typing into the form is an opt-in, never the default. The
+result says whether the admin let the user in.
 
 ```python
-admin_ui.login(user, password="secret")
+result = admin_ui.login(user, password="secret")
+assert result.success
+```
+
+To fill the form the way the test needs, open it, fill it and submit it in separate steps. A
+refused form stays the same page, so it can be filled again.
+
+```python
+page = admin_ui.login()
+page.fill(username="alice", password="wrong")
+result = page.submit()
+assert not result.success
+
+result.page.fill(password="secret")
+assert result.page.submit().success
 ```
 
 **Opening a changelist and reading its count and columns.** The count is what the page says,

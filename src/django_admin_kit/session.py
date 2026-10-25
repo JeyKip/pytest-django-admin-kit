@@ -8,14 +8,23 @@ has no password at all and must still be able to log in.
 
 from __future__ import annotations
 
-from typing import Any, TypeVar
+from typing import Any, TypeVar, overload
 from urllib.parse import urljoin
 
 from django.conf import settings
 from django.test import Client
 from playwright.sync_api import BrowserContext
 
-from .pages import AdminPage, ChangelistPage, CreatePage, DeletePage, EditPage, IndexPage
+from .pages import (
+    AdminPage,
+    ChangelistPage,
+    CreatePage,
+    DeletePage,
+    EditPage,
+    IndexPage,
+    LoginPage,
+)
+from .results import SubmissionResult
 from .tools import PageTools
 from .urls import AdminUrls
 
@@ -55,7 +64,22 @@ class AdminSession:
         """
         return urljoin(self._base_url, path)
 
-    def login(self, user: Any, password: str | None = None) -> None:
+    @overload
+    def login(self) -> LoginPage: ...
+
+    @overload
+    def login(self, user: Any, password: None = None) -> None: ...
+
+    @overload
+    def login(self, user: Any, password: str) -> SubmissionResult: ...
+
+    # For a password that may be None, such as one a test reads from its parameters.
+    @overload
+    def login(self, user: Any, password: str | None) -> SubmissionResult | None: ...
+
+    def login(
+        self, user: Any = None, password: str | None = None
+    ) -> LoginPage | SubmissionResult | None:
         """Log in as ``user`` without knowing or needing a password.
 
         Calling it again replaces the session rather than adding a second one, so
@@ -63,16 +87,28 @@ class AdminSession:
 
         With ``password``, the rendered login form is driven instead: the browser
         opens the login page, types what the user model identifies users by and the
-        password, and submits. That is for tests whose subject is the login page. A
-        wrong password leaves the browser on the form, with its error shown, and the
-        session anonymous.
+        password, and submits. That is for tests whose subject is the login page, and
+        the result says whether the admin let the user in. A wrong password leaves the
+        browser on the form, with its error shown, and the session anonymous.
+
+        Both log out first. With no arguments at all, nothing is logged out: the login
+        page opens as the admin serves it to whoever is logged in now, to be filled and
+        submitted by the test. The admin sends a staff user on to the index, and shows
+        a user who isn't staff the form with a note saying so.
         """
+        if user is None:
+            if password is not None:
+                raise TypeError("login() got a password but no user to type it for.")
+            return self._open(self._tools.urls.login(), LoginPage)
+
         self.logout()
 
         if password is None:
             self._login_with_cookie(user)
-        else:
-            self._login_with_form(user, password)
+            return None
+        page = self.login()
+        page.fill(username=user.get_username(), password=password)
+        return page.submit()
 
     def _login_with_cookie(self, user: Any) -> None:
         client = Client()
@@ -82,18 +118,6 @@ class AdminSession:
         self._context.add_cookies(
             [{"name": name, "value": client.cookies[name].value, "url": self._base_url}]
         )
-
-    def _login_with_form(self, user: Any, password: str) -> None:
-        page = self._context.new_page()
-        page.goto(self.absolute(self._tools.urls.login()))
-
-        # The admin's form names the identity input `username` whatever the user
-        # model calls the field; only the value it expects follows the model.
-        page.locator('input[name="username"]').fill(user.get_username())
-        page.locator('input[name="password"]').fill(password)
-        with page.expect_response(lambda response: response.request.method == "POST"):
-            page.locator('input[type="submit"]').click()
-        page.wait_for_load_state()
 
     def logout(self) -> None:
         """Return the browser to anonymous by dropping its cookies."""

@@ -5,9 +5,17 @@ import datetime
 from urllib.parse import urlsplit
 
 import pytest
+from django.contrib.sessions.models import Session
 from django.urls import reverse
 
-from django_admin_kit.pages import AdminPage, ChangelistPage, CreatePage, EditPage, IndexPage
+from django_admin_kit.pages import (
+    AdminPage,
+    ChangelistPage,
+    CreatePage,
+    EditPage,
+    IndexPage,
+    LoginPage,
+)
 from project.shop.models import Feed, Product
 
 # A page without a form, standing in for a confirmation page that a project's
@@ -191,6 +199,16 @@ def test_a_save_by_a_user_who_may_not_view_the_list_leads_to_the_index(admin_ui,
     assert result.success
     assert isinstance(result.page, IndexPage)
     assert result.page.works
+
+
+def test_a_save_after_the_session_ended_leads_to_the_login_page(admin_ui, filled):
+    """The browser keeps its cookies, but the session behind them is gone."""
+    Session.objects.all().delete()
+
+    result = filled.save()
+
+    assert result.redirected_to(admin_ui.url.login())
+    assert isinstance(result.page, LoginPage)
 
 
 def test_an_action_the_page_does_not_offer_submits_nothing(admin_ui, superuser):
