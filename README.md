@@ -161,6 +161,8 @@ assert page.fields["name"].required
 assert not page.fields["price_with_tax"].editable
 assert page.required_fields == {"name", "sku", "price", "quantity", "released_on"}
 assert page.optional_fields == {"is_active", "featured", "category"}
+assert page.readonly_fields == {"price_with_tax"}
+assert "name" in page.editable_fields
 
 assert page.fields["name"].label == "Name"
 assert page.fields["sku"].help_text == "The code printed on the label."

@@ -1,6 +1,8 @@
 """Which fields the create and edit pages show, by name and in the admin's order, and
 what each one says about itself."""
 
+import datetime
+
 import django
 import pytest
 from django.utils import translation
@@ -32,6 +34,15 @@ BLANK = ("", "- Select an option -" if django.VERSION >= (6, 1) else "---------"
 SKU_HELP = "The code printed on the label."
 QUANTITY_HELP = "How many are in stock, counted at the warehouse."
 IS_ACTIVE_HELP = "Only active products are listed in the shop."
+
+
+@pytest.fixture
+def refreshed_feed(db):
+    """A feed that has been refreshed, so its admin keeps the mode from changing."""
+    return Feed.objects.create(
+        source="refreshed.csv",
+        refreshed_at=datetime.datetime(2026, 1, 15, 9, 30, tzinfo=datetime.timezone.utc),
+    )
 
 
 def test_the_add_page_lists_its_fields_in_the_admin_order(admin_ui, superuser):
@@ -200,6 +211,64 @@ def test_the_optional_fields_leave_out_what_cannot_be_filled(admin_ui, superuser
     page = admin_ui.create(Product)
 
     assert page.optional_fields == {"is_active", "featured", "category"}
+
+
+def test_the_readonly_fields_are_the_rendered_only_ones(admin_ui, superuser):
+    admin_ui.login(superuser)
+
+    page = admin_ui.create(Product)
+
+    assert page.readonly_fields == {"price_with_tax"}
+
+
+def test_the_editable_fields_are_those_with_a_control(admin_ui, superuser):
+    admin_ui.login(superuser)
+
+    page = admin_ui.create(Product)
+
+    assert page.editable_fields == {
+        "name",
+        "sku",
+        "price",
+        "quantity",
+        "is_active",
+        "featured",
+        "released_on",
+        "category",
+    }
+
+
+def test_every_field_is_either_readonly_or_editable(admin_ui, superuser):
+    admin_ui.login(superuser)
+
+    page = admin_ui.create(Product)
+
+    assert not page.readonly_fields & page.editable_fields
+    assert page.readonly_fields | page.editable_fields == set(page.fields)
+    assert page.editable_fields == page.required_fields | page.optional_fields
+
+
+def test_a_viewer_reads_every_field_as_readonly(admin_ui, viewer, product):
+    admin_ui.login(viewer)
+
+    page = admin_ui.edit(product)
+
+    assert page.readonly_fields == set(FIELDS)
+    assert page.editable_fields == set()
+
+
+def test_a_field_the_admin_locks_for_one_object_is_readonly_on_its_page_only(
+    admin_ui, superuser, feed, refreshed_feed
+):
+    """The admin decides in `get_readonly_fields`, from the feed it is showing."""
+    admin_ui.login(superuser)
+
+    locked = admin_ui.edit(refreshed_feed)
+    unlocked = admin_ui.edit(feed)
+
+    assert locked.readonly_fields == {"mode"}
+    assert "mode" in unlocked.editable_fields
+    assert unlocked.readonly_fields == set()
 
 
 def test_a_viewer_has_nothing_to_fill(admin_ui, viewer, product):

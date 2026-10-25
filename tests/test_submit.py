@@ -44,6 +44,8 @@ PAGE_READERS = {
     "fields": lambda page: page.fields,
     "required_fields": lambda page: page.required_fields,
     "optional_fields": lambda page: page.optional_fields,
+    "readonly_fields": lambda page: page.readonly_fields,
+    "editable_fields": lambda page: page.editable_fields,
     "errors": lambda page: page.errors,
     "messages": lambda page: page.messages,
     "actions": lambda page: page.actions,
