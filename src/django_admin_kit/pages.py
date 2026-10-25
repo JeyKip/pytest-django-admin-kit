@@ -562,6 +562,21 @@ class FormPage(ModelPage):
         }
 
     @property
+    def readonly_fields(self) -> set[str]:
+        """The names of the fields the user may only read.
+
+        They follow what the admin renders rather than ``ModelAdmin.readonly_fields``, so
+        for a user who may only view, every field is here.
+        """
+        return {name for name, field in self.fields.items() if not field.editable}
+
+    @property
+    def editable_fields(self) -> set[str]:
+        """The names of the fields with a control to fill: the required and the optional
+        ones together."""
+        return {name for name, field in self.fields.items() if field.editable}
+
+    @property
     def errors(self) -> ValidationErrors:
         """The validation errors the form shows; none until the admin rejects it."""
         self._shown()

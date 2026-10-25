@@ -19,6 +19,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
   was refused, and `page.field_errors`, the errors under each input.
 - Read the help the admin shows with a field with `field.help_text`, `""` for a field without
   any. A field the user may only read has it too.
+- Get the fields the user may only read and the ones with a control to fill with
+  `page.readonly_fields` and `page.editable_fields`. They follow what the page shows, so a user
+  who may only view gets every field as read-only.
 
 ### Fixed
 

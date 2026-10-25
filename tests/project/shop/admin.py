@@ -138,6 +138,13 @@ class FeedAdmin(admin.ModelAdmin):
             kwargs["widget"] = SwatchPicker
         return super().formfield_for_dbfield(db_field, request, **kwargs)
 
+    # A feed that has been refreshed keeps its mode, so one field is read-only on some edit
+    # pages and editable on others, through the admin's code rather than its settings.
+    def get_readonly_fields(self, request, obj=None):
+        if obj is not None and obj.refreshed_at is not None:
+            return ("mode",)
+        return super().get_readonly_fields(request, obj)
+
     @admin.display(boolean=True, description="Refreshed")
     def refreshed(self, feed):
         return feed.refreshed_at is not None

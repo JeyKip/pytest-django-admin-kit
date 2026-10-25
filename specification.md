@@ -1170,6 +1170,24 @@ than only the model field definition. (done)
 
 A field the user may only read is in neither collection: nothing is there to fill. (done)
 
+The fields the user may only read and the ones with a control to fill are named the same way:
+
+```python
+assert page.readonly_fields == set()    # done
+
+assert page.editable_fields == {    # done
+    "name",
+    "price",
+    "description",
+    "enabled",
+}
+```
+
+Both follow what the admin renders rather than `ModelAdmin.readonly_fields`, so a field the
+admin's `get_readonly_fields` locks for one object is read-only on that object's page only, and
+a user who may only view gets every field as read-only. Every field is in exactly one of them,
+and the editable fields are the required and the optional ones together. (done)
+
 ---
 
 # 13. Field Metadata (done)
@@ -2999,7 +3017,7 @@ Field details:
   the collections of section 12. They follow what the admin renders rather than
   `ModelAdmin.readonly_fields`, so a user who may only view gets every field as read-only.
   Every field is in exactly one of them, and the editable fields are the required and the
-  optional ones together.
+  optional ones together (done).
 
 Compound controls:
 
