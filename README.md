@@ -79,6 +79,17 @@ result.page.fill(password="secret")
 assert result.page.submit().success
 ```
 
+A refused page reads what the admin says: the notes above the form, and the errors under each
+input.
+
+```python
+assert result.page.errors == [
+    "Please enter the correct username and password for a staff account. "
+    "Note that both fields may be case-sensitive."
+]
+assert result.page.field_errors == {}
+```
+
 **Opening a changelist and reading its count and columns.** The count is what the page says,
 not the rows on one page of it; columns come by label and by the name the admin configures
 them with; and a refused user gets `denied` rather than a count.

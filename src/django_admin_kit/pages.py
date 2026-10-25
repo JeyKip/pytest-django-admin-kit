@@ -336,7 +336,9 @@ class LoginPage(AdminPage):
         """
         form = self._form
         button = form.locator('input[type="submit"]')
-        if not form.evaluate("form => form.checkValidity()"):
+        # A form or a button marked `novalidate` is sent whatever its inputs hold.
+        sends = "b => b.form.noValidate || b.formNoValidate || b.form.checkValidity()"
+        if not button.evaluate(sends):
             # The click still shows the browser's message, as a user would see it, but
             # nothing is sent, so no next page comes.
             button.click()
@@ -344,6 +346,38 @@ class LoginPage(AdminPage):
         with self._page.expect_navigation() as navigation:
             button.click()
         return self._submitted(navigation.value)
+
+    @property
+    def errors(self) -> list[str]:
+        """The notes the page shows above the form, in order, or ``[]`` when it shows none.
+
+        A refused login shows why, the same way for a wrong password, an inactive user and a
+        user who isn't staff. A form with field errors shows that it has them, and a user who
+        is logged in but isn't staff is told so.
+        """
+        # The notes about the form come before the main content, and the note about who is
+        # logged in comes inside it, so all of them are read from the content area.
+        notes = self._shown().locator("#content p.errornote")
+        return [text_of(note) for note in notes.all()]
+
+    @property
+    def field_errors(self) -> dict[str, list[str]]:
+        """The errors the admin shows under each input that has any, by the input's name
+        (``username`` or ``password``), in the order of the form.
+
+        The browser's own message for an empty input is not one of them: the browser
+        shows it, not the admin, and only as long as the input stays empty.
+        """
+        errors: dict[str, list[str]] = {}
+        for row in self._form.locator(".form-row").all():
+            items = row.locator("ul.errorlist > li").all()
+            if items:
+                # A row holds hidden inputs too, such as where to go after logging in.
+                name = row.locator('input:not([type="hidden"])').first.get_attribute("name")
+                # Django names every input it renders.
+                assert name is not None
+                errors[name] = [text_of(item) for item in items]
+        return errors
 
     @property
     def _form(self) -> Locator:

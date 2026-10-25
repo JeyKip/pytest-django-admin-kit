@@ -67,6 +67,16 @@ def test_the_opened_form_logs_in_with_the_email(admin_ui, superuser):
     assert admin_ui.index().works
 
 
+def test_a_refused_login_names_the_field_the_model_identifies_users_by(admin_ui, superuser):
+    result = admin_ui.login(superuser, password="wrong")
+
+    assert not result.success
+    assert result.page.errors == [
+        "Please enter the correct email and password for a staff account. "
+        "Note that both fields may be case-sensitive."
+    ]
+
+
 def test_logout_returns_the_browser_to_anonymous(admin_ui, superuser):
     admin_ui.login(superuser)
     assert admin_ui.index().works

@@ -349,7 +349,39 @@ assert result.success
 assert result.redirected_to_index()
 ```
 
-A refused login is no success, and its `result.page` is the login page the admin shows again.
+A refused login is no success, and its `result.page` is the login page the admin shows again,
+which reads what the admin says about it:
+
+```python
+result = admin_ui.login(user, password="wrong")
+
+assert not result.success
+assert result.page.errors == [
+    "Please enter the correct username and password for a staff account. "
+    "Note that both fields may be case-sensitive."
+]
+assert result.page.field_errors == {}
+assert admin_ui.index().denied
+```
+
+`errors` holds the notes the page shows above the form, in order, and is `[]` when it shows
+none: why a login was refused, the same for a wrong password, an inactive user and a user who is
+not staff; that the form has field errors; and that the user logged in now is not staff.
+`field_errors` holds the errors the admin shows under each input that has any, by the input's
+name, `username` or `password`. A username of only spaces is one, since Django strips it:
+
+```python
+page = admin_ui.login()
+page.fill(username="   ", password="secret")
+result = page.submit()
+
+assert result.page.errors == ["Please correct the error below."]
+assert result.page.field_errors == {"username": ["This field is required."]}
+```
+
+The message the browser itself shows for an empty input is not in either: the admin never sees
+the form, and the browser shows the message only while the input stays empty. A test reads it
+through `page.native`.
 
 Both forms log out first, so the user given is the only one logged in. `login()` with no
 arguments opens the login page instead, and logs nobody out: the admin serves it as it would to
@@ -2958,7 +2990,7 @@ Login page:
 
 * a rejected login: when `login(user, password=...)` is refused, such as for a wrong password,
   reading the error the login form shows, so a test of the login page checks the message as well
-  as that the session stayed anonymous.
+  as that the session stayed anonymous. (done)
 
 ---
 

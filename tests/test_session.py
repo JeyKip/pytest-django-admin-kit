@@ -9,6 +9,12 @@ from django.urls import reverse
 
 from django_admin_kit.pages import LoginPage
 
+# Why the admin refuses a login, the same for a wrong password and a user who is not staff.
+INVALID_LOGIN = (
+    "Please enter the correct username and password for a staff account. "
+    "Note that both fields may be case-sensitive."
+)
+
 # The note the admin puts on the login page for a logged-in user who is not staff.
 NOT_STAFF_NOTE = (
     "You are authenticated as carol, but are not authorized to access this page. "
@@ -89,8 +95,42 @@ def test_the_login_form_refuses_the_wrong_password(admin_ui, superuser):
 
     assert not result.success
     assert result.page.destination == admin_ui.url.login()
-    assert "Please enter the correct" in result.page.native.locator(".errornote").text_content()
+    assert result.page.errors == [INVALID_LOGIN]
+    assert result.page.field_errors == {}
     assert admin_ui.index().denied
+
+
+def test_a_user_who_is_not_staff_is_refused_even_with_the_right_password(admin_ui, customer):
+    """The right password is not enough: the admin is for staff only."""
+    result = admin_ui.login(customer, password="pw")
+
+    assert not result.success
+    assert result.page.errors == [INVALID_LOGIN]
+
+
+def test_a_username_of_spaces_is_an_error_of_its_field(admin_ui):
+    """Django strips a username, so only spaces leave the field empty."""
+    page = admin_ui.login()
+    page.fill(username="   ", password="pw")
+
+    result = page.submit()
+
+    assert result.page.errors == ["Please correct the error below."]
+    assert result.page.field_errors == {"username": ["This field is required."]}
+
+
+def test_an_empty_password_is_an_error_of_its_field_once_the_browser_sends_it(admin_ui):
+    """A login template can turn the browser's own check off with `novalidate`."""
+    page = admin_ui.login()
+    page.native.locator("#login-form").evaluate("form => { form.noValidate = true }")
+    page.fill(username="alice")
+
+    result = page.submit()
+
+    assert not result.success
+    assert result.page is page
+    assert result.page.errors == ["Please correct the error below."]
+    assert result.page.field_errors == {"password": ["This field is required."]}
 
 
 def test_a_refused_login_carries_the_login_page(admin_ui, superuser):
@@ -128,6 +168,8 @@ def test_login_with_no_arguments_opens_the_blank_form(admin_ui):
     assert page.works
     assert page.destination == admin_ui.url.login()
     assert page.native.locator('input[name="username"]').input_value() == ""
+    assert page.errors == []
+    assert page.field_errors == {}
 
 
 def test_opening_the_login_page_as_staff_leads_to_the_index_and_keeps_the_session(
@@ -143,6 +185,14 @@ def test_opening_the_login_page_as_staff_leads_to_the_index_and_keeps_the_sessio
     assert admin_ui.index().works
 
 
+def test_a_login_page_that_did_not_open_has_no_errors_to_read(admin_ui, superuser):
+    admin_ui.login(superuser)
+    page = admin_ui.login()
+
+    with pytest.raises(LookupError, match="did not open"):
+        _ = page.errors
+
+
 def test_opening_the_login_page_as_a_user_who_is_not_staff_keeps_the_session(admin_ui, customer):
     """The admin shows the form with a note naming who is logged in."""
     admin_ui.login(customer)
@@ -150,8 +200,7 @@ def test_opening_the_login_page_as_a_user_who_is_not_staff_keeps_the_session(adm
     page = admin_ui.login()
 
     assert page.works
-    note = page.native.locator("#content-main .errornote").text_content()
-    assert " ".join(note.split()) == NOT_STAFF_NOTE
+    assert page.errors == [NOT_STAFF_NOTE]
 
 
 def test_the_opened_form_logs_in_once_filled_and_submitted(admin_ui, superuser):
@@ -209,6 +258,8 @@ def test_a_form_the_browser_keeps_is_no_success_on_the_same_page(admin_ui, super
     assert not result.success
     assert result.page is page
     assert page.works
+    assert page.errors == []
+    assert page.field_errors == {}
 
 
 def test_a_login_page_the_browser_left_fails_at_once(admin_ui, left_for, superuser):
