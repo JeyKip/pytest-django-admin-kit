@@ -1285,6 +1285,27 @@ Named field groups are deferred; see section 33.
 
 ---
 
+## 13.6 Help text (done)
+
+A field exposes the help the admin shows with it, as the user reads it, without its markup, and
+`""` for a field without any:
+
+```python
+page = admin_ui.create(Product)
+
+assert page.fields["sku"].help_text == "The code printed on the label."    # done
+assert page.fields["name"].help_text == ""                                  # done
+```
+
+A rendered-only field has help text too: the admin shows the help of the model field behind it,
+so a user who may only view reads the same help as one who may edit. (done)
+
+The links a help text may hold are reached through `field.native`. The note the admin's
+date-time script adds when the browser and the server disagree on the time zone is not part of
+the help text. (done)
+
+---
+
 # 14. Form Population (done)
 
 The package must support automatic form population.
@@ -2968,7 +2989,7 @@ Until then a project reads and fills any of them through a widget class of its o
 Field details:
 
 * a field's help text, as the admin shows it with the control: `field.help_text`, `""` for a
-  field without one;
+  field without one (done);
 * named field groups: the fieldsets of a form, in order, each with its name, `None` for a
   group without one, its description, and the names of its fields;
 * collapsed field groups: whether a group is collapsed, and reading and filling its fields

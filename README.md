@@ -163,6 +163,7 @@ assert page.required_fields == {"name", "sku", "price", "quantity", "released_on
 assert page.optional_fields == {"is_active", "featured", "category"}
 
 assert page.fields["name"].label == "Name"
+assert page.fields["sku"].help_text == "The code printed on the label."
 assert page.fields["name"].value == "Widget"
 assert page.fields["is_active"].value is True
 assert page.fields["category"].value == (str(tools.pk), "Tools")
