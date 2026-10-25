@@ -126,6 +126,19 @@ class FormField:
         return label[: -len(suffix)].rstrip() if label.endswith(suffix) else label
 
     @property
+    def help_text(self) -> str:
+        """The help the admin shows with the field, or ``""`` when it shows none.
+
+        It is read as the user reads it, without its markup. A field the user may only
+        read has the help of the model field behind it.
+        """
+        self._check()
+        # The admin's date-time script puts its time zone note in the same class, but
+        # the note is about the browser, not the field.
+        helps = self._own("div.help:not(.timezonewarning)")
+        return text_of(helps[0]) if helps else ""
+
+    @property
     def editable(self) -> bool:
         """Whether the field has a control to fill, rather than a value to read."""
         self._check()
@@ -163,14 +176,7 @@ class FormField:
         A field can fail several rules at once, so this is always a list.
         """
         self._check()
-        items = self._element.locator("ul.errorlist > li").all()
-        # A field that shares its line with others has a box of its own. Django 4.2 to 6.0
-        # put its errors next to that box, in a wrapper around the two; the others put
-        # them inside it. The wrapper holds one field, so its list is this field's.
-        if "fieldBox" in (self._element.get_attribute("class") or "").split():
-            wrapper = self._element.locator("xpath=..")
-            items = wrapper.locator(":scope > ul.errorlist > li").all() + items
-        return [text_of(item) for item in items]
+        return [text_of(item) for item in self._own("ul.errorlist > li")]
 
     def fill(self, value: Any) -> None:
         """Put ``value`` into the field, the way a user would.
@@ -211,6 +217,20 @@ class FormField:
                 "DJANGO_ADMIN_KIT['widgets']."
             )
         return widget
+
+    def _own(self, selector: str) -> list[Locator]:
+        """The elements matching ``selector`` that belong to this field, in page order.
+
+        A field that shares its line with others has a box of its own. Django 4.2 to 6.0
+        put its errors and its help next to that box, in a wrapper around them; the
+        others put them inside it. The wrapper holds one field, so what is in it is this
+        field's.
+        """
+        found = self._element.locator(selector).all()
+        if "fieldBox" in (self._element.get_attribute("class") or "").split():
+            wrapper = self._element.locator("xpath=..")
+            found = wrapper.locator(f":scope > {selector}").all() + found
+        return found
 
     @property
     def _label(self) -> Locator:

@@ -3,11 +3,17 @@ from django.db import models
 
 class Product(models.Model):
     name = models.CharField(max_length=100)
-    sku = models.CharField(max_length=32, unique=True)
+    # Help on a field that shares its line with the price, which has none.
+    sku = models.CharField(max_length=32, unique=True, help_text="The code printed on the label.")
     price = models.DecimalField(max_digits=8, decimal_places=2)
-    # A number with a default, so the add page starts with a value in a number input.
-    quantity = models.PositiveIntegerField(default=1)
-    is_active = models.BooleanField(default=True)
+    # A number with a default, so the add page starts with a value in a number input. Its
+    # help has markup, which the admin renders as is.
+    quantity = models.PositiveIntegerField(
+        default=1, help_text="How many are in stock, counted <em>at the warehouse</em>."
+    )
+    is_active = models.BooleanField(
+        default=True, help_text="Only active products are listed in the shop."
+    )
     featured = models.BooleanField(null=True, blank=True)
     released_on = models.DateField(null=True, blank=True)
     # A foreign key the form shows as a select with a blank option, and a change page

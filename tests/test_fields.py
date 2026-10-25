@@ -27,6 +27,12 @@ FIELDS = [
 # what the admin renders, so the suite proves the reader on both wordings.
 BLANK = ("", "- Select an option -" if django.VERSION >= (6, 1) else "---------")
 
+# The help the product form shows with three of its fields, as the user reads it. The
+# model gives the quantity's help markup, which the user doesn't see.
+SKU_HELP = "The code printed on the label."
+QUANTITY_HELP = "How many are in stock, counted at the warehouse."
+IS_ACTIVE_HELP = "Only active products are listed in the shop."
+
 
 def test_the_add_page_lists_its_fields_in_the_admin_order(admin_ui, superuser):
     admin_ui.login(superuser)
@@ -406,6 +412,62 @@ def test_the_suffix_follows_the_page_not_the_test_process(admin_ui, superuser):
     with translation.override("zh-hant"):
         assert page.fields["name"].native.locator("label").text_content() == "Name:"
         assert page.fields["name"].label == "Name"
+
+
+def test_a_field_on_its_own_line_reads_its_help_text(admin_ui, superuser):
+    admin_ui.login(superuser)
+
+    page = admin_ui.create(Product)
+
+    assert page.fields["quantity"].help_text == QUANTITY_HELP
+
+
+def test_a_field_sharing_its_line_reads_only_its_own_help_text(admin_ui, superuser):
+    """The sku has help and the price, on the same line, has none."""
+    admin_ui.login(superuser)
+
+    page = admin_ui.create(Product)
+
+    assert page.fields["sku"].help_text == SKU_HELP
+    assert page.fields["price"].help_text == ""
+
+
+def test_a_checkbox_reads_its_help_text(admin_ui, superuser):
+    admin_ui.login(superuser)
+
+    page = admin_ui.create(Product)
+
+    assert page.fields["is_active"].help_text == IS_ACTIVE_HELP
+
+
+def test_help_text_is_read_without_its_markup(admin_ui, superuser):
+    admin_ui.login(superuser)
+
+    page = admin_ui.create(Product)
+
+    assert page.fields["quantity"].native.locator(".help em").text_content() == "at the warehouse"
+    assert page.fields["quantity"].help_text == QUANTITY_HELP
+
+
+def test_a_field_without_help_text_reads_as_empty(admin_ui, superuser):
+    admin_ui.login(superuser)
+
+    page = admin_ui.create(Product)
+
+    assert page.fields["name"].help_text == ""
+
+
+def test_a_viewer_reads_the_same_help_texts(admin_ui, viewer, product):
+    """The admin shows a rendered-only field the help of its model field."""
+    admin_ui.login(viewer)
+
+    page = admin_ui.edit(product)
+
+    assert not page.fields["sku"].editable
+    assert page.fields["sku"].help_text == SKU_HELP
+    assert page.fields["quantity"].help_text == QUANTITY_HELP
+    assert page.fields["is_active"].help_text == IS_ACTIVE_HELP
+    assert page.fields["name"].help_text == ""
 
 
 def test_a_select_offers_its_choices_in_order_with_the_blank_one(admin_ui, superuser, category):

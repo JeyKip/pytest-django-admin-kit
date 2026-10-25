@@ -17,6 +17,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - A submission that ends on the login page has the login page as its `result.page`.
 - Read what a login page says with `page.errors`, the notes above the form such as why a login
   was refused, and `page.field_errors`, the errors under each input.
+- Read the help the admin shows with a field with `field.help_text`, `""` for a field without
+  any. A field the user may only read has it too.
 
 ### Fixed
 

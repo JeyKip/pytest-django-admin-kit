@@ -64,6 +64,7 @@ FIELD_READERS = {
     "links": lambda field: field.links,
     "required": lambda field: field.required,
     "label": lambda field: field.label,
+    "help_text": lambda field: field.help_text,
     "editable": lambda field: field.editable,
     "choices": lambda field: field.choices,
     "errors": lambda field: field.errors,
