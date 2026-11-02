@@ -166,6 +166,7 @@ assert "name" in page.editable_fields
 # The admin sets no `fieldsets`, so Django draws every field in one fieldset without a name.
 assert page.fieldsets[0].name is None
 assert list(page.fieldsets[0].fields) == list(page.fields)
+assert not page.fieldsets[0].collapsible    # no `collapse` class, so no toggle to open it
 
 assert page.fields["name"].label == "Name"
 assert page.fields["sku"].help_text == "The code printed on the label."

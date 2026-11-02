@@ -62,7 +62,8 @@ class FormField:
     after the label. ``check`` is run before every read, and fails when the browser no
     longer shows the page the field is on. ``normalizers`` read the value of a field the
     user may only read, by what stands behind it on the page ``model_admin`` draws, and
-    ``widgets`` read and fill the field's control.
+    ``widgets`` read and fill the field's control. ``fieldset`` is the one the field is
+    drawn in, opened before the field is filled when it is collapsed.
     """
 
     def __init__(
@@ -75,6 +76,7 @@ class FormField:
         normalizers: Normalizers,
         model_admin: ModelAdmin,
         widgets: Widgets,
+        fieldset: Fieldset | None = None,
     ) -> None:
         self._element = element
         self._name = name
@@ -83,6 +85,7 @@ class FormField:
         self._normalizers = normalizers
         self._model_admin = model_admin
         self._widgets = widgets
+        self._fieldset = fieldset
 
     @property
     def name(self) -> str:
@@ -185,14 +188,20 @@ class FormField:
         value's truth, a select is given the option that stands for the value, and every
         other control is filled with the value's text, ``None`` emptying it. A field the
         user may only read has nothing to fill, and a control no widget class recognizes
-        cannot be filled: both raise ``LookupError``.
+        cannot be filled: both raise ``LookupError``. A field in a collapsed fieldset is
+        filled once the fieldset is opened, as the user has to open it first.
         """
         self._check()
         if not self.editable:
             raise LookupError(
                 f"The field {self._name!r} is rendered only, so there is nothing to fill."
             )
-        self._widget("fill").fill(self, value)
+        widget = self._widget("fill")
+        # The admin hides the fields of a collapsed fieldset, and the browser does not
+        # fill a control the user cannot see.
+        if self._fieldset is not None and self._fieldset.collapsed:
+            self._fieldset.open()
+        widget.fill(self, value)
 
     @property
     def choices(self) -> list[FieldChoice]:
@@ -355,8 +364,55 @@ class Fieldset:
                         normalizers=self._normalizers,
                         model_admin=self._model_admin,
                         widgets=self._widgets,
+                        fieldset=self,
                     )
         return fields
+
+    @property
+    def collapsible(self) -> bool:
+        """Whether the page offers the user a toggle to collapse and open the fieldset.
+
+        It follows what the page renders: the admin draws a fieldset that shows errors
+        open and without its toggle, so that one is not collapsible.
+        """
+        self._check()
+        return self._toggle.count() > 0
+
+    @property
+    def collapsed(self) -> bool:
+        """Whether the fieldset's fields are hidden under its name right now."""
+        self._check()
+        # Before Django 5.1 the admin's script marks a collapsed fieldset with a class;
+        # later versions draw a collapsible one as a `details` that is not open.
+        return self._element.evaluate(
+            "f => f.classList.contains('collapsed')"
+            " || f.querySelector(':scope > details:not([open])') !== null"
+        )
+
+    def open(self) -> None:
+        """Open the fieldset through its toggle, as the user does. Nothing happens when
+        it is open already; a fieldset that is not collapsible raises ``LookupError``."""
+        self._set_collapsed(False, "opened")
+
+    def close(self) -> None:
+        """Collapse the fieldset through its toggle, as the user does. Nothing happens
+        when it is collapsed already; a fieldset that is not collapsible raises
+        ``LookupError``."""
+        self._set_collapsed(True, "closed")
+
+    def _set_collapsed(self, collapsed: bool, done: str) -> None:
+        if not self.collapsible:
+            name = self.name
+            fieldset = "A fieldset without a name" if name is None else f"The fieldset {name!r}"
+            raise LookupError(f"{fieldset} cannot be {done}: the page offers no toggle for it.")
+        if self.collapsed != collapsed:
+            self._toggle.click()
+
+    @property
+    def _toggle(self) -> Locator:
+        # The "Show" and "Hide" link the admin's script adds before Django 5.1, or the
+        # summary of the `details` later versions draw.
+        return self._element.locator(":scope > h2 > a.collapse-toggle, :scope > details > summary")
 
 
 def _field_names(element: Locator) -> list[str]:

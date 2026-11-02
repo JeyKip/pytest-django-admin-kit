@@ -79,6 +79,10 @@ FIELDSET_READERS = {
     "name": lambda fieldset: fieldset.name,
     "description": lambda fieldset: fieldset.description,
     "fields": lambda fieldset: fieldset.fields,
+    "collapsible": lambda fieldset: fieldset.collapsible,
+    "collapsed": lambda fieldset: fieldset.collapsed,
+    "open": lambda fieldset: fieldset.open(),
+    "close": lambda fieldset: fieldset.close(),
 }
 
 

@@ -1355,6 +1355,29 @@ schedule.fields["refresh_time"].fill("06:00:00")    # done
 A form whose admin sets no `fieldsets` has one fieldset, without a name, that holds every
 field. The fieldsets of inlines are not part of it. (done)
 
+A fieldset the admin lets the user collapse is `collapsible`, and `collapsed` says whether its
+fields are hidden under its name right now. Both follow the page: the admin draws a fieldset
+that shows errors open and without its toggle, so on that page it is neither. (done)
+
+```python
+assert schedule.collapsible    # done
+assert schedule.collapsed      # done
+```
+
+The fields of a collapsed fieldset are read as any other field is. Filling one opens the
+fieldset first, through its toggle, as the user has to, so the fieldset is open afterward. A
+test that checks the toggle itself opens and closes the fieldset with `open()` and `close()`.
+Each does nothing when the fieldset is already that way, and both raise `LookupError` on a
+fieldset that is not collapsible. (done)
+
+```python
+schedule.fields["refresh_time"].fill("06:00:00")    # done
+assert not schedule.collapsed                       # done
+
+schedule.close()                                    # done
+assert schedule.collapsed                           # done
+```
+
 ---
 
 # 14. Form Population (done)
@@ -3045,7 +3068,7 @@ Field details:
 * named field groups: the fieldsets of a form, in order, each with its name, `None` for a
   group without one, its description, and the names of its fields (done);
 * collapsed field groups: whether a group is collapsed, and reading and filling its fields
-  without opening it first;
+  without opening it first (done);
 * read-only and editable fields: `page.readonly_fields`, the names of the fields the user may
   only read, and `page.editable_fields`, the names of the fields with a control to fill, next to
   the collections of section 12. They follow what the admin renders rather than

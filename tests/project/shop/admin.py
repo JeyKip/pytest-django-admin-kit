@@ -133,12 +133,13 @@ class FeedAdmin(admin.ModelAdmin):
     )
     # Fieldsets with a name and without, with a description and without, holding the
     # fields in the order the admin would show them anyway. A name marked safe keeps its
-    # markup, as a description does.
+    # markup, as a description does. The schedule starts collapsed.
     fieldsets = (
         (None, {"fields": ("source", "mode")}),
         (
             "Schedule",
             {
+                "classes": ("collapse",),
                 "description": "When the feed last ran, and the time it runs <em>each day</em>.",
                 "fields": ("refreshed_at", "refresh_time"),
             },
