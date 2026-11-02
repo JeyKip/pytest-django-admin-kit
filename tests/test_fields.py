@@ -121,7 +121,7 @@ def test_an_unknown_field_is_reported_with_the_ones_there(admin_ui, superuser):
     with pytest.raises(KeyError) as failure:
         page.fields["color"]
     assert failure.value.args[0] == (
-        "The form has no field named 'color'. Fields: 'name', 'sku', 'price', 'quantity', "
+        "No field named 'color' here. Fields: 'name', 'sku', 'price', 'quantity', "
         "'is_active', 'featured', 'released_on', 'category', 'price_with_tax'."
     )
 

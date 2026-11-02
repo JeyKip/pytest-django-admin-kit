@@ -6,6 +6,7 @@ from django.core.validators import RegexValidator
 from django.http import HttpResponseRedirect
 from django.urls import reverse
 from django.utils.html import format_html
+from django.utils.safestring import mark_safe
 
 from .models import Category, Feed, Product
 from .widgets import SwatchPicker
@@ -129,6 +130,21 @@ class FeedAdmin(admin.ModelAdmin):
         "refresh_time",
         "refreshed",
         "last_refreshed",
+    )
+    # Fieldsets with a name and without, with a description and without, holding the
+    # fields in the order the admin would show them anyway. A name marked safe keeps its
+    # markup, as a description does. The schedule starts collapsed.
+    fieldsets = (
+        (None, {"fields": ("source", "mode")}),
+        (
+            "Schedule",
+            {
+                "classes": ("collapse",),
+                "description": "When the feed last ran, and the time it runs <em>each day</em>.",
+                "fields": ("refreshed_at", "refresh_time"),
+            },
+        ),
+        (mark_safe("Appearance <em>on the page</em>"), {"fields": ("color",)}),
     )
 
     # The color is picked with a widget of the project's own, which the package does not

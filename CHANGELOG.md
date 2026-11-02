@@ -22,11 +22,24 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - Get the fields the user may only read and the ones with a control to fill with
   `page.readonly_fields` and `page.editable_fields`. They follow what the page shows, so a user
   who may only view gets every field as read-only.
+- List the fieldsets of a form with `page.fieldsets`. Each one has its `name` and its
+  `description`, `None` when it has none, and its `fields`, read and filled like `page.fields`.
+- Tell whether a fieldset can be collapsed and whether it is collapsed now with
+  `fieldset.collapsible` and `fieldset.collapsed`, and open or collapse it with
+  `fieldset.open()` and `fieldset.close()`.
+
+### Changed
+
+- Asking `page.fields` for a field the form doesn't have now says
+  `No field named 'color' here.`, rather than `The form has no field named 'color'.`, so the
+  same message fits a fieldset's fields. It still lists the fields there are.
 
 ### Fixed
 
 - `admin_ui.login(user, password="")` no longer waits 30 seconds and fails. The browser does not
   send a form with an empty input, so the result is no success, at once.
+- Filling a field of a collapsed fieldset, with `field.fill()` or `page.populate()`, no longer
+  waits for the timeout and fails. The fieldset is opened first, as the user has to.
 
 ## [1.0.0] - 2026-10-13
 
