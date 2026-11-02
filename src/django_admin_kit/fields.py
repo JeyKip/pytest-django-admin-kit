@@ -384,9 +384,11 @@ class Fieldset:
         self._check()
         # Before Django 5.1 the admin's script marks a collapsed fieldset with a class;
         # later versions draw a collapsible one as a `details` that is not open.
-        return self._element.evaluate(
-            "f => f.classList.contains('collapsed')"
-            " || f.querySelector(':scope > details:not([open])') !== null"
+        return bool(
+            self._element.evaluate(
+                "f => f.classList.contains('collapsed')"
+                " || f.querySelector(':scope > details:not([open])') !== null"
+            )
         )
 
     def open(self) -> None:
