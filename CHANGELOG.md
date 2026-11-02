@@ -22,6 +22,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - Get the fields the user may only read and the ones with a control to fill with
   `page.readonly_fields` and `page.editable_fields`. They follow what the page shows, so a user
   who may only view gets every field as read-only.
+- List the fieldsets of a form with `page.fieldsets`. Each one has its `name` and its
+  `description`, `None` when it has none, and its `fields`, read and filled like `page.fields`.
+
+### Changed
+
+- Asking `page.fields` for a field the form doesn't have now says
+  `No field named 'color' here.`, rather than `The form has no field named 'color'.`, so the
+  same message fits a fieldset's fields. It still lists the fields there are.
 
 ### Fixed
 

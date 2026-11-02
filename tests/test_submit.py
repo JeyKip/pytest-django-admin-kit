@@ -42,6 +42,7 @@ PAGE_READERS = {
     "title": lambda page: page.title,
     "subtitle": lambda page: page.subtitle,
     "fields": lambda page: page.fields,
+    "fieldsets": lambda page: page.fieldsets,
     "required_fields": lambda page: page.required_fields,
     "optional_fields": lambda page: page.optional_fields,
     "readonly_fields": lambda page: page.readonly_fields,
@@ -71,6 +72,13 @@ FIELD_READERS = {
     "choices": lambda field: field.choices,
     "errors": lambda field: field.errors,
     "fill": lambda field: field.fill("Gadget"),
+}
+
+# Every way of reading a fieldset, by what it reads.
+FIELDSET_READERS = {
+    "name": lambda fieldset: fieldset.name,
+    "description": lambda fieldset: fieldset.description,
+    "fields": lambda fieldset: fieldset.fields,
 }
 
 
@@ -355,6 +363,19 @@ def test_a_field_of_a_page_the_browser_left_fails_at_once_when_read(
 
     with pytest.raises(LookupError) as failure:
         read(field)
+
+    assert str(failure.value) == left_for(admin_ui.url.list(Product))
+
+
+@pytest.mark.parametrize("read", FIELDSET_READERS.values(), ids=FIELDSET_READERS.keys())
+def test_a_fieldset_of_a_page_the_browser_left_fails_at_once_when_read(
+    admin_ui, left_for, filled, read
+):
+    fieldset = filled.fieldsets[0]
+    filled.save()
+
+    with pytest.raises(LookupError) as failure:
+        read(fieldset)
 
     assert str(failure.value) == left_for(admin_ui.url.list(Product))
 

@@ -1299,7 +1299,7 @@ assert list(page.fields) == [    # done
 ]
 ```
 
-Named field groups are deferred; see section 33.
+Section 13.7 reads the fieldsets the fields are drawn in. (done)
 
 ---
 
@@ -1321,6 +1321,39 @@ so a user who may only view reads the same help as one who may edit. (done)
 The links a help text may hold are reached through `field.native`. The note the admin's
 date-time script adds when the browser and the server disagree on the time zone is not part of
 the help text. (done)
+
+---
+
+## 13.7 Fieldsets (done)
+
+`page.fieldsets` lists the fieldsets the admin draws the form's fields in, in order. Each one has
+its name, its description and its fields:
+
+```python
+page = admin_ui.create(Feed)
+
+assert [fieldset.name for fieldset in page.fieldsets] == [None, "Schedule", "Appearance"]    # done
+
+schedule = page.fieldsets[1]
+assert schedule.description == "When the feed last ran, and the time it runs each day."     # done
+assert list(schedule.fields) == ["refreshed_at", "refresh_time"]                            # done
+```
+
+A fieldset without a name has `None` as its name, and one without a description has `None` as
+its description, as Django has them. The description is read as the user reads it, without its
+markup. (done)
+
+`fieldset.fields` is a mapping like `page.fields`: the fieldset's own fields by name, in order,
+leaving out the hidden ones. A field is read and filled through it as through `page.fields`,
+and a name the fieldset does not have raises `KeyError` listing the fields it has. Together the
+fieldsets hold every field of `page.fields`, in the same order. (done)
+
+```python
+schedule.fields["refresh_time"].fill("06:00:00")    # done
+```
+
+A form whose admin sets no `fieldsets` has one fieldset, without a name, that holds every
+field. The fieldsets of inlines are not part of it. (done)
 
 ---
 
@@ -2203,6 +2236,7 @@ AdminSession
 ├── EditPage
 ├── DeletePage           (the confirmation the admin asks for before deleting)
 │
+├── Fieldset
 ├── FormField
 │   └── FieldChoice
 ├── actions              (a set of action names, section 16.1)
@@ -3009,7 +3043,7 @@ Field details:
 * a field's help text, as the admin shows it with the control: `field.help_text`, `""` for a
   field without one (done);
 * named field groups: the fieldsets of a form, in order, each with its name, `None` for a
-  group without one, its description, and the names of its fields;
+  group without one, its description, and the names of its fields (done);
 * collapsed field groups: whether a group is collapsed, and reading and filling its fields
   without opening it first;
 * read-only and editable fields: `page.readonly_fields`, the names of the fields the user may

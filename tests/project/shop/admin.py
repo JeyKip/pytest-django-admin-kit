@@ -130,6 +130,19 @@ class FeedAdmin(admin.ModelAdmin):
         "refreshed",
         "last_refreshed",
     )
+    # Fieldsets with a name and without, with a description and without, holding the
+    # fields in the order the admin would show them anyway.
+    fieldsets = (
+        (None, {"fields": ("source", "mode")}),
+        (
+            "Schedule",
+            {
+                "description": "When the feed last ran, and the time it runs <em>each day</em>.",
+                "fields": ("refreshed_at", "refresh_time"),
+            },
+        ),
+        ("Appearance", {"fields": ("color",)}),
+    )
 
     # The color is picked with a widget of the project's own, which the package does not
     # know.

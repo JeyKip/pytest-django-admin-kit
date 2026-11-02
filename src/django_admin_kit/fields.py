@@ -253,7 +253,8 @@ class FormField:
 
 
 class Fields(Dict[str, FormField]):
-    """The fields of a form by name, in the order the admin presents them.
+    """The fields of a form or of one of its fieldsets, by name, in the order the admin
+    presents them.
 
     A plain dict, so membership, ``set()`` and ``list()`` are what they always are;
     only a miss says more than a bare ``KeyError`` would.
@@ -261,6 +262,96 @@ class Fields(Dict[str, FormField]):
 
     def __missing__(self, key: str) -> FormField:
         raise KeyError(
-            f"The form has no field named {key!r}. Fields: "
-            f"{', '.join(repr(name) for name in self)}."
+            f"No field named {key!r} here. Fields: {', '.join(repr(name) for name in self)}."
         )
+
+
+class Fieldset:
+    """One fieldset of an admin form: the box the admin draws a few of its fields in,
+    under a name of its own or none.
+
+    The fieldset is the one at its position on the page, read each time it is used.
+    ``check`` is run before every read. The other arguments are what each of its fields
+    is built with, as ``FormField`` describes them.
+    """
+
+    def __init__(
+        self,
+        element: Locator,
+        *,
+        language: str,
+        check: Callable[[], None],
+        normalizers: Normalizers,
+        model_admin: ModelAdmin,
+        widgets: Widgets,
+    ) -> None:
+        self._element = element
+        self._language = language
+        self._check = check
+        self._normalizers = normalizers
+        self._model_admin = model_admin
+        self._widgets = widgets
+
+    @property
+    def native(self) -> Locator:
+        """The ``fieldset`` element, unwrapped, for anything the package does not model."""
+        return self._element
+
+    @property
+    def name(self) -> str | None:
+        """The name the admin shows over the fieldset, or ``None`` for a fieldset without
+        one, as Django has it."""
+        self._check()
+        heading = self._element.locator(":scope > h2, :scope > details > summary > h2")
+        if heading.count() == 0:
+            return None
+        # Before Django 5.1 the admin's script adds a "(Show)" link after the name of
+        # a fieldset that collapses, so only the heading's first text is the name.
+        text = heading.first.evaluate("h => h.firstChild ? h.firstChild.textContent : ''")
+        return " ".join(text.split())
+
+    @property
+    def description(self) -> str | None:
+        """The description the admin shows under the name, as the user reads it, without
+        its markup, or ``None`` for a fieldset without one, as Django has it."""
+        self._check()
+        descriptions = self._element.locator(
+            ":scope > div.description, :scope > details > div.description"
+        ).all()
+        return text_of(descriptions[0]) if descriptions else None
+
+    @property
+    def fields(self) -> Fields:
+        """The fieldset's fields, by name, in the order the admin presents them.
+
+        A field the admin renders hidden is not shown to the user, so it is not here
+        either, as in ``page.fields``.
+        """
+        self._check()
+        # Each line of a fieldset is a `form-row` carrying a `field-<name>` class per
+        # field on it: a line with one field is that field's box, a line with several
+        # holds a `fieldBox` per field.
+        fields = Fields()
+        for row in self._element.locator(".form-row").all():
+            boxes = [row] if len(_field_names(row)) == 1 else row.locator(".fieldBox").all()
+            for box in boxes:
+                if "hidden" in (box.get_attribute("class") or "").split():
+                    continue
+                for name in _field_names(box):
+                    fields[name] = FormField(
+                        box,
+                        name,
+                        language=self._language,
+                        check=self._check,
+                        normalizers=self._normalizers,
+                        model_admin=self._model_admin,
+                        widgets=self._widgets,
+                    )
+        return fields
+
+
+def _field_names(element: Locator) -> list[str]:
+    # A field's box carries one `field-<name>` class; a line with several fields
+    # carries all of theirs. For example, class="form-row field-sku field-price".
+    classes = (element.get_attribute("class") or "").split()
+    return [c[len("field-") :] for c in classes if c.startswith("field-")]

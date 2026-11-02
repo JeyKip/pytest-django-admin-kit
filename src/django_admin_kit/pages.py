@@ -25,7 +25,7 @@ from playwright.sync_api import Locator, Page, Response
 
 from . import matching
 from .errors import ValidationErrors
-from .fields import Fields, FormField
+from .fields import Fields, Fieldset, FormField
 from .messages import Messages
 from .normalize import integer
 from .rendered import text_of
@@ -518,33 +518,35 @@ class FormPage(ModelPage):
         A field the admin renders hidden is not shown to the user, so it is not here
         either; the browser posts it with the form all the same.
         """
+        fields = Fields()
+        for fieldset in self.fieldsets:
+            fields.update(fieldset.fields)
+        return fields
+
+    @property
+    def fieldsets(self) -> list[Fieldset]:
+        """The fieldsets the form draws its fields in, in order.
+
+        A form whose admin sets no ``fieldsets`` has one, without a name.
+        """
         # The form's own fieldsets are direct children of the form's one div, which
-        # leaves out the inline formsets next to them. Each line of a fieldset is a
-        # `form-row` carrying a `field-<name>` class per field on it: a line with one
-        # field is that field's box, a line with several holds a `fieldBox` per field.
+        # leaves out the inline formsets next to them.
         page = self._shown()
         # The admin says which language it rendered the page in, and the fields need
         # it to know what the form put after each label.
         language = page.locator("html").get_attribute("lang") or ""
         admin = model_admin(self._tools.urls.site, self._model)
-        fields = Fields()
-        for row in page.locator("form > div > fieldset.module .form-row").all():
-            boxes = [row] if len(_field_names(row)) == 1 else row.locator(".fieldBox").all()
-            for box in boxes:
-                classes = (box.get_attribute("class") or "").split()
-                if "hidden" in classes:
-                    continue
-                for name in _field_names(box):
-                    fields[name] = FormField(
-                        box,
-                        name,
-                        language=language,
-                        check=self._check,
-                        normalizers=self._tools.normalizers,
-                        model_admin=admin,
-                        widgets=self._tools.widgets,
-                    )
-        return fields
+        return [
+            Fieldset(
+                element,
+                language=language,
+                check=self._check,
+                normalizers=self._tools.normalizers,
+                model_admin=admin,
+                widgets=self._tools.widgets,
+            )
+            for element in page.locator("form > div > fieldset.module").all()
+        ]
 
     @property
     def required_fields(self) -> set[str]:
@@ -926,10 +928,3 @@ def _own_text(item: Locator) -> str:
 def _token(element: Locator, prefix: str) -> str:
     classes = (element.get_attribute("class") or "").split()
     return next(c[len(prefix) :] for c in classes if c.startswith(prefix))
-
-
-def _field_names(element: Locator) -> list[str]:
-    # A field's box carries one `field-<name>` class; a line with several fields
-    # carries all of theirs. For example, class="form-row field-sku field-price".
-    classes = (element.get_attribute("class") or "").split()
-    return [c[len("field-") :] for c in classes if c.startswith("field-")]
