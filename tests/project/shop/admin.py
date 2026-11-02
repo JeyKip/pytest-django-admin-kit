@@ -6,6 +6,7 @@ from django.core.validators import RegexValidator
 from django.http import HttpResponseRedirect
 from django.urls import reverse
 from django.utils.html import format_html
+from django.utils.safestring import mark_safe
 
 from .models import Category, Feed, Product
 from .widgets import SwatchPicker
@@ -131,7 +132,8 @@ class FeedAdmin(admin.ModelAdmin):
         "last_refreshed",
     )
     # Fieldsets with a name and without, with a description and without, holding the
-    # fields in the order the admin would show them anyway.
+    # fields in the order the admin would show them anyway. A name marked safe keeps its
+    # markup, as a description does.
     fieldsets = (
         (None, {"fields": ("source", "mode")}),
         (
@@ -141,7 +143,7 @@ class FeedAdmin(admin.ModelAdmin):
                 "fields": ("refreshed_at", "refresh_time"),
             },
         ),
-        ("Appearance", {"fields": ("color",)}),
+        (mark_safe("Appearance <em>on the page</em>"), {"fields": ("color",)}),
     )
 
     # The color is picked with a widget of the project's own, which the package does not

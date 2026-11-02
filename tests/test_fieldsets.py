@@ -4,6 +4,10 @@ import pytest
 
 from project.shop.models import Feed, Product
 
+# The name of the feed's last fieldset, as the user reads it. The admin gives it markup,
+# which the user doesn't see.
+APPEARANCE = "Appearance on the page"
+
 # The description of the feed's "Schedule" fieldset, as the user reads it. The admin
 # gives it markup, which the user doesn't see.
 SCHEDULE_DESCRIPTION = "When the feed last ran, and the time it runs each day."
@@ -28,7 +32,15 @@ def test_the_fieldsets_are_listed_in_the_admin_order_with_their_names(admin_ui, 
 
     page = admin_ui.create(Feed)
 
-    assert [fieldset.name for fieldset in page.fieldsets] == [None, "Schedule", "Appearance"]
+    assert [fieldset.name for fieldset in page.fieldsets] == [None, "Schedule", APPEARANCE]
+
+
+def test_a_name_is_read_without_its_markup(admin_ui, superuser):
+    admin_ui.login(superuser)
+
+    page = admin_ui.create(Feed)
+
+    assert page.fieldsets[2].name == APPEARANCE
 
 
 def test_each_fieldset_holds_its_fields_in_order(admin_ui, superuser):

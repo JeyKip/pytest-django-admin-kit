@@ -1340,8 +1340,8 @@ assert list(schedule.fields) == ["refreshed_at", "refresh_time"]                
 ```
 
 A fieldset without a name has `None` as its name, and one without a description has `None` as
-its description, as Django has them. The description is read as the user reads it, without its
-markup. (done)
+its description, as Django has them. The name and the description are read as the user reads
+them, without their markup. (done)
 
 `fieldset.fields` is a mapping like `page.fields`: the fieldset's own fields by name, in order,
 leaving out the hidden ones. A field is read and filled through it as through `page.fields`,

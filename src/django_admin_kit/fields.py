@@ -299,15 +299,24 @@ class Fieldset:
 
     @property
     def name(self) -> str | None:
-        """The name the admin shows over the fieldset, or ``None`` for a fieldset without
-        one, as Django has it."""
+        """The name the admin shows over the fieldset, as the user reads it, without its
+        markup, or ``None`` for a fieldset without one, as Django has it."""
         self._check()
         heading = self._element.locator(":scope > h2, :scope > details > summary > h2")
         if heading.count() == 0:
             return None
-        # Before Django 5.1 the admin's script adds a "(Show)" link after the name of
-        # a fieldset that collapses, so only the heading's first text is the name.
-        text = heading.first.evaluate("h => h.firstChild ? h.firstChild.textContent : ''")
+        # Before Django 5.1 the admin's script appends " (", a "Show" link and ")" to
+        # the name of a fieldset that collapses, so those three are left out.
+        text = heading.first.evaluate(
+            """h => {
+                const toggle = h.querySelector(":scope > a.collapse-toggle");
+                const added = toggle ? [toggle.previousSibling, toggle, toggle.nextSibling] : [];
+                return Array.from(h.childNodes)
+                    .filter(node => !added.includes(node))
+                    .map(node => node.textContent)
+                    .join("");
+            }"""
+        )
         return " ".join(text.split())
 
     @property
