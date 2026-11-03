@@ -27,6 +27,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - Tell whether a fieldset can be collapsed and whether it is collapsed now with
   `fieldset.collapsible` and `fieldset.collapsed`, and open or collapse it with
   `fieldset.open()` and `fieldset.close()`.
+- Read and fill the admin's split date-time through the built-in `SplitDateTimeWidget`. It reads
+  as the date and the time as typed, such as `("2026-01-15", "09:30:00")`, and is filled from a
+  `datetime`, a `(date, time)` pair or `None`.
 
 ### Changed
 

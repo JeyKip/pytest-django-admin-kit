@@ -1217,6 +1217,18 @@ assert page.fields["enabled"].value is True     # done
 assert page.fields["quantity"].value == "1"     # done
 ```
 
+A split date-time, which the admin draws as a date input and a time input, reads as the two
+texts they hold, and is filled from a `datetime`, from a `(date, time)` pair, each half a date
+or time, text or `None`, or from `None`, which empties both. Dates and times are typed in ISO
+format, and an aware `datetime` in the current time zone:
+
+```python
+page.fields["published_at"].fill(datetime.datetime(2026, 1, 15, 9, 30))    # done
+assert page.fields["published_at"].value == ("2026-01-15", "09:30:00")     # done
+
+page.fields["published_at"].fill(("2026-11-03", "11:25:48"))               # done
+```
+
 ---
 
 ## 13.3 Choices (done)
@@ -2777,9 +2789,9 @@ whatever value suits it, and the package passes it on untouched. It never uses `
 which runs for every field the package reads or fills, does not read the page.
 
 The package's own controls are widget classes of the same kind, public so that a project may
-build on one: `CheckboxWidget`, `SelectWidget` and `TextWidget`, the last reading and filling any
-single control that carries the field's name as text. They are importable from
-`django_admin_kit.widgets`.
+build on one: `CheckboxWidget`, `SelectWidget`, `SplitDateTimeWidget` and `TextWidget`, tried in
+that order, the last reading and filling any single control that carries the field's name as
+text. They are importable from `django_admin_kit.widgets`.
 
 A widget of several components is one field and one widget class. The admin renders a whole
 widget inside its field's box, and fields are found by their box, never by their inputs, so a
@@ -3076,11 +3088,12 @@ Field details:
   Every field is in exactly one of them, and the editable fields are the required and the
   optional ones together (done).
 
-Compound controls:
+Compound controls, form controls that render several inputs under one name, with their value
+and choices:
 
-* form controls that render several inputs under one name, with their value and choices:
-  split date-times, which the admin draws for every editable date-time field, radio buttons
-  (`radio_fields`) and multiple selects.
+* split date-times, which the admin draws for every editable date-time field (done);
+* radio buttons (`radio_fields`);
+* multiple selects.
 
 Login page:
 

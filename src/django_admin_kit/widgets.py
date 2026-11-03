@@ -7,9 +7,11 @@ class: ``read`` and ``fill`` get the whole field and find their own elements in 
 
 from __future__ import annotations
 
+import datetime
 from typing import TYPE_CHECKING, Any, Iterable, Protocol
 
 from django.db.models import Model
+from django.utils import timezone
 from playwright.sync_api import Locator
 
 from .fields import FieldChoice
@@ -88,6 +90,48 @@ class SelectWidget:
         return field.native.locator(f'select[name="{field.name}"]')
 
 
+class SplitDateTimeWidget:
+    """The admin's date and time inputs of one date-time, read as the pair of texts they
+    hold and filled from a ``datetime``, a ``(date, time)`` pair or ``None``."""
+
+    def marker(self, field: FormField) -> str:
+        # The admin draws the two inputs in a `p.datetime`, which a project's own widget
+        # of two inputs doesn't.
+        return f'p.datetime input[name="{field.name}_0"]'
+
+    def read(self, field: FormField) -> tuple[str, str]:
+        return self._input(field, 0).input_value(), self._input(field, 1).input_value()
+
+    def fill(self, field: FormField, value: Any) -> None:
+        date, time = self._texts(field, value)
+        self._input(field, 0).fill(date)
+        self._input(field, 1).fill(time)
+
+    def _texts(self, field: FormField, value: Any) -> tuple[str, str]:
+        """The date and the time to type for ``value``. Dates and times are typed in ISO
+        format, which the admin accepts in any locale."""
+        if value is None:
+            return "", ""
+        if isinstance(value, datetime.datetime):
+            # The admin reads what is typed in the current time zone.
+            if timezone.is_aware(value):
+                value = timezone.localtime(value)
+            return value.date().isoformat(), value.time().isoformat()
+        if isinstance(value, (tuple, list)) and len(value) == 2:
+            date, time = value
+            # A datetime is also a date, but not one the date input takes.
+            date_fits = _can_fill(date, datetime.date) and not isinstance(date, datetime.datetime)
+            if date_fits and _can_fill(time, datetime.time):
+                return _part_text(date), _part_text(time)
+        raise TypeError(
+            f"The field {field.name!r} takes a datetime, a (date, time) pair or None, "
+            f"not {value!r}. Each half of the pair is a date or time, text, or None."
+        )
+
+    def _input(self, field: FormField, index: int) -> Locator:
+        return field.native.locator(f'input[name="{field.name}_{index}"]')
+
+
 class TextWidget:
     """Whatever one control carries the field's name, read and filled as text."""
 
@@ -119,6 +163,7 @@ class Widgets:
             *custom,
             CheckboxWidget(),
             SelectWidget(),
+            SplitDateTimeWidget(),
             TextWidget(),
         )
 
@@ -170,3 +215,17 @@ def _option_spellings(value: Any) -> list[str]:
     if value is None:
         return ["", "unknown"]
     return [str(value)]
+
+
+def _can_fill(value: Any, kind: type) -> bool:
+    """Whether ``value`` can fill the input for a ``kind``: it's a ``kind``, text or ``None``."""
+    return value is None or isinstance(value, (kind, str))
+
+
+def _part_text(value: datetime.date | datetime.time | str | None) -> str:
+    """What to type for one half of a date-time pair."""
+    if value is None:
+        return ""
+    if isinstance(value, str):
+        return value
+    return value.isoformat()

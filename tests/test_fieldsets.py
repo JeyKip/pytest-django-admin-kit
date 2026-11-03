@@ -5,7 +5,7 @@ import datetime
 
 import pytest
 
-from project.shop.models import Feed, Product
+from project.shop.models import Category, Feed, Product
 
 # The name of the feed's last fieldset, as the user reads it. The admin gives it markup,
 # which the user doesn't see.
@@ -255,11 +255,12 @@ def test_a_fieldset_with_an_error_is_shown_open_without_a_toggle(admin_ui, super
 
 
 def test_a_field_no_widget_class_can_fill_leaves_its_fieldset_collapsed(admin_ui, superuser):
-    """The admin draws a date-time as two inputs, which no built-in widget class fills."""
+    """The category's shelf is two inputs drawn by a widget of the project's own, which no
+    built-in widget class fills."""
     admin_ui.login(superuser)
-    schedule = admin_ui.create(Feed).fieldsets[1]
+    placement = admin_ui.create(Category).fieldsets[1]
 
     with pytest.raises(LookupError):
-        schedule.fields["refreshed_at"].fill(datetime.datetime(2026, 1, 15, 9, 30))
+        placement.fields["shelf"].fill(["3", "B"])
 
-    assert schedule.collapsed
+    assert placement.collapsed

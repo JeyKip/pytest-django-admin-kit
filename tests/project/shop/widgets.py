@@ -14,3 +14,14 @@ class SwatchPicker(forms.Widget):
         context = super().get_context(name, value, attrs)
         context["widget"]["colors"] = self.colors
         return context
+
+
+class Shelf(forms.MultiWidget):
+    """Two text inputs for one value, the aisle and the shelf, drawn without the admin's
+    markup for a date-time."""
+
+    def __init__(self, attrs=None):
+        super().__init__([forms.TextInput, forms.TextInput], attrs)
+
+    def decompress(self, value):
+        return value or [None, None]

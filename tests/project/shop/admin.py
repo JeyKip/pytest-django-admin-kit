@@ -9,7 +9,7 @@ from django.utils.html import format_html
 from django.utils.safestring import mark_safe
 
 from .models import Category, Feed, Product
-from .widgets import SwatchPicker
+from .widgets import Shelf, SwatchPicker
 
 # A message level between Django's warning (30) and error (40), with no tag of its own.
 REFRESHED = 35
@@ -199,8 +199,26 @@ class FeedAdmin(admin.ModelAdmin):
         return super().response_change(request, obj)
 
 
+class CategoryForm(forms.ModelForm):
+    # A form-only field drawn as two inputs by a widget of the project's own, so the suite
+    # has a control no built-in widget class recognizes. Not required, so saving a
+    # category is unchanged.
+    shelf = forms.CharField(widget=Shelf, required=False)
+
+    class Meta:
+        model = Category
+        fields = "__all__"
+
+
 # A changelist whose rows link to nothing, so the suite has one without a change link.
 @admin.register(Category)
 class CategoryAdmin(admin.ModelAdmin):
+    form = CategoryForm
     list_display = ("name",)
     list_display_links = None
+    # The shelf in a collapsed fieldset, so a fill that fails can be seen to leave it
+    # collapsed.
+    fieldsets = (
+        (None, {"fields": ("name",)}),
+        ("Placement", {"classes": ("collapse",), "fields": ("shelf",)}),
+    )

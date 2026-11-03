@@ -27,9 +27,10 @@ class BareSelectWidget(SelectWidget):
         return super().read(field).value
 
 
-class SplitDateTimeWidget:
+class DateTimePairWidget:
     """The admin's date and time inputs of one date-time: filled from a datetime and read
-    as the pair of texts they hold."""
+    as the pair of texts they hold. Listed in front of the package's own class for them,
+    so it is the one used."""
 
     def marker(self, field):
         return "p.datetime"
@@ -58,7 +59,7 @@ class NoMarker:
 def admin_ui_widgets():
     """The swatch picker's widget class and one for the admin's split date-time in front
     of the package's, the way a project overrides the fixture for some of its tests."""
-    return Widgets([SwatchPickerWidget(), SplitDateTimeWidget()])
+    return Widgets([SwatchPickerWidget(), DateTimePairWidget()])
 
 
 @pytest.fixture
@@ -193,7 +194,6 @@ def test_a_widget_of_several_inputs_is_filled_from_one_value(admin_ui, superuser
 
 
 def test_populate_fills_every_field_of_a_model_instance(admin_ui, superuser, unsaved_feed):
-    """The split date-time stopped this call before a widget class could fill it."""
     admin_ui.login(superuser)
 
     page = admin_ui.create(Feed)
