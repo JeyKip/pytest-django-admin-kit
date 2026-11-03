@@ -59,7 +59,7 @@ class SelectWidget:
         return FieldChoice(option.get_attribute("value") or "", text_of(option))
 
     def fill(self, field: FormField, value: Any) -> None:
-        option = self._option(field, value)
+        option = _option_for(field, self.choices(field), value)
         # An option is asked for by its value, except the blank one, whose value is the
         # empty string: the browser layer reads that as "select nothing" on the versions
         # that still run on Python 3.8, so it is asked for by its label.
@@ -75,19 +75,40 @@ class SelectWidget:
             for option in self._control(field).locator("option").all()
         ]
 
-    def _option(self, field: FormField, value: Any) -> FieldChoice:
-        """The option that stands for ``value``, among the ones the select offers."""
-        offered = {choice.value: choice for choice in self.choices(field)}
-        for spelling in _option_spellings(value):
-            if spelling in offered:
-                return offered[spelling]
-        raise ValueError(
-            f"The field {field.name!r} offers no option for {value!r}. Options: "
-            f"{', '.join(repr(option) for option in offered) or 'none'}."
-        )
-
     def _control(self, field: FormField) -> Locator:
         return field.native.locator(f'select[name="{field.name}"]')
+
+
+class RadioWidget:
+    """Radio buttons, read as the ``FieldChoice`` checked and filled by checking the
+    option that stands for a value, spelled as for a select."""
+
+    def marker(self, field: FormField) -> str:
+        return f'input[type="radio"][name="{field.name}"]'
+
+    def read(self, field: FormField) -> FieldChoice | None:
+        # The browser checks none until a value is given, unlike a select.
+        checked = field.native.locator(f'input[type="radio"][name="{field.name}"]:checked')
+        return self._choice(checked) if checked.count() else None
+
+    def fill(self, field: FormField, value: Any) -> None:
+        option = _option_for(field, self.choices(field), value)
+        for radio in self._inputs(field).all():
+            if (radio.get_attribute("value") or "") == option.value:
+                radio.check()
+                return
+
+    def choices(self, field: FormField) -> list[FieldChoice]:
+        """The options the radio buttons offer, in order, the blank one included."""
+        return [self._choice(radio) for radio in self._inputs(field).all()]
+
+    def _choice(self, radio: Locator) -> FieldChoice:
+        # Each input sits inside the label that names its option.
+        label = radio.locator("xpath=ancestor::label[1]")
+        return FieldChoice(radio.get_attribute("value") or "", text_of(label))
+
+    def _inputs(self, field: FormField) -> Locator:
+        return field.native.locator(f'input[type="radio"][name="{field.name}"]')
 
 
 class SplitDateTimeWidget:
@@ -162,6 +183,7 @@ class Widgets:
         self._widgets: tuple[Widget, ...] = (
             *custom,
             CheckboxWidget(),
+            RadioWidget(),
             SelectWidget(),
             SplitDateTimeWidget(),
             TextWidget(),
@@ -190,6 +212,18 @@ def _marker(widget: Widget, field: FormField) -> str:
             f"not {marker!r}."
         )
     return marker
+
+
+def _option_for(field: FormField, choices: list[FieldChoice], value: Any) -> FieldChoice:
+    """The option among ``choices`` that stands for ``value``."""
+    offered = {choice.value: choice for choice in choices}
+    for spelling in _option_spellings(value):
+        if spelling in offered:
+            return offered[spelling]
+    raise ValueError(
+        f"The field {field.name!r} offers no option for {value!r}. Options: "
+        f"{', '.join(repr(option) for option in offered) or 'none'}."
+    )
 
 
 def _option_spellings(value: Any) -> list[str]:

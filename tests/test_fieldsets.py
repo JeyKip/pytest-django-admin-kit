@@ -52,7 +52,7 @@ def test_each_fieldset_holds_its_fields_in_order(admin_ui, superuser):
     page = admin_ui.create(Feed)
 
     assert [list(fieldset.fields) for fieldset in page.fieldsets] == [
-        ["source", "mode"],
+        ["source", "mode", "section"],
         ["refreshed_at", "refresh_time"],
         ["color"],
     ]
@@ -101,7 +101,9 @@ def test_a_field_the_fieldset_does_not_have_is_reported_with_the_ones_it_has(adm
     with pytest.raises(KeyError) as failure:
         page.fieldsets[0].fields["color"]
 
-    assert failure.value.args[0] == "No field named 'color' here. Fields: 'source', 'mode'."
+    assert failure.value.args[0] == (
+        "No field named 'color' here. Fields: 'source', 'mode', 'section'."
+    )
 
 
 def test_a_form_without_fieldsets_is_one_unnamed_fieldset(admin_ui, superuser):

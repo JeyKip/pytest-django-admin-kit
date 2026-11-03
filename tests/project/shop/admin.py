@@ -135,7 +135,7 @@ class FeedAdmin(admin.ModelAdmin):
     # fields in the order the admin would show them anyway. A name marked safe keeps its
     # markup, as a description does. The schedule starts collapsed.
     fieldsets = (
-        (None, {"fields": ("source", "mode")}),
+        (None, {"fields": ("source", "mode", "section")}),
         (
             "Schedule",
             {
@@ -146,6 +146,7 @@ class FeedAdmin(admin.ModelAdmin):
         ),
         (mark_safe("Appearance <em>on the page</em>"), {"fields": ("color",)}),
     )
+    radio_fields = {"mode": admin.HORIZONTAL, "section": admin.VERTICAL}  # noqa: RUF012
 
     # The color is picked with a widget of the project's own, which the package does not
     # know.

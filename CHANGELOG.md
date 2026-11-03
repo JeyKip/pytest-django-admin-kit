@@ -30,6 +30,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - Read and fill the admin's split date-time through the built-in `SplitDateTimeWidget`. It reads
   as the date and the time as typed, such as `("2026-01-15", "09:30:00")`, and is filled from a
   `datetime`, a `(date, time)` pair or `None`.
+- Read and fill radio buttons, as the admin draws a field named in `radio_fields`, through the
+  built-in `RadioWidget`. They're read, filled and listed as a select is, and read as `None`
+  while none is checked.
 
 ### Changed
 
