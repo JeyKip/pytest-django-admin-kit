@@ -51,6 +51,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
   with a single option. It reads and fills as a list.
 - `page.populate(instance)` no longer fails with `ValueError` on an unsaved model instance with
   a many-to-many field.
+- A `filter_horizontal` or `filter_vertical` field raises `LookupError` at once when read or
+  filled, rather than waiting for the timeout. No built-in widget class takes the two lists the
+  admin's script draws for it, so a project can add its own.
 - `admin_ui.login(user, password="")` no longer waits 30 seconds and fails. The browser does not
   send a form with an empty input, so the result is no success, at once.
 - Filling a field of a collapsed fieldset, with `field.fill()` or `page.populate()`, no longer

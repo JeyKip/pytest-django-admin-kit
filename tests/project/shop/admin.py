@@ -2,6 +2,7 @@ from decimal import Decimal
 
 from django import forms
 from django.contrib import admin, messages
+from django.contrib.admin.widgets import FilteredSelectMultiple
 from django.core.validators import RegexValidator
 from django.http import HttpResponseRedirect
 from django.urls import reverse
@@ -205,6 +206,13 @@ class CategoryForm(forms.ModelForm):
     # has a control no built-in widget class recognizes. Not required, so saving a
     # category is unchanged.
     shelf = forms.CharField(widget=Shelf, required=False)
+    # A form-only field drawn as `filter_horizontal` draws one, which the admin's script
+    # turns into two lists. Not required either.
+    see_also = forms.ModelMultipleChoiceField(
+        Category.objects.all(),
+        required=False,
+        widget=FilteredSelectMultiple("see also", is_stacked=False),
+    )
 
     class Meta:
         model = Category
@@ -220,6 +228,6 @@ class CategoryAdmin(admin.ModelAdmin):
     # The shelf in a collapsed fieldset, so a fill that fails can be seen to leave it
     # collapsed.
     fieldsets = (
-        (None, {"fields": ("name",)}),
+        (None, {"fields": ("name", "see_also")}),
         ("Placement", {"classes": ("collapse",), "fields": ("shelf",)}),
     )

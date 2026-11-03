@@ -2819,8 +2819,14 @@ which runs for every field the package reads or fills, does not read the page.
 
 The package's own controls are widget classes of the same kind, public so that a project may
 build on one: `CheckboxWidget`, `RadioWidget`, `SelectMultipleWidget`, `SelectWidget`,
-`SplitDateTimeWidget` and `TextWidget`, tried in that order, the last reading and filling any single control that carries
-the field's name as text. They are importable from `django_admin_kit.widgets`.
+`SplitDateTimeWidget` and `TextWidget`, tried in that order, the last reading and filling any
+single control that carries the field's name as text. They are importable from
+`django_admin_kit.widgets`.
+
+None of them takes the two lists the admin's script draws for `filter_horizontal` and
+`filter_vertical`. The list that carries the field's name holds the chosen options without
+selecting them, so a select's reading would say nothing is chosen. Reading or filling such a
+field raises `LookupError` until a project lists a class of its own for it.
 
 A widget of several components is one field and one widget class. The admin renders a whole
 widget inside its field's box, and fields are found by their box, never by their inputs, so a

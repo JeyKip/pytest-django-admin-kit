@@ -20,6 +20,13 @@ from .rendered import text_of
 if TYPE_CHECKING:
     from .fields import FormField
 
+# The multiple select the admin draws for `filter_horizontal` and `filter_vertical`: classed
+# `selectfilter` or `selectfilterstacked` as rendered, and `filtered` once its script has
+# turned it into two lists. The list that then carries the field's name holds the chosen
+# options without selecting them, so it reads as nothing chosen. No built-in class takes it,
+# so it fails clearly and a project's own class can.
+_FILTER_WIDGET = ".filtered, .selectfilter, .selectfilterstacked"
+
 
 class Widget(Protocol):
     """What the package asks of a widget class. ``choices(field)`` is optional."""
@@ -52,7 +59,7 @@ class SelectWidget:
     stands for a value."""
 
     def marker(self, field: FormField) -> str:
-        return f'select[name="{field.name}"]'
+        return f'select[name="{field.name}"]:not([multiple])'
 
     def read(self, field: FormField) -> FieldChoice:
         option = self._control(field).locator("option:checked")
@@ -84,7 +91,7 @@ class SelectMultipleWidget:
     with the options for a list of values, each spelled as for a select."""
 
     def marker(self, field: FormField) -> str:
-        return f'select[multiple][name="{field.name}"]'
+        return f'select[multiple][name="{field.name}"]:not({_FILTER_WIDGET})'
 
     def read(self, field: FormField) -> list[FieldChoice]:
         return [self._choice(option) for option in self._options(field, ":checked")]
@@ -196,7 +203,7 @@ class TextWidget:
     """Whatever one control carries the field's name, read and filled as text."""
 
     def marker(self, field: FormField) -> str:
-        return f'[name="{field.name}"]'
+        return f'[name="{field.name}"]:not({_FILTER_WIDGET})'
 
     def read(self, field: FormField) -> str:
         return self._control(field).input_value()
