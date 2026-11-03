@@ -205,7 +205,15 @@ assert page.fields["featured"].value == ("true", "Yes")
 
 A select takes back a choice it offered, `page.fields["category"].fill(choice)`, and `None`
 puts it on its blank option. A value no option has raises `ValueError` naming the options
-there are, and a field the user may only read raises `LookupError`.
+there are, and a field the user may only read raises `LookupError`. Radio buttons, as the admin
+draws a field named in `radio_fields`, are read and filled the same way, and read as `None` while
+none is checked. A multiple select reads as the list of choices made, and is filled with a list
+of values, each written as for a select: `fill([tools, toys])`, and `fill([])` clears it.
+
+A date-time, which the admin draws as a date input and a time input, reads as the two texts,
+`("2026-01-15", "09:30:00")`. It's filled from a `datetime`, typed in the current time zone, from
+a `(date, time)` pair whose halves may also be text or `None`, or from `None`, which empties
+both.
 
 **Filling a whole form in one call.** A dictionary carries the shared data and keywords carry
 the values this one test is about. Fields that are named nowhere keep the values the admin
@@ -322,8 +330,8 @@ such as `text=`, belongs in `read` and `fill`. To combine conditions, use `:has(
 `':scope:has(input[name="image_cache_key"]) input[type="file"]'`.
 
 Your classes are tried first, in the order you list them, then the package's own:
-`CheckboxWidget`, `SelectWidget` and `TextWidget`, from `django_admin_kit.widgets`. Two rules
-follow from that:
+`CheckboxWidget`, `RadioWidget`, `SelectMultipleWidget`, `SelectWidget`, `SplitDateTimeWidget` and
+`TextWidget`, from `django_admin_kit.widgets`. Two rules follow from that:
 
 - A marker matches what is particular to its widget. A class marked by `input[type="file"]`
   would take every file field in the project.

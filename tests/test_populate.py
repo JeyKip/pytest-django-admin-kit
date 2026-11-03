@@ -9,7 +9,7 @@ import pytest
 
 from django_admin_kit.fields import FieldChoice
 from django_admin_kit.pages import PagePopulationMode
-from project.shop.models import Feed, Product
+from project.shop.models import Category, Feed, Product
 
 # The option a select shows for no choice. Django 6.1 reworded it; the package works from
 # the option's value, which is `""` on every version, so the suite proves both wordings.
@@ -215,13 +215,12 @@ def test_a_rendered_only_field_has_nothing_to_fill(admin_ui, superuser):
 def test_a_control_no_widget_class_recognizes_is_reported_when_filled(admin_ui, superuser):
     admin_ui.login(superuser)
 
-    page = admin_ui.create(Feed)
+    page = admin_ui.create(Category)
 
     with pytest.raises(LookupError) as failure:
-        page.fields["refreshed_at"].fill(datetime.datetime(2026, 1, 15, 9, 30))
+        page.fields["shelf"].fill(["3", "B"])
     assert str(failure.value) == (
-        "No widget class can fill the field 'refreshed_at'. Add one for it to "
-        "DJANGO_ADMIN_KIT['widgets']."
+        "No widget class can fill the field 'shelf'. Add one for it to DJANGO_ADMIN_KIT['widgets']."
     )
 
 
@@ -545,16 +544,11 @@ def test_a_field_named_after_an_argument_is_filled_by_keyword(admin_ui, superuse
 
 def test_populating_a_control_no_widget_class_recognizes_is_reported(admin_ui, superuser):
     admin_ui.login(superuser)
-    feed = Feed(
-        source="catalog.csv",
-        refreshed_at=datetime.datetime(2026, 1, 15, 9, 30, tzinfo=datetime.timezone.utc),
-    )
 
-    page = admin_ui.create(Feed)
+    page = admin_ui.create(Category)
 
     with pytest.raises(LookupError) as failure:
-        page.populate(feed)
+        page.populate(name="Tools", shelf=["3", "B"])
     assert str(failure.value) == (
-        "No widget class can fill the field 'refreshed_at'. Add one for it to "
-        "DJANGO_ADMIN_KIT['widgets']."
+        "No widget class can fill the field 'shelf'. Add one for it to DJANGO_ADMIN_KIT['widgets']."
     )

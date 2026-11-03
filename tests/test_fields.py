@@ -9,7 +9,7 @@ from django.utils import translation
 from playwright.sync_api import Locator
 
 from django_admin_kit.fields import FieldChoice
-from project.shop.models import Feed, Product
+from project.shop.models import Category, Feed, Product
 
 # The product form as the admin lays it out: the model's fields, then the rendered-only
 # one the admin appends. The hidden `source` field is on the page but never shown.
@@ -352,17 +352,16 @@ def test_a_rendered_only_field_reads_as_its_text(admin_ui, editor, released):
 
 
 def test_a_control_no_widget_class_recognizes_is_reported_when_read(admin_ui, superuser):
-    """The admin draws a date-time as two inputs, neither named after the field, so no
-    built-in widget class recognizes it."""
+    """The category's shelf is two inputs drawn by a widget of the project's own, neither
+    named after the field, so no built-in widget class recognizes it."""
     admin_ui.login(superuser)
 
-    page = admin_ui.create(Feed)
+    page = admin_ui.create(Category)
 
     with pytest.raises(LookupError) as failure:
-        _ = page.fields["refreshed_at"].value
+        _ = page.fields["shelf"].value
     assert str(failure.value) == (
-        "No widget class can read the field 'refreshed_at'. Add one for it to "
-        "DJANGO_ADMIN_KIT['widgets']."
+        "No widget class can read the field 'shelf'. Add one for it to DJANGO_ADMIN_KIT['widgets']."
     )
 
 
@@ -596,9 +595,9 @@ def test_a_rendered_only_field_offers_no_choices(admin_ui, viewer, released):
 def test_a_control_no_widget_class_recognizes_offers_no_choices(admin_ui, superuser):
     admin_ui.login(superuser)
 
-    page = admin_ui.create(Feed)
+    page = admin_ui.create(Category)
 
-    assert page.fields["refreshed_at"].choices == []
+    assert page.fields["shelf"].choices == []
 
 
 def test_a_rendered_only_foreign_key_links_to_the_object(admin_ui, viewer, released, category):

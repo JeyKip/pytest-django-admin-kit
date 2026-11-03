@@ -1217,6 +1217,18 @@ assert page.fields["enabled"].value is True     # done
 assert page.fields["quantity"].value == "1"     # done
 ```
 
+A split date-time, which the admin draws as a date input and a time input, reads as the two
+texts they hold, and is filled from a `datetime`, from a `(date, time)` pair, each half a date
+or time, text or `None`, or from `None`, which empties both. Dates and times are typed in ISO
+format, and an aware `datetime` in the current time zone:
+
+```python
+page.fields["published_at"].fill(datetime.datetime(2026, 1, 15, 9, 30))    # done
+assert page.fields["published_at"].value == ("2026-01-15", "09:30:00")     # done
+
+page.fields["published_at"].fill(("2026-11-03", "11:25:48"))               # done
+```
+
 ---
 
 ## 13.3 Choices (done)
@@ -1252,6 +1264,32 @@ assert field.value == ("2", "Toys")     # done
 assert field.value.value == "2"         # done
 assert field.value.label == "Toys"      # done
 assert field.value in field.choices     # done
+```
+
+A multiple select, which the admin draws for a many-to-many field, reads as the list of the
+choices made, in the order offered, and `[]` when none is. It is filled with a list or another
+iterable of values, each written as for a select, and the choices become exactly those; `None`
+and `[]` clear them. A lone value is refused with `TypeError`, so it is written as `[value]`:
+
+```python
+field = page.fields["categories"]
+
+field.fill([toys, tools])
+assert field.value == [("1", "Tools"), ("2", "Toys")]    # done
+field.fill([])
+assert field.value == []                                 # done
+```
+
+Radio buttons, which the admin draws for a field named in `radio_fields`, are read, filled and
+listed as a select is. Their value is `None` while none is checked, and `None` fills the blank
+option where the admin draws one, labeled "None":
+
+```python
+field = page.fields["section"]
+
+field.fill(toys)
+assert field.value == ("2", "Toys")                                      # done
+assert field.choices == [("", "None"), ("1", "Tools"), ("2", "Toys")]    # done
 ```
 
 ---
@@ -1462,6 +1500,9 @@ page.populate(product)    # done
 
 A related object stands for the option the select offers for it, so a foreign key set on the
 instance picks that option. (done)
+
+A many-to-many field is filled with the related objects of a saved instance. An unsaved one has
+none yet, so the field is left as rendered. (done)
 
 This does not imply that related objects or object graphs must automatically be serialized in
 1.0.0.
@@ -2777,9 +2818,15 @@ whatever value suits it, and the package passes it on untouched. It never uses `
 which runs for every field the package reads or fills, does not read the page.
 
 The package's own controls are widget classes of the same kind, public so that a project may
-build on one: `CheckboxWidget`, `SelectWidget` and `TextWidget`, the last reading and filling any
+build on one: `CheckboxWidget`, `RadioWidget`, `SelectMultipleWidget`, `SelectWidget`,
+`SplitDateTimeWidget` and `TextWidget`, tried in that order, the last reading and filling any
 single control that carries the field's name as text. They are importable from
 `django_admin_kit.widgets`.
+
+None of them takes the two lists the admin's script draws for `filter_horizontal` and
+`filter_vertical`. The list that carries the field's name holds the chosen options without
+selecting them, so a select's reading would say nothing is chosen. Reading or filling such a
+field raises `LookupError` until a project lists a class of its own for it.
 
 A widget of several components is one field and one widget class. The admin renders a whole
 widget inside its field's box, and fields are found by their box, never by their inputs, so a
@@ -3076,11 +3123,12 @@ Field details:
   Every field is in exactly one of them, and the editable fields are the required and the
   optional ones together (done).
 
-Compound controls:
+Compound controls, form controls that render several inputs under one name, with their value
+and choices:
 
-* form controls that render several inputs under one name, with their value and choices:
-  split date-times, which the admin draws for every editable date-time field, radio buttons
-  (`radio_fields`) and multiple selects.
+* split date-times, which the admin draws for every editable date-time field (done);
+* radio buttons (`radio_fields`) (done);
+* multiple selects (done).
 
 Login page:
 

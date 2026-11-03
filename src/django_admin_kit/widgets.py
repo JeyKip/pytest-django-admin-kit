@@ -7,9 +7,11 @@ class: ``read`` and ``fill`` get the whole field and find their own elements in 
 
 from __future__ import annotations
 
+import datetime
 from typing import TYPE_CHECKING, Any, Iterable, Protocol
 
 from django.db.models import Model
+from django.utils import timezone
 from playwright.sync_api import Locator
 
 from .fields import FieldChoice
@@ -17,6 +19,13 @@ from .rendered import text_of
 
 if TYPE_CHECKING:
     from .fields import FormField
+
+# The multiple select the admin draws for `filter_horizontal` and `filter_vertical`: classed
+# `selectfilter` or `selectfilterstacked` as rendered, and `filtered` once its script has
+# turned it into two lists. The list that then carries the field's name holds the chosen
+# options without selecting them, so it reads as nothing chosen. No built-in class takes it,
+# so it fails clearly and a project's own class can.
+_FILTER_WIDGET = ".filtered, .selectfilter, .selectfilterstacked"
 
 
 class Widget(Protocol):
@@ -50,14 +59,14 @@ class SelectWidget:
     stands for a value."""
 
     def marker(self, field: FormField) -> str:
-        return f'select[name="{field.name}"]'
+        return f'select[name="{field.name}"]:not([multiple])'
 
     def read(self, field: FormField) -> FieldChoice:
         option = self._control(field).locator("option:checked")
         return FieldChoice(option.get_attribute("value") or "", text_of(option))
 
     def fill(self, field: FormField, value: Any) -> None:
-        option = self._option(field, value)
+        option = _option_for(field, self.choices(field), value)
         # An option is asked for by its value, except the blank one, whose value is the
         # empty string: the browser layer reads that as "select nothing" on the versions
         # that still run on Python 3.8, so it is asked for by its label.
@@ -73,26 +82,128 @@ class SelectWidget:
             for option in self._control(field).locator("option").all()
         ]
 
-    def _option(self, field: FormField, value: Any) -> FieldChoice:
-        """The option that stands for ``value``, among the ones the select offers."""
-        offered = {choice.value: choice for choice in self.choices(field)}
-        for spelling in _option_spellings(value):
-            if spelling in offered:
-                return offered[spelling]
-        raise ValueError(
-            f"The field {field.name!r} offers no option for {value!r}. Options: "
-            f"{', '.join(repr(option) for option in offered) or 'none'}."
-        )
-
     def _control(self, field: FormField) -> Locator:
         return field.native.locator(f'select[name="{field.name}"]')
+
+
+class SelectMultipleWidget:
+    """A select with ``multiple``, read as the list of ``FieldChoice``s chosen and filled
+    with the options for a list of values, each spelled as for a select."""
+
+    def marker(self, field: FormField) -> str:
+        return f'select[multiple][name="{field.name}"]:not({_FILTER_WIDGET})'
+
+    def read(self, field: FormField) -> list[FieldChoice]:
+        return [self._choice(option) for option in self._options(field, ":checked")]
+
+    def fill(self, field: FormField, value: Any) -> None:
+        """Chooses exactly the options for ``value``, a list or another iterable of values,
+        and clears the choice for ``None``."""
+        # A text is iterable, but it is one value, never a list of its characters.
+        if value is not None and (
+            isinstance(value, (str, bytes, Model)) or not isinstance(value, Iterable)
+        ):
+            raise TypeError(
+                f"The field {field.name!r} takes a list of values or None, not {value!r}. "
+                f"A single value is written as [value]."
+            )
+        choices = self.choices(field)
+        options = [_option_for(field, choices, item) for item in value or []]
+        self._control(field).select_option(value=[option.value for option in options])
+
+    def choices(self, field: FormField) -> list[FieldChoice]:
+        """The options the select offers, in order."""
+        return [self._choice(option) for option in self._options(field)]
+
+    def _choice(self, option: Locator) -> FieldChoice:
+        return FieldChoice(option.get_attribute("value") or "", text_of(option))
+
+    def _options(self, field: FormField, state: str = "") -> list[Locator]:
+        return self._control(field).locator(f"option{state}").all()
+
+    def _control(self, field: FormField) -> Locator:
+        return field.native.locator(f'select[multiple][name="{field.name}"]')
+
+
+class RadioWidget:
+    """Radio buttons, read as the ``FieldChoice`` checked and filled by checking the
+    option that stands for a value, spelled as for a select."""
+
+    def marker(self, field: FormField) -> str:
+        return f'input[type="radio"][name="{field.name}"]'
+
+    def read(self, field: FormField) -> FieldChoice | None:
+        # The browser checks none until a value is given, unlike a select.
+        checked = field.native.locator(f'input[type="radio"][name="{field.name}"]:checked')
+        return self._choice(checked) if checked.count() else None
+
+    def fill(self, field: FormField, value: Any) -> None:
+        option = _option_for(field, self.choices(field), value)
+        for radio in self._inputs(field).all():
+            if (radio.get_attribute("value") or "") == option.value:
+                radio.check()
+                return
+
+    def choices(self, field: FormField) -> list[FieldChoice]:
+        """The options the radio buttons offer, in order, the blank one included."""
+        return [self._choice(radio) for radio in self._inputs(field).all()]
+
+    def _choice(self, radio: Locator) -> FieldChoice:
+        # Each input sits inside the label that names its option.
+        label = radio.locator("xpath=ancestor::label[1]")
+        return FieldChoice(radio.get_attribute("value") or "", text_of(label))
+
+    def _inputs(self, field: FormField) -> Locator:
+        return field.native.locator(f'input[type="radio"][name="{field.name}"]')
+
+
+class SplitDateTimeWidget:
+    """The admin's date and time inputs of one date-time, read as the pair of texts they
+    hold and filled from a ``datetime``, a ``(date, time)`` pair or ``None``."""
+
+    def marker(self, field: FormField) -> str:
+        # The admin draws the two inputs in a `p.datetime`, which a project's own widget
+        # of two inputs doesn't.
+        return f'p.datetime input[name="{field.name}_0"]'
+
+    def read(self, field: FormField) -> tuple[str, str]:
+        return self._input(field, 0).input_value(), self._input(field, 1).input_value()
+
+    def fill(self, field: FormField, value: Any) -> None:
+        date, time = self._texts(field, value)
+        self._input(field, 0).fill(date)
+        self._input(field, 1).fill(time)
+
+    def _texts(self, field: FormField, value: Any) -> tuple[str, str]:
+        """The date and the time to type for ``value``. Dates and times are typed in ISO
+        format, which the admin accepts in any locale."""
+        if value is None:
+            return "", ""
+        if isinstance(value, datetime.datetime):
+            # The admin reads what is typed in the current time zone.
+            if timezone.is_aware(value):
+                value = timezone.localtime(value)
+            return value.date().isoformat(), value.time().isoformat()
+        if isinstance(value, (tuple, list)) and len(value) == 2:
+            date, time = value
+            # A datetime is also a date, but not one the date input takes.
+            date_fits = _can_fill(date, datetime.date) and not isinstance(date, datetime.datetime)
+            if date_fits and _can_fill(time, datetime.time):
+                return _part_text(date), _part_text(time)
+        raise TypeError(
+            f"The field {field.name!r} takes a datetime, a (date, time) pair or None, "
+            f"not {value!r}. Each half of the pair is a date or time, text, or None."
+        )
+
+    def _input(self, field: FormField, index: int) -> Locator:
+        return field.native.locator(f'input[name="{field.name}_{index}"]')
 
 
 class TextWidget:
     """Whatever one control carries the field's name, read and filled as text."""
 
     def marker(self, field: FormField) -> str:
-        return f'[name="{field.name}"]'
+        return f'[name="{field.name}"]:not({_FILTER_WIDGET})'
 
     def read(self, field: FormField) -> str:
         return self._control(field).input_value()
@@ -118,7 +229,11 @@ class Widgets:
         self._widgets: tuple[Widget, ...] = (
             *custom,
             CheckboxWidget(),
+            RadioWidget(),
+            # Before the select, whose marker matches a multiple select as well.
+            SelectMultipleWidget(),
             SelectWidget(),
+            SplitDateTimeWidget(),
             TextWidget(),
         )
 
@@ -147,6 +262,18 @@ def _marker(widget: Widget, field: FormField) -> str:
     return marker
 
 
+def _option_for(field: FormField, choices: list[FieldChoice], value: Any) -> FieldChoice:
+    """The option among ``choices`` that stands for ``value``."""
+    offered = {choice.value: choice for choice in choices}
+    for spelling in _option_spellings(value):
+        if spelling in offered:
+            return offered[spelling]
+    raise ValueError(
+        f"The field {field.name!r} offers no option for {value!r}. Options: "
+        f"{', '.join(repr(option) for option in offered) or 'none'}."
+    )
+
+
 def _option_spellings(value: Any) -> list[str]:
     """The option values ``value`` may be written as, in the order they are looked for.
 
@@ -170,3 +297,17 @@ def _option_spellings(value: Any) -> list[str]:
     if value is None:
         return ["", "unknown"]
     return [str(value)]
+
+
+def _can_fill(value: Any, kind: type) -> bool:
+    """Whether ``value`` can fill the input for a ``kind``: it's a ``kind``, text or ``None``."""
+    return value is None or isinstance(value, (kind, str))
+
+
+def _part_text(value: datetime.date | datetime.time | str | None) -> str:
+    """What to type for one half of a date-time pair."""
+    if value is None:
+        return ""
+    if isinstance(value, str):
+        return value
+    return value.isoformat()

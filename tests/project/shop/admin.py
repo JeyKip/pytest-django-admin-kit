@@ -2,6 +2,7 @@ from decimal import Decimal
 
 from django import forms
 from django.contrib import admin, messages
+from django.contrib.admin.widgets import FilteredSelectMultiple
 from django.core.validators import RegexValidator
 from django.http import HttpResponseRedirect
 from django.urls import reverse
@@ -9,7 +10,7 @@ from django.utils.html import format_html
 from django.utils.safestring import mark_safe
 
 from .models import Category, Feed, Product
-from .widgets import SwatchPicker
+from .widgets import Shelf, SwatchPicker
 
 # A message level between Django's warning (30) and error (40), with no tag of its own.
 REFRESHED = 35
@@ -135,7 +136,7 @@ class FeedAdmin(admin.ModelAdmin):
     # fields in the order the admin would show them anyway. A name marked safe keeps its
     # markup, as a description does. The schedule starts collapsed.
     fieldsets = (
-        (None, {"fields": ("source", "mode")}),
+        (None, {"fields": ("source", "mode", "section", "categories")}),
         (
             "Schedule",
             {
@@ -146,6 +147,7 @@ class FeedAdmin(admin.ModelAdmin):
         ),
         (mark_safe("Appearance <em>on the page</em>"), {"fields": ("color",)}),
     )
+    radio_fields = {"mode": admin.HORIZONTAL, "section": admin.VERTICAL}  # noqa: RUF012
 
     # The color is picked with a widget of the project's own, which the package does not
     # know.
@@ -199,8 +201,33 @@ class FeedAdmin(admin.ModelAdmin):
         return super().response_change(request, obj)
 
 
+class CategoryForm(forms.ModelForm):
+    # A form-only field drawn as two inputs by a widget of the project's own, so the suite
+    # has a control no built-in widget class recognizes. Not required, so saving a
+    # category is unchanged.
+    shelf = forms.CharField(widget=Shelf, required=False)
+    # A form-only field drawn as `filter_horizontal` draws one, which the admin's script
+    # turns into two lists. Not required either.
+    see_also = forms.ModelMultipleChoiceField(
+        Category.objects.all(),
+        required=False,
+        widget=FilteredSelectMultiple("see also", is_stacked=False),
+    )
+
+    class Meta:
+        model = Category
+        fields = "__all__"
+
+
 # A changelist whose rows link to nothing, so the suite has one without a change link.
 @admin.register(Category)
 class CategoryAdmin(admin.ModelAdmin):
+    form = CategoryForm
     list_display = ("name",)
     list_display_links = None
+    # The shelf in a collapsed fieldset, so a fill that fails can be seen to leave it
+    # collapsed.
+    fieldsets = (
+        (None, {"fields": ("name", "see_also")}),
+        ("Placement", {"classes": ("collapse",), "fields": ("shelf",)}),
+    )
