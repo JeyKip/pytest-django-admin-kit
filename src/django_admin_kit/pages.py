@@ -908,6 +908,10 @@ def _value_of(source: Any, name: str) -> Any:
         return _NOTHING
     if isinstance(source, Mapping):
         return source.get(name, _NOTHING)
+    # A many-to-many field holds the related objects, which an unsaved instance has none
+    # of yet: Django refuses to look them up until it has a primary key.
+    if isinstance(source, Model) and name in {f.name for f in source._meta.many_to_many}:
+        return _NOTHING if source.pk is None else list(getattr(source, name).all())
     return getattr(source, name, _NOTHING)
 
 

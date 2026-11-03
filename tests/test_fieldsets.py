@@ -52,7 +52,7 @@ def test_each_fieldset_holds_its_fields_in_order(admin_ui, superuser):
     page = admin_ui.create(Feed)
 
     assert [list(fieldset.fields) for fieldset in page.fieldsets] == [
-        ["source", "mode", "section"],
+        ["source", "mode", "section", "categories"],
         ["refreshed_at", "refresh_time"],
         ["color"],
     ]
@@ -102,7 +102,7 @@ def test_a_field_the_fieldset_does_not_have_is_reported_with_the_ones_it_has(adm
         page.fieldsets[0].fields["color"]
 
     assert failure.value.args[0] == (
-        "No field named 'color' here. Fields: 'source', 'mode', 'section'."
+        "No field named 'color' here. Fields: 'source', 'mode', 'section', 'categories'."
     )
 
 

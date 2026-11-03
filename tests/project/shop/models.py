@@ -59,6 +59,9 @@ class Feed(models.Model):
     # Drawn as radio buttons, as the mode is. It may be empty, so the admin adds a blank
     # option, and its options stand for objects rather than text.
     section = models.ForeignKey("Category", null=True, blank=True, on_delete=models.SET_NULL)
+    # Drawn as a multiple select. Named on the category side, which the section already
+    # takes the default name on.
+    categories = models.ManyToManyField("Category", blank=True, related_name="feeds")
     # A date-time and a time, so a changelist shows each next to the product's dates.
     refreshed_at = models.DateTimeField(null=True, blank=True)
     refresh_time = models.TimeField(null=True, blank=True)

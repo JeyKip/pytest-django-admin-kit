@@ -1266,6 +1266,20 @@ assert field.value.label == "Toys"      # done
 assert field.value in field.choices     # done
 ```
 
+A multiple select, which the admin draws for a many-to-many field, reads as the list of the
+choices made, in the order offered, and `[]` when none is. It is filled with a list or another
+iterable of values, each written as for a select, and the choices become exactly those; `None`
+and `[]` clear them. A lone value is refused with `TypeError`, so it is written as `[value]`:
+
+```python
+field = page.fields["categories"]
+
+field.fill([toys, tools])
+assert field.value == [("1", "Tools"), ("2", "Toys")]    # done
+field.fill([])
+assert field.value == []                                 # done
+```
+
 Radio buttons, which the admin draws for a field named in `radio_fields`, are read, filled and
 listed as a select is. Their value is `None` while none is checked, and `None` fills the blank
 option where the admin draws one, labeled "None":
@@ -1486,6 +1500,9 @@ page.populate(product)    # done
 
 A related object stands for the option the select offers for it, so a foreign key set on the
 instance picks that option. (done)
+
+A many-to-many field is filled with the related objects of a saved instance. An unsaved one has
+none yet, so the field is left as rendered. (done)
 
 This does not imply that related objects or object graphs must automatically be serialized in
 1.0.0.
@@ -2801,8 +2818,8 @@ whatever value suits it, and the package passes it on untouched. It never uses `
 which runs for every field the package reads or fills, does not read the page.
 
 The package's own controls are widget classes of the same kind, public so that a project may
-build on one: `CheckboxWidget`, `RadioWidget`, `SelectWidget`, `SplitDateTimeWidget` and
-`TextWidget`, tried in that order, the last reading and filling any single control that carries
+build on one: `CheckboxWidget`, `RadioWidget`, `SelectMultipleWidget`, `SelectWidget`,
+`SplitDateTimeWidget` and `TextWidget`, tried in that order, the last reading and filling any single control that carries
 the field's name as text. They are importable from `django_admin_kit.widgets`.
 
 A widget of several components is one field and one widget class. The admin renders a whole
@@ -3105,7 +3122,7 @@ and choices:
 
 * split date-times, which the admin draws for every editable date-time field (done);
 * radio buttons (`radio_fields`) (done);
-* multiple selects.
+* multiple selects (done).
 
 Login page:
 

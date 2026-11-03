@@ -79,6 +79,45 @@ class SelectWidget:
         return field.native.locator(f'select[name="{field.name}"]')
 
 
+class SelectMultipleWidget:
+    """A select with ``multiple``, read as the list of ``FieldChoice``s chosen and filled
+    with the options for a list of values, each spelled as for a select."""
+
+    def marker(self, field: FormField) -> str:
+        return f'select[multiple][name="{field.name}"]'
+
+    def read(self, field: FormField) -> list[FieldChoice]:
+        return [self._choice(option) for option in self._options(field, ":checked")]
+
+    def fill(self, field: FormField, value: Any) -> None:
+        """Chooses exactly the options for ``value``, a list or another iterable of values,
+        and clears the choice for ``None``."""
+        # A text is iterable, but it is one value, never a list of its characters.
+        if value is not None and (
+            isinstance(value, (str, bytes, Model)) or not isinstance(value, Iterable)
+        ):
+            raise TypeError(
+                f"The field {field.name!r} takes a list of values or None, not {value!r}. "
+                f"A single value is written as [value]."
+            )
+        choices = self.choices(field)
+        options = [_option_for(field, choices, item) for item in value or []]
+        self._control(field).select_option(value=[option.value for option in options])
+
+    def choices(self, field: FormField) -> list[FieldChoice]:
+        """The options the select offers, in order."""
+        return [self._choice(option) for option in self._options(field)]
+
+    def _choice(self, option: Locator) -> FieldChoice:
+        return FieldChoice(option.get_attribute("value") or "", text_of(option))
+
+    def _options(self, field: FormField, state: str = "") -> list[Locator]:
+        return self._control(field).locator(f"option{state}").all()
+
+    def _control(self, field: FormField) -> Locator:
+        return field.native.locator(f'select[multiple][name="{field.name}"]')
+
+
 class RadioWidget:
     """Radio buttons, read as the ``FieldChoice`` checked and filled by checking the
     option that stands for a value, spelled as for a select."""
@@ -184,6 +223,8 @@ class Widgets:
             *custom,
             CheckboxWidget(),
             RadioWidget(),
+            # Before the select, whose marker matches a multiple select as well.
+            SelectMultipleWidget(),
             SelectWidget(),
             SplitDateTimeWidget(),
             TextWidget(),

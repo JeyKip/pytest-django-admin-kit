@@ -203,6 +203,7 @@ def test_populate_fills_every_field_of_a_model_instance(admin_ui, superuser, uns
         "source": "catalog.csv",
         "mode": ("replace", "Replace"),
         "section": ("", "None"),
+        "categories": [],
         "refreshed_at": ("2026-01-15", "09:30:00"),
         "refresh_time": "06:00:00",
         "color": ("green", "Green"),

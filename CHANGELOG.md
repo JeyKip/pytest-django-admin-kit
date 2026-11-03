@@ -33,6 +33,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - Read and fill radio buttons, as the admin draws a field named in `radio_fields`, through the
   built-in `RadioWidget`. They're read, filled and listed as a select is, and read as `None`
   while none is checked.
+- Read and fill a multiple select, as the admin draws a many-to-many field, through the built-in
+  `SelectMultipleWidget`. It reads as the list of choices made and is filled with a list of
+  values, each written as for a select. A lone value raises `TypeError`.
+- `page.populate(instance)` fills a many-to-many field with a saved instance's related objects,
+  and leaves it alone for an unsaved instance, which has none yet.
 
 ### Changed
 
@@ -42,6 +47,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Fixed
 
+- A multiple select no longer reads as one option, and filling it no longer replaces the choice
+  with a single option. It reads and fills as a list.
+- `page.populate(instance)` no longer fails with `ValueError` on an unsaved model instance with
+  a many-to-many field.
 - `admin_ui.login(user, password="")` no longer waits 30 seconds and fails. The browser does not
   send a form with an empty input, so the result is no success, at once.
 - Filling a field of a collapsed fieldset, with `field.fill()` or `page.populate()`, no longer
