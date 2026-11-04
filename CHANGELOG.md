@@ -7,6 +7,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-11-04
+
 ### Added
 
 - Open the login page with `admin_ui.login()`, fill it with `page.fill(username=..., password=...)`
@@ -134,5 +136,6 @@ The first release. Tests open the Django admin in a real browser and check it wi
 - Tests can run in parallel, and every test starts logged out.
 - Works with Python 3.8 to 3.14 and Django 3.2 to 6.1.
 
-[Unreleased]: https://github.com/JeyKip/pytest-django-admin-kit/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/JeyKip/pytest-django-admin-kit/compare/v1.1.0...HEAD
+[1.1.0]: https://github.com/JeyKip/pytest-django-admin-kit/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/JeyKip/pytest-django-admin-kit/releases/tag/v1.0.0
