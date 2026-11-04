@@ -24,7 +24,7 @@ Before writing admin tests, read https://raw.githubusercontent.com/JeyKip/pytest
 
 ## Status
 
-Version 1.0.0 implements the API written up in
+Version 1.1.0 implements the API written up in
 [specification.md](https://github.com/JeyKip/pytest-django-admin-kit/blob/main/specification.md),
 and its public API is stable. What changed in each release is in
 [CHANGELOG.md](https://github.com/JeyKip/pytest-django-admin-kit/blob/main/CHANGELOG.md), and what

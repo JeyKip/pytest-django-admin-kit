@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "pytest-django-admin-kit"
-version = "1.0.0"
+version = "1.1.0"
 description = "Pytest plugin for testing the Django admin in a real browser, with plain asserts."
 readme = "README.md"
 requires-python = ">=3.8"
