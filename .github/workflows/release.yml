@@ -30,7 +30,8 @@ jobs:
   matrix:
     name: ${{ matrix.cell }}
     needs: cells
-    runs-on: ubuntu-latest
+    # Python 3.9 stops at Playwright 1.60, which has no Chromium for Ubuntu 26.04.
+    runs-on: ${{ startsWith(matrix.cell, '3.9-') && 'ubuntu-24.04' || 'ubuntu-latest' }}
     strategy:
       fail-fast: false
       matrix:
