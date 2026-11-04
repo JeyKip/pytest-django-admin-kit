@@ -1,0 +1,41 @@
+# pytest-django-admin-kit
+
+> Pytest plugin for testing the Django admin in a real browser, with plain asserts. Install it as `pytest-django-admin-kit` and import it as `django_admin_kit`. It needs Python 3.8+ and Django 3.2+.
+
+Installing the package registers the plugin and the `admin_ui` fixture. The project also needs pytest-django configured and a browser, from `playwright install chromium`.
+
+```python
+def test_product_admin(admin_ui, admin_user, product):
+    admin_ui.login(admin_user)
+
+    assert admin_ui.list(Product).count == 1
+
+    page = admin_ui.edit(product)
+    page.populate(name="Renamed")
+    result = page.save()
+
+    assert result.success
+    assert result.page.messages.of_level("success")
+```
+
+Before writing tests:
+
+- Open pages with `admin_ui.index()`, `list(Model)`, `create(Model)`, `edit(obj)`, `delete(obj)` and `open(path)`. Get URLs from `admin_ui.url` rather than hardcoding `/admin/`.
+- `admin_ui.login(user)` needs no password. Passing `password=` types into the login form, so use it only to test that form.
+- Reads are live. After a submission, read `result.page`, because reading a page the browser has left raises `LookupError`.
+- Configure everything under the `DJANGO_ADMIN_KIT` setting. An unknown key is an error.
+- A field no widget class recognizes raises `LookupError`. Add a class to `DJANGO_ADMIN_KIT["widgets"]`, or override the `admin_ui_widgets` fixture for some tests. `filter_horizontal` and `filter_vertical` fields need this today.
+- For what the package doesn't model yet, use `.native`, the Playwright object behind a page, field, row or cell. That currently includes inlines and changelist search, filters, sorting, pagination and actions.
+- pytest-playwright deletes `test-results/` at the start of every session, so keep other output elsewhere or pass `--output`.
+- Don't set a fixed live server address, such as `--liveserver=localhost:8081`. It breaks parallel runs under `pytest-xdist`.
+
+The links below follow `main`, which can be ahead of the latest release. Check a feature's version in the changelog against the version installed.
+
+## Docs
+
+- [README](https://raw.githubusercontent.com/JeyKip/pytest-django-admin-kit/main/README.md): "What it solves today" and "Settings" cover usage, with examples. The sections after them are for contributors.
+- [Changelog](https://raw.githubusercontent.com/JeyKip/pytest-django-admin-kit/main/CHANGELOG.md): what each release added, and what is still unreleased.
+
+## Optional
+
+- [Specification](https://raw.githubusercontent.com/JeyKip/pytest-django-admin-kit/main/specification.md): the full design, over 3,000 lines. Section 27 covers fixtures, section 28 configuration and extension, and section 33 the roadmap. Parts not marked "(done)" may not exist yet.
