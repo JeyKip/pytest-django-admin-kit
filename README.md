@@ -15,6 +15,13 @@ def test_product_admin(admin_ui, admin_user, product):
 
 Install it as `pytest-django-admin-kit`; import it as `django_admin_kit`.
 
+AI agents can start from [llms.txt](https://github.com/JeyKip/pytest-django-admin-kit/blob/main/llms.txt).
+To point yours there, add this line to your project's `AGENTS.md` or `CLAUDE.md`:
+
+```markdown
+Before writing admin tests, read https://raw.githubusercontent.com/JeyKip/pytest-django-admin-kit/main/llms.txt
+```
+
 ## Status
 
 Version 1.0.0 implements the API written up in
