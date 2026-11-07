@@ -7,6 +7,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+### Added
+
+- Tell whether a changelist offers a search with `page.can_search`. It follows what the page shows, so an admin without search fields offers none.
+
 ## [1.1.0] - 2026-11-05
 
 ### Added

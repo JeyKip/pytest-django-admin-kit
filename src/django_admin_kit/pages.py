@@ -505,6 +505,24 @@ class ChangelistPage(ModelPage):
         assert match is not None, f"unexpected paginator text {text!r}"
         return match
 
+    @property
+    def can_search(self) -> bool:
+        """Whether the changelist has a search box.
+
+        The admin draws one only when it has search fields for this request. This reads the
+        page rather than ``ModelAdmin.search_fields``, so it also follows
+        ``get_search_fields()`` and a project's own template.
+        """
+        return self._search_box.count() > 0
+
+    @property
+    def _search_box(self) -> Locator:
+        return self._search_form.locator("#searchbar")
+
+    @property
+    def _search_form(self) -> Locator:
+        return self._shown().locator("#changelist-search")
+
 
 class FormPage(ModelPage):
     """An admin page with the model's form on it: which fields the form shows."""

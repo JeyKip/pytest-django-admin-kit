@@ -773,6 +773,20 @@ assert page.rows == []    # done
 
 ---
 
+## 8.3 Search
+
+A changelist says whether it offers a search:
+
+```python
+assert admin_ui.list(Product).can_search      # done
+assert not admin_ui.list(Feed).can_search     # done
+```
+
+The admin draws a search box only when it has search fields for the request, so this follows what
+the page shows rather than `ModelAdmin.search_fields`.
+
+---
+
 # 9. Changelist Row Matching (done)
 
 One of the main 1.0.0 features is concise verification of rows shown on a changelist.
