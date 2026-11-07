@@ -8,6 +8,7 @@ import pytest
 from django.urls import reverse
 
 from django_admin_kit.pages import LoginPage
+from project.shop.models import Product
 
 # Why the admin refuses a login, the same for a wrong password and a user who is not staff.
 INVALID_LOGIN = (
@@ -325,6 +326,38 @@ def test_a_path_the_admin_does_not_serve_is_missing(admin_ui, superuser):
     admin_ui.login(superuser)
 
     assert admin_ui.open("/admin/no/such/page/").missing
+
+
+def test_a_path_with_a_query_string_opens_where_it_was_asked(admin_ui, superuser, products):
+    admin_ui.login(superuser)
+    path = admin_ui.url.list(Product)
+
+    page = admin_ui.open(f"{path}?q=Bolt")
+
+    assert page.works
+    assert not page.redirected
+    assert page.destination == path
+    assert page.native.locator("#result_list tbody tr").count() == 1
+
+
+def test_a_query_string_does_not_hide_a_refusal_in_place(admin_ui, adder):
+    admin_ui.login(adder)
+
+    page = admin_ui.open(f"{admin_ui.url.list(Product)}?q=Bolt")
+
+    assert page.denied
+    assert not page.works
+    assert page.status_code == 403
+
+
+def test_a_query_string_does_not_hide_a_redirect(admin_ui, db):
+    """Nobody is logged in, so the admin sends the browser to the login page."""
+    page = admin_ui.open(f"{admin_ui.url.list(Product)}?q=Bolt")
+
+    assert page.denied
+    assert page.redirected
+    assert not page.works
+    assert page.destination == admin_ui.url.login()
 
 
 def test_absolute_builds_a_url_against_the_live_server(admin_ui, live_server):

@@ -9,7 +9,7 @@ has no password at all and must still be able to log in.
 from __future__ import annotations
 
 from typing import Any, TypeVar, overload
-from urllib.parse import urljoin
+from urllib.parse import urljoin, urlsplit
 
 from django.conf import settings
 from django.test import Client
@@ -153,4 +153,5 @@ class AdminSession:
         response = page.goto(self.absolute(path))
         # `goto` returns None only for same-document navigations, never for a URL.
         assert response is not None
-        return page_class(page, response.status, path, self._tools, *args)
+        # A page is compared by its path, so a query string isn't part of what was asked for.
+        return page_class(page, response.status, urlsplit(path).path, self._tools, *args)

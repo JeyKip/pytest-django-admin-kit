@@ -13,6 +13,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - Search a changelist through its search box with `page.search(term)`. The same page then reads the results, a search keeps any filters applied, and `page.search("")` clears the search.
 - Read the term a changelist's search box shows with `page.search_term`, `""` for a changelist without a box.
 
+### Fixed
+
+- `admin_ui.open()` with a query string in the path no longer reports `works` as false and `redirected` as true for a page that opened normally.
+
 ## [1.1.0] - 2026-11-05
 
 ### Added
