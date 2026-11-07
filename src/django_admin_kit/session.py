@@ -9,9 +9,10 @@ has no password at all and must still be able to log in.
 from __future__ import annotations
 
 from typing import Any, TypeVar, overload
-from urllib.parse import urljoin
+from urllib.parse import urlencode, urljoin, urlsplit
 
 from django.conf import settings
+from django.contrib.admin.views.main import SEARCH_VAR
 from django.test import Client
 from playwright.sync_api import BrowserContext
 
@@ -132,9 +133,21 @@ class AdminSession:
         """Open the admin index."""
         return self._open(self._tools.urls.index(), IndexPage)
 
-    def list(self, model: type[Any]) -> ChangelistPage:
-        """Open a model's changelist."""
-        return self._open(self._tools.urls.list(model), ChangelistPage, model)
+    def list(self, model: type[Any], *, search: str | None = None) -> ChangelistPage:
+        """Open a model's changelist, with the term ``search`` already applied if given.
+
+        The admin ignores a term when it has no search fields and shows every record, which
+        would look like a search that found them all, so that raises ``LookupError``. A page
+        that did not open comes back as usual, to say how it was refused.
+        """
+        path = self._tools.urls.list(model)
+        if search is None:
+            return self._open(path, ChangelistPage, model)
+        query = urlencode({SEARCH_VAR: search})
+        page = self._open(f"{path}?{query}", ChangelistPage, model)
+        if page.works and not page.can_search:
+            raise LookupError("The page offers no search.")
+        return page
 
     def create(self, model: type[Any]) -> CreatePage:
         """Open the page that adds a new instance of ``model``."""
@@ -153,4 +166,5 @@ class AdminSession:
         response = page.goto(self.absolute(path))
         # `goto` returns None only for same-document navigations, never for a URL.
         assert response is not None
-        return page_class(page, response.status, path, self._tools, *args)
+        # A page is compared by its path, so a query string isn't part of what was asked for.
+        return page_class(page, response.status, urlsplit(path).path, self._tools, *args)

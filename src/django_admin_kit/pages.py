@@ -505,6 +505,54 @@ class ChangelistPage(ModelPage):
         assert match is not None, f"unexpected paginator text {text!r}"
         return match
 
+    @property
+    def can_search(self) -> bool:
+        """Whether the changelist has a search box.
+
+        The admin draws one only when it has search fields for this request. This reads the
+        page rather than ``ModelAdmin.search_fields``, so it also follows
+        ``get_search_fields()`` and a project's own template.
+        """
+        return self._search_box.count() > 0
+
+    def search(self, term: str) -> None:
+        """Type ``term`` into the search box, click the button, and wait for the results.
+
+        This same page then reads the results, so ``count``, ``summary``, ``rows`` and the rest
+        describe what the search found. A search keeps any filters applied, and an empty term
+        clears the search. If the page has no search box, nothing is clicked and ``LookupError``
+        says so.
+
+        The page stands for wherever the browser ended up. If the admin sends it elsewhere, such
+        as to the login page after the session ended, the page reports that as ``denied`` or
+        ``redirected``.
+        """
+        box = self._search_box
+        if not box.count():
+            raise LookupError("The page offers no search.")
+        box.fill(term)
+        with self._page.expect_navigation() as navigation:
+            self._search_form.locator('input[type="submit"]').click()
+        response = navigation.value
+        # A navigation of the page always comes with a response.
+        assert response is not None
+        self._status_code = response.status
+        self._landed()
+
+    @property
+    def search_term(self) -> str:
+        """The term the search box shows, exactly as it shows it, or ``""`` without a box."""
+        box = self._search_box
+        return box.input_value() if box.count() else ""
+
+    @property
+    def _search_box(self) -> Locator:
+        return self._search_form.locator("#searchbar")
+
+    @property
+    def _search_form(self) -> Locator:
+        return self._shown().locator("#changelist-search")
+
 
 class FormPage(ModelPage):
     """An admin page with the model's form on it: which fields the form shows."""

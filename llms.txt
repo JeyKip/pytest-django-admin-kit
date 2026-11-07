@@ -25,7 +25,7 @@ Before writing tests:
 - Reads are live. After a submission, read `result.page`, because reading a page the browser has left raises `LookupError`.
 - Configure everything under the `DJANGO_ADMIN_KIT` setting. An unknown key is an error.
 - A field no widget class recognizes raises `LookupError`. Add a class to `DJANGO_ADMIN_KIT["widgets"]`, or override the `admin_ui_widgets` fixture for some tests. `filter_horizontal` and `filter_vertical` fields need this today.
-- For what the package doesn't model yet, use `.native`, the Playwright object behind a page, field, row or cell. That currently includes inlines and changelist search, filters, sorting, pagination and actions.
+- For what the package doesn't model yet, use `.native`, the Playwright object behind a page, field, row or cell. That currently includes inlines and changelist filters, sorting, pagination and actions.
 - pytest-playwright deletes `test-results/` at the start of every session, so keep other output elsewhere or pass `--output`.
 - Don't set a fixed live server address, such as `--liveserver=localhost:8081`. It breaks parallel runs under `pytest-xdist`.
 

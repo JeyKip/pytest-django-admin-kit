@@ -773,6 +773,54 @@ assert page.rows == []    # done
 
 ---
 
+## 8.3 Search (done)
+
+A changelist says whether it offers a search:
+
+```python
+assert admin_ui.list(Product).can_search      # done
+assert not admin_ui.list(Feed).can_search     # done
+```
+
+The admin draws a search box only when it has search fields for the request, so this follows what
+the page shows rather than `ModelAdmin.search_fields`.
+
+`page.search` searches through that box. It returns nothing: the page stays the same object, and
+the count, summary and rows read the results.
+
+```python
+page = admin_ui.list(Product)
+
+page.search("Bolt")                           # done
+
+assert page.count == 1                        # done
+assert page.summary == "1 product"            # done
+assert page.search_term == "Bolt"             # done
+```
+
+A search keeps any filters applied, and `page.search("")` clears the search. On a changelist
+without a search box, nothing is clicked and `LookupError` says so. If the admin sends the browser
+elsewhere, such as to the login page after the session ended, the page stands for where it landed
+(section 3.9) and reports it as `denied` or `redirected`.
+
+`page.search_term` is what the box shows at that moment, exactly as it shows it, and `""` on a
+changelist without a box.
+
+A changelist can also open with a term already applied:
+
+```python
+page = admin_ui.list(Product, search="Bolt")  # done
+
+assert page.search_term == "Bolt"             # done
+assert page.count == 1                        # done
+```
+
+The admin ignores a term when it has no search fields and shows every record, so on such a
+changelist this raises `LookupError`, as `page.search` does. A page that did not open comes back as
+usual, to say how it was refused.
+
+---
+
 # 9. Changelist Row Matching (done)
 
 One of the main 1.0.0 features is concise verification of rows shown on a changelist.
@@ -3142,7 +3190,7 @@ Login page:
 
 * search: searching a changelist through its search box, which leads to the changelist of the
   results, the search term it shows, and the count and summary of its results; a changelist
-  whose admin declares no search fields reports that it offers no search;
+  whose admin declares no search fields reports that it offers no search (done);
 * filters: the filters a changelist offers, their choices, and applying them;
 * ordering: the order a changelist shows, sortable columns, and sorting by them;
 * pagination and page traversal;
