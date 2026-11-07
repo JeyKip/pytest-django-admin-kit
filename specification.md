@@ -806,6 +806,19 @@ elsewhere, such as to the login page after the session ended, the page stands fo
 `page.search_term` is what the box shows at that moment, exactly as it shows it, and `""` on a
 changelist without a box.
 
+A changelist can also open with a term already applied:
+
+```python
+page = admin_ui.list(Product, search="Bolt")  # done
+
+assert page.search_term == "Bolt"             # done
+assert page.count == 1                        # done
+```
+
+The admin ignores a term when it has no search fields and shows every record, so on such a
+changelist this raises `LookupError`, as `page.search` does. A page that did not open comes back as
+usual, to say how it was refused.
+
 ---
 
 # 9. Changelist Row Matching (done)

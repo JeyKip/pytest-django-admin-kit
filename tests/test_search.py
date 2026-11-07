@@ -205,3 +205,63 @@ def test_a_page_that_did_not_open_cannot_show_a_term(admin_ui, adder):
 
     with pytest.raises(LookupError, match="The page did not open"):
         _ = page.search_term
+
+
+def test_a_changelist_can_open_with_a_term_applied(admin_ui, superuser, products):
+    admin_ui.login(superuser)
+
+    page = admin_ui.list(Product, search="Bolt")
+
+    assert page.works
+    assert not page.redirected
+    assert page.destination == admin_ui.url.list(Product)
+    assert page.search_term == "Bolt"
+    assert page.count == 1
+    assert [row["name"].value for row in page.rows] == ["Bolt"]
+
+
+def test_a_term_opened_with_reads_back_as_written(admin_ui, superuser, products):
+    """Each of these characters means something else in a URL unless it is encoded."""
+    admin_ui.login(superuser)
+    term = "a&b=c #d+e"
+
+    page = admin_ui.list(Product, search=term)
+
+    assert page.search_term == term
+    assert page.empty
+
+
+def test_opening_with_an_empty_term_shows_every_record(admin_ui, superuser, products):
+    admin_ui.login(superuser)
+
+    page = admin_ui.list(Product, search="")
+
+    assert page.works
+    assert page.search_term == ""
+    assert page.count == 3
+
+
+def test_opening_with_a_term_refuses_a_changelist_without_search_fields(admin_ui, superuser):
+    admin_ui.login(superuser)
+
+    with pytest.raises(LookupError, match="The page offers no search"):
+        admin_ui.list(Feed, search="anything")
+
+
+def test_a_refused_user_opening_with_a_term_gets_a_denied_page(admin_ui, adder):
+    admin_ui.login(adder)
+
+    page = admin_ui.list(Product, search="Bolt")
+
+    assert page.denied
+    assert not page.works
+
+
+def test_a_page_opened_with_a_term_can_search_again(admin_ui, superuser, products):
+    admin_ui.login(superuser)
+    page = admin_ui.list(Product, search="Bolt")
+
+    page.search("Washer")
+
+    assert page.search_term == "Washer"
+    assert [row["name"].value for row in page.rows] == ["Washer"]

@@ -12,6 +12,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - Tell whether a changelist offers a search with `page.can_search`. It follows what the page shows, so an admin without search fields offers none.
 - Search a changelist through its search box with `page.search(term)`. The same page then reads the results, a search keeps any filters applied, and `page.search("")` clears the search.
 - Read the term a changelist's search box shows with `page.search_term`, `""` for a changelist without a box.
+- Open a changelist with a term already applied with `admin_ui.list(Model, search=term)`. An admin without search fields raises `LookupError`, as `page.search` does.
 
 ### Fixed
 

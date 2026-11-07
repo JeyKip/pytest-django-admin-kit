@@ -156,6 +156,11 @@ assert page.search_term == "Bolt"
 assert page.count == 1
 assert page.summary == "1 product"
 assert page.contains({"name": "Bolt"})
+
+# The same results, opened directly:
+page = admin_ui.list(Product, search="Bolt")
+
+assert page.count == 1
 ```
 
 **Reading form fields.** The create and edit pages list their fields by name, in the order the
