@@ -515,6 +515,30 @@ class ChangelistPage(ModelPage):
         """
         return self._search_box.count() > 0
 
+    def search(self, term: str) -> None:
+        """Type ``term`` into the search box, click the button, and wait for the results.
+
+        This same page then reads the results, so ``count``, ``summary``, ``rows`` and the rest
+        describe what the search found. A search keeps any filters applied, and an empty term
+        clears the search. If the page has no search box, nothing is clicked and ``LookupError``
+        says so.
+
+        The page stands for wherever the browser ended up. If the admin sends it elsewhere, such
+        as to the login page after the session ended, the page reports that as ``denied`` or
+        ``redirected``.
+        """
+        box = self._search_box
+        if not box.count():
+            raise LookupError("The page offers no search.")
+        box.fill(term)
+        with self._page.expect_navigation() as navigation:
+            self._search_form.locator('input[type="submit"]').click()
+        response = navigation.value
+        # A navigation of the page always comes with a response.
+        assert response is not None
+        self._status_code = response.status
+        self._landed()
+
     @property
     def _search_box(self) -> Locator:
         return self._search_form.locator("#searchbar")

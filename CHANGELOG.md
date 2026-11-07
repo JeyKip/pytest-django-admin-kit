@@ -10,6 +10,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 ### Added
 
 - Tell whether a changelist offers a search with `page.can_search`. It follows what the page shows, so an admin without search fields offers none.
+- Search a changelist through its search box with `page.search(term)`. The same page then reads the results, a search keeps any filters applied, and `page.search("")` clears the search.
 
 ## [1.1.0] - 2026-11-05
 

@@ -29,3 +29,117 @@ def test_a_page_that_did_not_open_cannot_say_whether_it_offers_a_search(admin_ui
 
     with pytest.raises(LookupError, match="The page did not open"):
         _ = page.can_search
+
+
+def test_the_page_reads_the_results_of_a_search(admin_ui, superuser, products):
+    admin_ui.login(superuser)
+    page = admin_ui.list(Product)
+
+    assert page.search("Bolt") is None
+
+    assert page.works
+    assert not page.redirected
+    assert page.status_code == 200
+    assert page.destination == admin_ui.url.list(Product)
+    assert page.count == 1
+    assert page.summary == "1 product"
+    assert not page.empty
+    assert [row["name"].value for row in page.rows] == ["Bolt"]
+    assert page.contains({"name": "Bolt"})
+
+
+def test_several_results_are_reported_in_the_plural(admin_ui, superuser, products):
+    """The term is in the name or the SKU of two of the three products."""
+    admin_ui.login(superuser)
+    page = admin_ui.list(Product)
+
+    page.search("t")
+
+    assert page.count == 2
+    assert page.summary == "2 products"
+    assert {row["name"].value for row in page.rows} == {"Bolt", "Nut"}
+
+
+def test_a_search_that_finds_nothing_leaves_an_empty_changelist(admin_ui, superuser, products):
+    admin_ui.login(superuser)
+    page = admin_ui.list(Product)
+
+    page.search("no such product")
+
+    assert page.works
+    assert page.empty
+    assert page.count == 0
+    assert page.summary == "0 products"
+    assert page.rows == []
+    assert page.can_search
+
+
+def test_the_same_search_can_be_run_again(admin_ui, superuser, products):
+    admin_ui.login(superuser)
+    page = admin_ui.list(Product)
+
+    page.search("Bolt")
+    page.search("Bolt")
+
+    assert page.count == 1
+
+
+def test_one_page_can_search_several_times_in_a_row(admin_ui, superuser, products):
+    admin_ui.login(superuser)
+    page = admin_ui.list(Product)
+
+    page.search("Bolt")
+    assert [row["name"].value for row in page.rows] == ["Bolt"]
+
+    page.search("Washer")
+    assert [row["name"].value for row in page.rows] == ["Washer"]
+
+
+def test_an_empty_term_clears_the_search(admin_ui, superuser, products):
+    admin_ui.login(superuser)
+    page = admin_ui.list(Product)
+    page.search("Bolt")
+
+    page.search("")
+
+    assert page.count == 3
+
+
+def test_a_search_keeps_the_filters_applied(admin_ui, superuser, products):
+    """Two products named Bolt, of which the filter lets only the active one through."""
+    Product.objects.create(name="Bolt", sku="SKU-Inactive", price="10.00", is_active=False)
+    admin_ui.login(superuser)
+    page = admin_ui.list(Product)
+    page.native.goto(admin_ui.absolute(f"{admin_ui.url.list(Product)}?is_active__exact=1"))
+
+    page.search("Bolt")
+
+    assert page.count == 1
+    assert page.rows[0]["sku"].value == "SKU-Bolt"
+
+
+def test_a_changelist_without_search_fields_refuses_a_search(admin_ui, superuser):
+    admin_ui.login(superuser)
+    page = admin_ui.list(Feed)
+    before = page.native.url
+
+    with pytest.raises(LookupError, match="The page offers no search"):
+        page.search("anything")
+
+    assert page.native.url == before
+
+
+def test_a_search_after_the_session_ended_reports_the_refusal(admin_ui, superuser, products):
+    """The admin sends the browser to the login page, and the page stands for where it landed."""
+    admin_ui.login(superuser)
+    page = admin_ui.list(Product)
+    admin_ui.logout()
+
+    page.search("Bolt")
+
+    assert page.denied
+    assert page.redirected
+    assert not page.works
+    assert page.destination == admin_ui.url.login()
+    with pytest.raises(LookupError, match="The page did not open"):
+        _ = page.rows

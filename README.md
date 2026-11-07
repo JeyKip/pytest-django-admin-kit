@@ -140,6 +140,23 @@ assert page.match([
 ])
 ```
 
+**Searching a changelist.** `search` types into the admin's search box and clicks its button.
+The same page then reads the results, so the count, summary and rows are what the search found.
+A search keeps any filters applied, `page.search("")` clears it, and on a changelist whose admin
+has no search fields, `can_search` is false and `search` raises `LookupError`.
+
+```python
+page = admin_ui.list(Product)
+
+assert page.can_search
+
+page.search("Bolt")
+
+assert page.count == 1
+assert page.summary == "1 product"
+assert page.contains({"name": "Bolt"})
+```
+
 **Reading form fields.** The create and edit pages list their fields by name, in the order the
 admin presents them, whether the user may fill them or only read them. A field the admin renders
 hidden is not shown, so it is not listed. Whether a field is required is read the way the user

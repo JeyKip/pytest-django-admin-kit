@@ -785,6 +785,23 @@ assert not admin_ui.list(Feed).can_search     # done
 The admin draws a search box only when it has search fields for the request, so this follows what
 the page shows rather than `ModelAdmin.search_fields`.
 
+`page.search` searches through that box. It returns nothing: the page stays the same object, and
+the count, summary and rows read the results.
+
+```python
+page = admin_ui.list(Product)
+
+page.search("Bolt")                           # done
+
+assert page.count == 1                        # done
+assert page.summary == "1 product"            # done
+```
+
+A search keeps any filters applied, and `page.search("")` clears the search. On a changelist
+without a search box, nothing is clicked and `LookupError` says so. If the admin sends the browser
+elsewhere, such as to the login page after the session ended, the page stands for where it landed
+(section 3.9) and reports it as `denied` or `redirected`.
+
 ---
 
 # 9. Changelist Row Matching (done)
