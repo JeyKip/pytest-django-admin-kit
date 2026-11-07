@@ -540,6 +540,12 @@ class ChangelistPage(ModelPage):
         self._landed()
 
     @property
+    def search_term(self) -> str:
+        """The term the search box shows, exactly as it shows it, or ``""`` without a box."""
+        box = self._search_box
+        return box.input_value() if box.count() else ""
+
+    @property
     def _search_box(self) -> Locator:
         return self._search_form.locator("#searchbar")
 

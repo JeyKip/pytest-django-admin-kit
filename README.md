@@ -152,6 +152,7 @@ assert page.can_search
 
 page.search("Bolt")
 
+assert page.search_term == "Bolt"
 assert page.count == 1
 assert page.summary == "1 product"
 assert page.contains({"name": "Bolt"})

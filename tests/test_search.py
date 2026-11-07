@@ -143,3 +143,65 @@ def test_a_search_after_the_session_ended_reports_the_refusal(admin_ui, superuse
     assert page.destination == admin_ui.url.login()
     with pytest.raises(LookupError, match="The page did not open"):
         _ = page.rows
+
+
+def test_the_term_is_empty_before_any_search(admin_ui, superuser):
+    admin_ui.login(superuser)
+
+    assert admin_ui.list(Product).search_term == ""
+
+
+def test_the_term_is_empty_without_a_search_box(admin_ui, superuser):
+    admin_ui.login(superuser)
+
+    assert admin_ui.list(Feed).search_term == ""
+
+
+def test_the_page_shows_the_term_it_searched_for(admin_ui, superuser, products):
+    admin_ui.login(superuser)
+    page = admin_ui.list(Product)
+
+    page.search("Bolt")
+
+    assert page.search_term == "Bolt"
+
+
+def test_the_term_keeps_its_spaces(admin_ui, superuser, products):
+    admin_ui.login(superuser)
+    page = admin_ui.list(Product)
+
+    page.search("  Bolt ")
+
+    assert page.search_term == "  Bolt "
+    assert page.count == 1
+
+
+def test_the_term_is_empty_after_clearing_the_search(admin_ui, superuser, products):
+    admin_ui.login(superuser)
+    page = admin_ui.list(Product)
+    page.search("Bolt")
+
+    page.search("")
+
+    assert page.search_term == ""
+
+
+def test_the_term_is_what_the_box_shows_now(admin_ui, superuser, products):
+    """Text typed but not yet submitted is on the screen, so it reads as typed, while the rows
+    still show the last search."""
+    admin_ui.login(superuser)
+    page = admin_ui.list(Product)
+    page.search("Bolt")
+
+    page.native.locator("#searchbar").fill("Nut")
+
+    assert page.search_term == "Nut"
+    assert [row["name"].value for row in page.rows] == ["Bolt"]
+
+
+def test_a_page_that_did_not_open_cannot_show_a_term(admin_ui, adder):
+    admin_ui.login(adder)
+    page = admin_ui.list(Product)
+
+    with pytest.raises(LookupError, match="The page did not open"):
+        _ = page.search_term

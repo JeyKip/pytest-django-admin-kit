@@ -773,7 +773,7 @@ assert page.rows == []    # done
 
 ---
 
-## 8.3 Search
+## 8.3 Search (done)
 
 A changelist says whether it offers a search:
 
@@ -795,12 +795,16 @@ page.search("Bolt")                           # done
 
 assert page.count == 1                        # done
 assert page.summary == "1 product"            # done
+assert page.search_term == "Bolt"             # done
 ```
 
 A search keeps any filters applied, and `page.search("")` clears the search. On a changelist
 without a search box, nothing is clicked and `LookupError` says so. If the admin sends the browser
 elsewhere, such as to the login page after the session ended, the page stands for where it landed
 (section 3.9) and reports it as `denied` or `redirected`.
+
+`page.search_term` is what the box shows at that moment, exactly as it shows it, and `""` on a
+changelist without a box.
 
 ---
 
@@ -3173,7 +3177,7 @@ Login page:
 
 * search: searching a changelist through its search box, which leads to the changelist of the
   results, the search term it shows, and the count and summary of its results; a changelist
-  whose admin declares no search fields reports that it offers no search;
+  whose admin declares no search fields reports that it offers no search (done);
 * filters: the filters a changelist offers, their choices, and applying them;
 * ordering: the order a changelist shows, sortable columns, and sorting by them;
 * pagination and page traversal;
