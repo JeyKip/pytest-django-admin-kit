@@ -821,6 +821,48 @@ usual, to say how it was refused.
 
 ---
 
+## 8.4 Filters
+
+A changelist says whether it offers filters, and lists them by the field they filter, in the order
+the sidebar shows them:
+
+```python
+page = admin_ui.list(Product)
+
+assert page.can_filter                                      # done
+assert not admin_ui.list(Feed).can_filter                   # done
+assert list(page.filters) == ["is_active", "released_on"]   # done
+```
+
+This follows what the page shows rather than `ModelAdmin.list_filter`, so it also follows
+`get_list_filter()`, and a filter the admin leaves out because it has nothing to offer isn't there.
+`page.filters` is a read-only mapping, and a field without filters raises `KeyError` listing the
+fields there are.
+
+A filter is addressed by its field, never by its title, which repeats and is translated. The page
+doesn't say which `list_filter` entry a filter came from, so the field comes from the parameters
+its links send: a trailing lookup and a relation's target are removed, so `category__id__exact`
+names `category`. A filter of the project's own is named after its `parameter_name`. When a
+filter's parameters name different fields, the part they share up to a `__` is used, or else the
+first of them in sorted order.
+
+Each field has a group of filters, usually one. Two filters on one field, such as a date filter and
+an `EmptyFieldListFilter` on `released_on`, share a group, in the order shown, and are reached by
+index:
+
+```python
+dates = page.filters["released_on"]
+
+assert len(dates) == 2                                      # done
+dates[1].native                                             # done
+```
+
+An index depends on the order of `list_filter`. A filter drawn with inputs instead of links, as
+range filters often are, has no choices to pick, so it isn't listed; a test fills it through
+`page.native`.
+
+---
+
 # 9. Changelist Row Matching (done)
 
 One of the main 1.0.0 features is concise verification of rows shown on a changelist.
@@ -2348,6 +2390,10 @@ AdminSession
 ├── EditPage
 ├── DeletePage           (the confirmation the admin asks for before deleting)
 │
+├── ChangelistFilters    (a changelist's filters by field, section 8.4)
+│   └── FieldFilters     (the filters on one field)
+│       └── FieldFilter
+│
 ├── Fieldset
 ├── FormField
 │   └── FieldChoice
@@ -2372,6 +2418,10 @@ them, so they have none. (done)
 
 A `SubmissionResult` reports on a submission rather than standing for anything on the page, so
 it has none either; the page it carries has one. (done)
+
+`ChangelistFilters` is a mapping of groups rather than an element, so it has none. A
+`FieldFilter`'s handle is its list of links, and a `FieldFilters` handle is that list, or a list
+of them for a field with several filters. (done)
 
 ---
 

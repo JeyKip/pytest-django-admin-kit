@@ -26,6 +26,7 @@ from playwright.sync_api import Locator, Page, Response
 from . import matching
 from .errors import ValidationErrors
 from .fields import Fields, Fieldset, FormField
+from .filters import ChangelistFilters
 from .messages import Messages
 from .normalize import integer
 from .rendered import text_of
@@ -552,6 +553,27 @@ class ChangelistPage(ModelPage):
     @property
     def _search_form(self) -> Locator:
         return self._shown().locator("#changelist-search")
+
+    @property
+    def can_filter(self) -> bool:
+        """Whether the changelist offers any filter in its sidebar.
+
+        This reads the page rather than ``ModelAdmin.list_filter``, so it follows
+        ``get_list_filter()``, and a filter the admin leaves out because it has nothing to
+        offer doesn't count.
+        """
+        return bool(self.filters)
+
+    @property
+    def filters(self) -> ChangelistFilters:
+        """The filters the changelist offers, by the field they filter, in the order shown.
+
+        A field usually has one filter. The filters are read from the page again whenever they
+        are used.
+        """
+        # A page that did not open fails here rather than at the first use of what it hands out.
+        self._shown()
+        return ChangelistFilters(self._shown, self._model)
 
 
 class FormPage(ModelPage):
