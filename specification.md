@@ -821,7 +821,7 @@ usual, to say how it was refused.
 
 ---
 
-## 8.4 Filters
+## 8.4 Filters (done)
 
 A changelist says whether it offers filters, and lists them by the field they filter, in the order
 the sidebar shows them:
@@ -919,6 +919,21 @@ dates.apply("Has date")
 
 assert dates.selected == ["Has date", "All"]                # done
 ```
+
+Filters are cleared without a label, so in any language:
+
+```python
+page.filters.clear()                                        # done
+page.filters["released_on"].clear()                         # done
+dates[1].clear()                                            # done
+```
+
+`page.filters.clear()` clicks the admin's "Clear all filters", which keeps a search and the
+ordering. A filter's `clear()` clicks the choice that removes its parameters, "All" or "Any date"
+as a rule, and a group's clears each of its filters in order. Each does nothing when nothing it
+would clear is applied, and the page isn't loaded again. A changelist without filters raises
+`LookupError`, and so does a filter applied without a choice that clears it, such as one of the
+project's own without "All".
 
 ---
 
@@ -3300,7 +3315,7 @@ Login page:
 * search: searching a changelist through its search box, which leads to the changelist of the
   results, the search term it shows, and the count and summary of its results; a changelist
   whose admin declares no search fields reports that it offers no search (done);
-* filters: the filters a changelist offers, their choices, and applying them;
+* filters: the filters a changelist offers, their choices, and applying them (done);
 * ordering: the order a changelist shows, sortable columns, and sorting by them;
 * pagination and page traversal;
 * actions: the actions a changelist offers, selecting rows, and running an action, including

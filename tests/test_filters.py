@@ -22,6 +22,12 @@ DATE_CHOICES = [
     "Has date",
 ]
 
+# The ways to clear the category filter: all filters at once, and the field's own.
+CLEARS = {
+    "every filter": lambda page: page.filters.clear(),
+    "the field's filters": lambda page: page.filters["category"].clear(),
+}
+
 # The parameters a filter's links send, and the field the filter is named after.
 NAMES = {
     "a boolean": (Product, ["is_active__exact"], "is_active"),
@@ -65,6 +71,13 @@ def list_filter(monkeypatch):
 def links(element):
     """The labels of the links in a filter's list, as the user reads them."""
     return [" ".join(text.split()) for text in element.locator("a").all_text_contents()]
+
+
+def page_loads(page):
+    """The address of each page the browser loads from now on."""
+    loads = []
+    page.native.on("load", lambda loaded: loads.append(loaded.url))
+    return loads
 
 
 def click(page, parameter):
@@ -697,6 +710,153 @@ def test_a_filter_applied_after_the_session_ended_leaves_the_page_denied(
 
     admin_ui.logout()
     group.apply("Tools")
+
+    assert page.denied
+    assert page.redirected
+    assert page.destination == admin_ui.url.login()
+
+
+def test_clearing_every_filter_leaves_each_at_its_first_choice(admin_ui, superuser, stocked):
+    admin_ui.login(superuser)
+    page = admin_ui.list(Product)
+    page.filters["category"].apply("Tools")
+    page.filters["is_active"].apply("Yes")
+
+    assert page.filters.clear() is None
+
+    assert [group.selected for group in page.filters.values()] == ["All", "Any date", "All", "All"]
+    assert page.count == 2
+
+
+def test_clearing_one_field_keeps_the_filters_on_the_others(admin_ui, superuser, stocked):
+    admin_ui.login(superuser)
+    page = admin_ui.list(Product)
+    page.filters["category"].apply("Tools")
+    page.filters["is_active"].apply("Yes")
+
+    assert page.filters["category"].clear() is None
+
+    assert page.filters["category"].selected == "All"
+    assert page.filters["is_active"].selected == "Yes"
+    assert page.count == 2
+
+
+@pytest.mark.parametrize("clear", CLEARS.values(), ids=CLEARS.keys())
+def test_a_search_survives_clearing(admin_ui, superuser, stocked, clear):
+    admin_ui.login(superuser)
+    page = admin_ui.list(Product)
+    page.search("Bolt")
+    page.filters["category"].apply("Toys")
+
+    clear(page)
+
+    assert page.filters["category"].selected == "All"
+    assert page.search_term == "Bolt"
+    assert page.count == 1
+
+
+def test_clearing_what_is_not_applied_loads_nothing(admin_ui, superuser, stocked):
+    admin_ui.login(superuser)
+    page = admin_ui.list(Product)
+    loads = page_loads(page)
+
+    page.filters.clear()
+    page.filters["category"].clear()
+    page.filters["category"][0].clear()
+
+    assert loads == []
+
+
+def test_clearing_a_changelist_without_filters_raises(admin_ui, superuser, feed):
+    admin_ui.login(superuser)
+    page = admin_ui.list(Feed)
+
+    with pytest.raises(LookupError) as failure:
+        page.filters.clear()
+
+    assert str(failure.value) == "The page offers no filters."
+
+
+def test_clearing_the_date_filter_alone_clears_the_empty_filter_on_its_field_too(
+    admin_ui, superuser, stocked, list_filter
+):
+    """The date filter's "Any date" leaves out every parameter of its field."""
+    list_filter("released_on", ("released_on", EmptyFieldListFilter))
+    admin_ui.login(superuser)
+    page = admin_ui.list(Product)
+    group = page.filters["released_on"]
+    group.apply("Has date")
+    group.apply("Empty")
+    loads = page_loads(page)
+
+    group[0].clear()
+
+    assert group.selected == ["Any date", "All"]
+    assert len(loads) == 1
+    assert urlsplit(page.native.url).query == ""
+
+
+def test_clearing_a_field_clicks_each_of_its_filters_still_applied(
+    admin_ui, superuser, stocked, list_filter
+):
+    """With the empty filter first, its "All" keeps the date filter's parameter, so the date
+    filter is cleared with a second click."""
+    list_filter(("released_on", EmptyFieldListFilter), "released_on")
+    admin_ui.login(superuser)
+    page = admin_ui.list(Product)
+    group = page.filters["released_on"]
+    group.apply("Has date")
+    group.apply("Empty")
+    loads = page_loads(page)
+
+    group.clear()
+
+    assert group.selected == ["All", "Any date"]
+    assert len(loads) == 2
+    assert urlsplit(page.native.url).query == ""
+
+
+def test_a_filter_without_a_choice_that_clears_it_raises(admin_ui, superuser, stocked, list_filter):
+    list_filter(StatusFilter, "is_active")
+    admin_ui.login(superuser)
+    page = admin_ui.list(Product)
+    page.filters["status"].apply("Inactive")
+    loads = page_loads(page)
+
+    with pytest.raises(LookupError) as failure:
+        page.filters["status"].clear()
+
+    assert str(failure.value) == (
+        "The filter on 'status' offers no choice that clears it. "
+        "Clear every filter with page.filters.clear()."
+    )
+    assert loads == []
+
+
+def test_a_filter_without_a_choice_that_clears_it_is_cleared_with_every_filter(
+    admin_ui, superuser, stocked, list_filter
+):
+    list_filter(StatusFilter, "is_active")
+    admin_ui.login(superuser)
+    page = admin_ui.list(Product)
+    page.filters["status"].apply("Inactive")
+
+    page.filters.clear()
+
+    assert page.filters["status"].selected is None
+    assert page.count == 2
+
+
+@pytest.mark.parametrize("clear", CLEARS.values(), ids=CLEARS.keys())
+def test_clearing_after_the_session_ended_leaves_the_page_denied(
+    admin_ui, superuser, stocked, clear
+):
+    admin_ui.login(superuser)
+    page = admin_ui.list(Product)
+    page.filters["category"].apply("Tools")
+
+    admin_ui.logout()
+    clear(page)
 
     assert page.denied
     assert page.redirected

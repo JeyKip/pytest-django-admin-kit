@@ -16,6 +16,10 @@ from django.core.exceptions import FieldDoesNotExist
 from django.db.models import Field, Model
 from playwright.sync_api import Locator, Page
 
+# The admin's "Clear all filters": the one link in the sidebar outside every filter's list that
+# isn't "Show counts" or "Hide counts". Its text is translated, and its id is gone from 5.0.
+_CLEAR_ALL = "#changelist-filter a:not(ul a):not(.viewlink):not(.hidelink)"
+
 
 class FieldFilter:
     """One filter in the sidebar: the one at its position among its field's filters, read
@@ -63,6 +67,29 @@ class FieldFilter:
                 else _no_choice(self._group.name, choice, [(index, _choices(block))])
             )
         _click(block, positions[0], self._group._follow)
+
+    def clear(self) -> None:
+        """Clear the filter through the choice that removes its parameters, "All" or "Any
+        date" as a rule, and wait for the page it leads to.
+
+        Nothing is clicked when the filter isn't applied. A filter applied without a choice
+        that clears it, such as one of the project's own without "All", raises ``LookupError``.
+        """
+        block, _ = self._located()
+        hrefs = _hrefs(block)
+        own = _own_parameters(hrefs)
+        if not own & set(_query(block.page.url)):
+            return
+        clearing = [position for position, href in enumerate(hrefs) if not own & set(_query(href))]
+        if not clearing:
+            # The page offers no way to clear this filter alone. Going to a URL without its
+            # parameters would do what no link does, and "Clear all filters" would clear the
+            # others too, so the test is pointed to that instead.
+            raise LookupError(
+                f"The filter on {self._group.name!r} offers no choice that clears it. "
+                "Clear every filter with page.filters.clear()."
+            )
+        _click(block, clearing[0], self._group._follow)
 
     def _located(self) -> tuple[Locator, int]:
         """The filter's ``ul``, and how many filters its field has now."""
@@ -153,6 +180,16 @@ class FieldFilters(Sequence[FieldFilter]):
             f"page.filters[{self._name!r}][{offering[0]}].apply({choice!r})."
         )
 
+    def clear(self) -> None:
+        """Clear each of the field's filters that is applied, in the order shown, as
+        ``FieldFilter.clear`` does.
+
+        A click that already cleared a later filter saves that filter's click, as "Any date"
+        does for an empty filter on the same field.
+        """
+        for item in self:
+            item.clear()
+
     @overload
     def __getitem__(self, index: int) -> FieldFilter: ...
 
@@ -220,6 +257,20 @@ class ChangelistFilters(Mapping[str, FieldFilters]):
 
     def __len__(self) -> int:
         return len(self._names())
+
+    def clear(self) -> None:
+        """Click the admin's "Clear all filters" and wait for the page it leads to.
+
+        The admin keeps a search and the ordering. It shows the link only while a filter is
+        applied, so nothing is clicked otherwise. A changelist without filters raises
+        ``LookupError``.
+        """
+        page = self._shown()
+        link = page.locator(_CLEAR_ALL)
+        if link.count():
+            self._follow(link.first)
+        elif not _filter_blocks(page, self._model):
+            raise LookupError("The page offers no filters.")
 
     def __repr__(self) -> str:
         return f"ChangelistFilters({self._names()!r})"
@@ -316,13 +367,25 @@ def _and(items: list[int]) -> str:
     return " and ".join([", ".join(words[:-1]), words[-1]]) if len(words) > 1 else words[0]
 
 
+def _hrefs(block: Locator) -> list[str]:
+    # Every link, in the order of `_choices`, so a position names the same link in both.
+    hrefs: list[str] = block.evaluate(
+        "ul => Array.from(ul.querySelectorAll('a'), a => a.getAttribute('href') || '')"
+    )
+    return hrefs
+
+
+def _query(url: str) -> dict[str, list[str]]:
+    return parse_qs(urlsplit(url).query, keep_blank_values=True)
+
+
 def _own_parameters(hrefs: list[str]) -> set[str]:
     # Each link is the whole URL the page would have after the click, so it repeats what
     # is already applied, such as a search or another filter's value, unchanged in every
     # link. The filter's own parameters are the ones its links don't all send alike: its
     # first link ("All") usually removes them, and its other links set them to different
     # values, which is also how a filter of the project's own without "All" is told.
-    sent = [parse_qs(urlsplit(href).query, keep_blank_values=True) for href in hrefs]
+    sent = [_query(href) for href in hrefs]
     names: set[str] = set().union(*sent)
     return {name for name in names if len({_sent_as(values, name) for values in sent}) > 1}
 

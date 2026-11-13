@@ -183,11 +183,17 @@ active.apply("No")
 
 assert active.selected == "No"
 assert page.count == 0
+
+# Back to every product, the way "Clear all filters" does it:
+page.filters.clear()
+
+assert active.selected == "All"
 ```
 
 A field with two filters, such as a date filter and an `EmptyFieldListFilter`, reads a list of
 each, and a label only one of them offers applies through it. A filter is also reached by index,
-as in `page.filters["released_on"][1].apply("Empty")`.
+as in `page.filters["released_on"][1].apply("Empty")`. `clear()` needs no label: on
+`page.filters` it clears everything, on a field its filters, and on a filter just that one.
 
 **Reading form fields.** The create and edit pages list their fields by name, in the order the
 admin presents them, whether the user may fill them or only read them. A field the admin renders
