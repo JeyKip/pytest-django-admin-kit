@@ -163,6 +163,38 @@ page = admin_ui.list(Product, search="Bolt")
 assert page.count == 1
 ```
 
+**Filtering a changelist.** `filters` lists the filters in the sidebar by the field they filter.
+Each reads its choices and the one selected as labels, and `apply` clicks a choice by its label.
+The same page then reads the results, and a filter keeps a search and the other filters applied.
+A label matches with or without the count Django can show after it.
+
+```python
+page = admin_ui.list(Product)
+
+assert page.can_filter
+assert list(page.filters) == ["is_active", "released_on"]
+
+active = page.filters["is_active"]
+
+assert active.choices == ["All", "Yes", "No"]
+assert active.selected == "All"
+
+active.apply("No")
+
+assert active.selected == "No"
+assert page.count == 0
+
+# Back to every product, the way "Clear all filters" does it:
+page.filters.clear()
+
+assert active.selected == "All"
+```
+
+A field with two filters, such as a date filter and an `EmptyFieldListFilter`, reads a list of
+each, and a label only one of them offers applies through it. A filter is also reached by index,
+as in `page.filters["released_on"][1].apply("Empty")`. `clear()` needs no label: on
+`page.filters` it clears everything, on a field its filters, and on a filter just that one.
+
 **Reading form fields.** The create and edit pages list their fields by name, in the order the
 admin presents them, whether the user may fill them or only read them. A field the admin renders
 hidden is not shown, so it is not listed. Whether a field is required is read the way the user

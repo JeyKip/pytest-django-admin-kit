@@ -50,6 +50,91 @@ class ProductForm(forms.ModelForm):
         return cleaned_data
 
 
+class StockFilter(admin.SimpleListFilter):
+    """A filter of the project's own, named after a parameter that is no field's."""
+
+    title = "stock level"
+    parameter_name = "stock"
+
+    def lookups(self, request, model_admin):
+        return ("low", "Low"), ("high", "High")
+
+    def queryset(self, request, queryset):
+        if self.value() == "low":
+            return queryset.filter(quantity__lt=5)
+        if self.value() == "high":
+            return queryset.filter(quantity__gte=5)
+        return queryset
+
+
+class StatusFilter(admin.SimpleListFilter):
+    """A filter of the project's own without "All", as a filter that always has a value is
+    often written, so every one of its links sends its parameter. `ProductAdmin` doesn't
+    list it; the tests that need it do."""
+
+    title = "status"
+    parameter_name = "status"
+
+    def lookups(self, request, model_admin):
+        return ("active", "Active"), ("inactive", "Inactive")
+
+    def choices(self, changelist):
+        for lookup, title in self.lookup_choices:
+            yield {
+                "selected": self.value() == lookup,
+                "query_string": changelist.get_query_string({self.parameter_name: lookup}),
+                "display": title,
+            }
+
+    def queryset(self, request, queryset):
+        if self.value() == "active":
+            return queryset.filter(is_active=True)
+        if self.value() == "inactive":
+            return queryset.filter(is_active=False)
+        return queryset
+
+
+class PriceRangeFilter(admin.FieldListFilter):
+    """A filter of the project's own on a field, whose links each send two parameters, the
+    way a date filter's do. `ProductAdmin` doesn't list it; the tests that need it do."""
+
+    bands = (("Under 10", "0", "10"), ("10 to 100", "10", "100"))
+
+    def __init__(self, field, request, params, model, model_admin, field_path):
+        self.since = f"{field_path}__gte"
+        self.until = f"{field_path}__lt"
+        super().__init__(field, request, params, model, model_admin, field_path)
+
+    def expected_parameters(self):
+        return [self.since, self.until]
+
+    def choices(self, changelist):
+        # From Django 5.0 a parameter's value is the list of the values sent for it.
+        used = {
+            name: value[-1] if isinstance(value, list) else value
+            for name, value in self.used_parameters.items()
+        }
+        yield {
+            "selected": not used,
+            "query_string": changelist.get_query_string(remove=[self.since, self.until]),
+            "display": "All",
+        }
+        for label, since, until in self.bands:
+            band = {self.since: since, self.until: until}
+            yield {
+                "selected": used == band,
+                "query_string": changelist.get_query_string(band),
+                "display": label,
+            }
+
+
+class PriceInputFilter(PriceRangeFilter):
+    """The same filter drawn as two inputs and a button, as range filters often are, so it
+    has no links to pick from."""
+
+    template = "shop/price_input_filter.html"
+
+
 @admin.register(Product)
 class ProductAdmin(admin.ModelAdmin):
     form = ProductForm
@@ -64,7 +149,8 @@ class ProductAdmin(admin.ModelAdmin):
         "price_with_tax",
         "documents",
     )
-    list_filter = ("is_active",)
+    # A boolean, a date, a relation and a filter of the project's own.
+    list_filter = ("is_active", "released_on", "category", StockFilter)
     search_fields = ("name", "sku")
     empty_value_display = "(none)"
     # A field every user gets rendered only, next to the ones an editor may fill, and

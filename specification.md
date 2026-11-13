@@ -821,6 +821,122 @@ usual, to say how it was refused.
 
 ---
 
+## 8.4 Filters (done)
+
+A changelist says whether it offers filters, and lists them by the field they filter, in the order
+the sidebar shows them:
+
+```python
+page = admin_ui.list(Product)
+
+assert page.can_filter                                      # done
+assert not admin_ui.list(Feed).can_filter                   # done
+assert list(page.filters) == ["is_active", "released_on"]   # done
+```
+
+This follows what the page shows rather than `ModelAdmin.list_filter`, so it also follows
+`get_list_filter()`, and a filter the admin leaves out because it has nothing to offer isn't there.
+`page.filters` is a read-only mapping, and a field without filters raises `KeyError` listing the
+fields there are.
+
+A filter is addressed by its field, never by its title, which repeats and is translated. The page
+doesn't say which `list_filter` entry a filter came from, so the field comes from the parameters
+its links send: a trailing lookup and a relation's target are removed, so `category__id__exact`
+names `category`. A filter of the project's own is named after its `parameter_name`. When a
+filter's parameters name different fields, the part they share up to a `__` is used, or else the
+first of them in sorted order.
+
+Each field has a group of filters, usually one. Two filters on one field, such as a date filter and
+an `EmptyFieldListFilter` on `released_on`, share a group, in the order shown, and are reached by
+index:
+
+```python
+dates = page.filters["released_on"]
+
+assert len(dates) == 2                                      # done
+dates[1].native                                             # done
+```
+
+An index depends on the order of `list_filter`. A filter drawn with inputs instead of links, as
+range filters often are, has no choices to pick, so it isn't listed; a test fills it through
+`page.native`.
+
+A filter reads its choices and the one the page marks selected, as labels:
+
+```python
+active = page.filters["is_active"]
+
+assert active.choices == ["All", "Yes", "No"]               # done
+assert active.selected == "All"                             # done
+```
+
+The labels are read as the page shows them, so with Django's counts on they read "Yes (3)". A
+date filter's first choice is "Any date". `selected` is `None` when the page marks no choice, as
+Django does for a date filter while another filter on the same field is applied.
+
+A group of one filter reads as that filter. A group of several reads a list, one item per filter in
+the order shown:
+
+```python
+assert dates.choices == [                                   # done
+    ["Any date", "Today", "Past 7 days", "This month", "This year", "No date", "Has date"],
+    ["All", "Empty", "Not empty"],
+]
+assert dates.selected == ["Any date", "All"]                # done
+```
+
+A filter applies a choice by its label. It returns nothing: the page stays the same object, and
+the count, summary and rows read the results.
+
+```python
+active.apply("No")                                          # done
+
+assert active.selected == "No"                              # done
+assert page.count == 0                                      # done
+```
+
+`apply` clicks the link the admin renders, so Django decides what the click keeps: a search and the
+other filters' values. A label also matches with Django's count after it, so `apply("Yes")` applies
+"Yes (3)". A label the filter doesn't offer, or offers more than once, raises `LookupError`, and
+nothing is clicked. A filter the user collapsed is opened first. If the admin sends the browser
+elsewhere, such as to the login page after the session ended, the page stands for where it landed
+(section 3.9) and reports it as `denied` or `redirected`.
+
+On a group, `apply` uses whichever filter offers the label. A label several of them offer, such as
+"All", raises `LookupError` naming them by index, and is applied through one of them:
+
+```python
+dates[1].apply("All")                                       # done
+```
+
+Two filters on one field don't always agree about the URL. The date filter's links leave out every
+parameter of its field, so "Empty" then "Has date" drops "Empty", while "Has date" then "Empty"
+keeps both, and the date filter then marks no choice. The package reports what Django does:
+
+```python
+dates.apply("Empty")
+dates.apply("Has date")
+
+assert dates.selected == ["Has date", "All"]                # done
+```
+
+Filters are cleared without a label, so in any language:
+
+```python
+page.filters.clear()                                        # done
+page.filters["released_on"].clear()                         # done
+dates[1].clear()                                            # done
+```
+
+`page.filters.clear()` clicks the admin's "Clear all filters", which keeps a search and the
+ordering. A filter's `clear()` clicks the choice that removes its parameters, "All" or "Any date"
+as a rule, and a group's clears each of its filters in order. Each does nothing when nothing it
+would clear is applied, and the page isn't loaded again. A changelist without filters raises
+`LookupError`, and so does a filter applied without a choice that clears it, such as one of the
+project's own without "All".
+
+---
+
 # 9. Changelist Row Matching (done)
 
 One of the main 1.0.0 features is concise verification of rows shown on a changelist.
@@ -2348,6 +2464,10 @@ AdminSession
 ├── EditPage
 ├── DeletePage           (the confirmation the admin asks for before deleting)
 │
+├── ChangelistFilters    (a changelist's filters by field, section 8.4)
+│   └── FieldFilters     (the filters on one field)
+│       └── FieldFilter
+│
 ├── Fieldset
 ├── FormField
 │   └── FieldChoice
@@ -2372,6 +2492,10 @@ them, so they have none. (done)
 
 A `SubmissionResult` reports on a submission rather than standing for anything on the page, so
 it has none either; the page it carries has one. (done)
+
+`ChangelistFilters` is a mapping of groups rather than an element, so it has none. A
+`FieldFilter`'s handle is its list of links, and a `FieldFilters` handle is that list, or a list
+of them for a field with several filters. (done)
 
 ---
 
@@ -3191,7 +3315,7 @@ Login page:
 * search: searching a changelist through its search box, which leads to the changelist of the
   results, the search term it shows, and the count and summary of its results; a changelist
   whose admin declares no search fields reports that it offers no search (done);
-* filters: the filters a changelist offers, their choices, and applying them;
+* filters: the filters a changelist offers, their choices, and applying them (done);
 * ordering: the order a changelist shows, sortable columns, and sorting by them;
 * pagination and page traversal;
 * actions: the actions a changelist offers, selecting rows, and running an action, including
