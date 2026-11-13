@@ -35,6 +35,21 @@ class FieldFilter:
             )
         return blocks[self._index]
 
+    @property
+    def choices(self) -> list[str]:
+        """The labels of the filter's choices, in order, as the page shows them, with counts
+        when it shows those."""
+        return _choices(self.native)
+
+    @property
+    def selected(self) -> str | None:
+        """The label of the choice the page marks selected, or ``None`` when it marks none.
+
+        Django marks none on a date filter while another filter on the same field is applied,
+        since the date filter compares every parameter of the field with its links.
+        """
+        return _selected(self.native)
+
     def __repr__(self) -> str:
         return f"FieldFilter({self._group.name!r}, {self._index})"
 
@@ -61,6 +76,18 @@ class FieldFilters(Sequence[FieldFilter]):
         """The filter's ``ul`` of links, or a list of them for a field with several filters."""
         blocks = self._read()
         return blocks[0] if len(blocks) == 1 else blocks
+
+    @property
+    def choices(self) -> list[str] | list[list[str]]:
+        """The filter's ``choices``, or a list of them for a field with several filters."""
+        choices = [_choices(block) for block in self._read()]
+        return choices[0] if len(choices) == 1 else choices
+
+    @property
+    def selected(self) -> str | list[str | None] | None:
+        """The filter's ``selected``, or a list of them for a field with several filters."""
+        selected = [_selected(block) for block in self._read()]
+        return selected[0] if len(selected) == 1 else selected
 
     @overload
     def __getitem__(self, index: int) -> FieldFilter: ...
@@ -165,6 +192,15 @@ def _field_of(model: type[Model], parameters: Iterable[str]) -> str:
             break
         shared.append(parts[0])
     return "__".join(shared) if shared else names[0]
+
+
+def _choices(block: Locator) -> list[str]:
+    return [" ".join(text.split()) for text in block.locator("a").all_text_contents()]
+
+
+def _selected(block: Locator) -> str | None:
+    labels = block.locator("li.selected a").all_text_contents()
+    return " ".join(labels[0].split()) if labels else None
 
 
 def _own_parameters(hrefs: list[str]) -> set[str]:

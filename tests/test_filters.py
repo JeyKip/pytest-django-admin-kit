@@ -1,5 +1,6 @@
 """The filters a changelist offers in its sidebar, grouped by the field they filter."""
 
+import django
 import pytest
 from django.contrib.admin import EmptyFieldListFilter, RelatedOnlyFieldListFilter
 from playwright.sync_api import Locator
@@ -7,6 +8,17 @@ from playwright.sync_api import Locator
 from django_admin_kit.filters import FieldFilter, _field_of
 from project.shop.admin import PriceInputFilter, PriceRangeFilter, ProductAdmin, StatusFilter
 from project.shop.models import Category, Feed, Product, Review
+
+# What a date filter offers on a field that may be empty.
+DATE_CHOICES = [
+    "Any date",
+    "Today",
+    "Past 7 days",
+    "This month",
+    "This year",
+    "No date",
+    "Has date",
+]
 
 # The parameters a filter's links send, and the field the filter is named after.
 NAMES = {
@@ -51,6 +63,12 @@ def list_filter(monkeypatch):
 def links(element):
     """The labels of the links in a filter's list, as the user reads them."""
     return [" ".join(text.split()) for text in element.locator("a").all_text_contents()]
+
+
+def click(page, parameter):
+    """Follows the sidebar link that sends ``parameter``, as a user clicks it."""
+    with page.native.expect_navigation():
+        page.native.click(f"#changelist-filter a[href*='{parameter}']")
 
 
 def test_a_changelist_with_filters_offers_filtering(admin_ui, superuser, stocked):
@@ -301,6 +319,116 @@ def test_a_filter_drawn_with_links_next_to_one_with_inputs_is_listed(
 
     assert page.can_filter is True
     assert list(page.filters) == ["is_active"]
+
+
+def test_each_filter_reads_its_choices_in_order(admin_ui, superuser, stocked):
+    admin_ui.login(superuser)
+
+    filters = admin_ui.list(Product).filters
+
+    assert filters["is_active"].choices == ["All", "Yes", "No"]
+    assert filters["released_on"].choices == DATE_CHOICES
+    assert filters["category"].choices == ["All", "Tools", "Toys", "(none)"]
+    assert filters["stock"].choices == ["All", "Low", "High"]
+    assert filters["is_active"][0].choices == ["All", "Yes", "No"]
+
+
+def test_a_custom_filter_on_a_field_reads_its_choices(admin_ui, superuser, stocked, list_filter):
+    list_filter(("price", PriceRangeFilter))
+    admin_ui.login(superuser)
+
+    group = admin_ui.list(Product).filters["price"]
+
+    assert group.choices == ["All", "Under 10", "10 to 100"]
+
+
+def test_each_filter_reads_its_first_choice_as_selected_before_any_is_applied(
+    admin_ui, superuser, stocked
+):
+    admin_ui.login(superuser)
+
+    filters = admin_ui.list(Product).filters
+
+    assert [group.selected for group in filters.values()] == ["All", "Any date", "All", "All"]
+
+
+def test_a_filter_reads_the_choice_applied_and_the_others_keep_theirs(admin_ui, superuser, stocked):
+    admin_ui.login(superuser)
+    page = admin_ui.list(Product)
+
+    click(page, "is_active__exact=0")
+
+    assert page.filters["is_active"].selected == "No"
+    assert page.filters["is_active"][0].selected == "No"
+    assert page.filters["released_on"].selected == "Any date"
+
+
+def test_a_field_with_two_filters_reads_a_list_of_each(admin_ui, superuser, stocked, list_filter):
+    list_filter("released_on", ("released_on", EmptyFieldListFilter))
+    admin_ui.login(superuser)
+
+    group = admin_ui.list(Product).filters["released_on"]
+
+    assert group.choices == [DATE_CHOICES, ["All", "Empty", "Not empty"]]
+    assert group.selected == ["Any date", "All"]
+
+
+def test_the_date_filter_marks_nothing_while_the_empty_filter_on_its_field_is_applied(
+    admin_ui, superuser, stocked, list_filter
+):
+    """Django compares every parameter of the field with the date filter's links."""
+    list_filter("released_on", ("released_on", EmptyFieldListFilter))
+    admin_ui.login(superuser)
+    page = admin_ui.list(Product)
+
+    click(page, "released_on__isempty=0")
+
+    assert page.filters["released_on"].selected == [None, "Not empty"]
+    assert page.filters["released_on"][0].selected is None
+
+
+@pytest.mark.skipif(django.VERSION < (5, 0), reason="Django 5.0 added counts to filters.")
+def test_counts_are_read_as_the_page_shows_them(admin_ui, superuser, stocked, monkeypatch):
+    from django.contrib.admin import ShowFacets
+
+    monkeypatch.setattr(ProductAdmin, "show_facets", ShowFacets.ALWAYS)
+    admin_ui.login(superuser)
+    page = admin_ui.list(Product)
+
+    click(page, "is_active__exact=0")
+
+    assert page.filters["is_active"].choices == ["All", "Yes (2)", "No (0)"]
+    assert page.filters["is_active"].selected == "No (0)"
+
+
+def test_held_filters_read_the_selection_again(admin_ui, superuser, stocked):
+    admin_ui.login(superuser)
+    page = admin_ui.list(Product)
+    group = page.filters["is_active"]
+    held = group[0]
+
+    click(page, "is_active__exact=0")
+
+    assert group.selected == "No"
+    assert held.selected == "No"
+
+
+def test_a_held_filter_whose_position_is_gone_raises(admin_ui, superuser, stocked, list_filter):
+    list_filter("released_on", ("released_on", EmptyFieldListFilter))
+    admin_ui.login(superuser)
+    page = admin_ui.list(Product)
+    held = page.filters["released_on"][1]
+
+    list_filter("released_on")
+    with page.native.expect_navigation():
+        page.native.reload()
+
+    with pytest.raises(LookupError) as failure:
+        _ = held.selected
+
+    assert str(failure.value) == (
+        "The page no longer shows a filter on 'released_on' at index 1; it shows 1."
+    )
 
 
 @pytest.mark.parametrize(("model", "parameters", "name"), NAMES.values(), ids=NAMES.keys())

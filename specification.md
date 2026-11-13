@@ -861,6 +861,30 @@ An index depends on the order of `list_filter`. A filter drawn with inputs inste
 range filters often are, has no choices to pick, so it isn't listed; a test fills it through
 `page.native`.
 
+A filter reads its choices and the one the page marks selected, as labels:
+
+```python
+active = page.filters["is_active"]
+
+assert active.choices == ["All", "Yes", "No"]               # done
+assert active.selected == "All"                             # done
+```
+
+The labels are read as the page shows them, so with Django's counts on they read "Yes (3)". A
+date filter's first choice is "Any date". `selected` is `None` when the page marks no choice, as
+Django does for a date filter while another filter on the same field is applied.
+
+A group of one filter reads as that filter. A group of several reads a list, one item per filter in
+the order shown:
+
+```python
+assert dates.choices == [                                   # done
+    ["Any date", "Today", "Past 7 days", "This month", "This year", "No date", "Has date"],
+    ["All", "Empty", "Not empty"],
+]
+assert dates.selected == ["Any date", "All"]                # done
+```
+
 ---
 
 # 9. Changelist Row Matching (done)

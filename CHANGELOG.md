@@ -14,6 +14,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - Read the term a changelist's search box shows with `page.search_term`, `""` for a changelist without a box.
 - Open a changelist with a term already applied with `admin_ui.list(Model, search=term)`. An admin without search fields raises `LookupError`, as `page.search` does.
 - List the filters a changelist offers by the field they filter with `page.filters`, and tell whether it offers any with `page.can_filter`. Several filters on one field share a group and are reached by index.
+- Read a filter's choices with `filter.choices` and the one the page marks selected with `filter.selected`, as labels. A field with several filters reads a list of each.
 
 ### Fixed
 
