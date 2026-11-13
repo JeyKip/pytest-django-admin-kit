@@ -7,6 +7,7 @@ parameters its links send, so a filter is named after those, reduced to the fiel
 
 from __future__ import annotations
 
+import re
 from typing import Callable, Iterable, Iterator, Mapping, Sequence, overload
 from urllib.parse import parse_qs, urlsplit
 
@@ -27,13 +28,7 @@ class FieldFilter:
     @property
     def native(self) -> Locator:
         """The filter's ``ul`` of links, unwrapped, for anything the package does not model."""
-        blocks = self._group._read()
-        if self._index >= len(blocks):
-            raise LookupError(
-                f"The page no longer shows a filter on {self._group.name!r} at index "
-                f"{self._index}; it shows {len(blocks)}."
-            )
-        return blocks[self._index]
+        return self._located()[0]
 
     @property
     def choices(self) -> list[str]:
@@ -50,6 +45,35 @@ class FieldFilter:
         """
         return _selected(self.native)
 
+    def apply(self, choice: str) -> None:
+        """Click the link of ``choice`` and wait for the page it leads to.
+
+        ``choice`` is a label as ``choices`` reads it, or the same label without its count, so
+        ``"Yes"`` also applies "Yes (3)". This same page then reads the results. The admin's link
+        keeps what else is applied, such as a search or another filter. A label the filter
+        doesn't offer, or offers more than once, raises ``LookupError`` and nothing is clicked.
+        """
+        block, count = self._located()
+        positions = _matching(block, choice)
+        if len(positions) != 1:
+            index = _shown_index(self._index, count)
+            raise LookupError(
+                _several(self._group.name, choice, index)
+                if positions
+                else _no_choice(self._group.name, choice, [(index, _choices(block))])
+            )
+        _click(block, positions[0], self._group._follow)
+
+    def _located(self) -> tuple[Locator, int]:
+        """The filter's ``ul``, and how many filters its field has now."""
+        blocks = self._group._read()
+        if self._index >= len(blocks):
+            raise LookupError(
+                f"The page no longer shows a filter on {self._group.name!r} at index "
+                f"{self._index}; it shows {len(blocks)}."
+            )
+        return blocks[self._index], len(blocks)
+
     def __repr__(self) -> str:
         return f"FieldFilter({self._group.name!r}, {self._index})"
 
@@ -58,13 +82,21 @@ class FieldFilters(Sequence[FieldFilter]):
     """The filters on one field, in the order the page shows them. Most fields have one.
 
     The filters are found on the page again each time they are used, by the field they
-    filter. ``shown`` gives the page once it is known to be the changelist they are on.
+    filter. ``shown`` gives the page once it is known to be the changelist they are on, and
+    ``follow`` clicks a link on it and waits for the page it leads to.
     """
 
-    def __init__(self, name: str, shown: Callable[[], Page], model: type[Model]) -> None:
+    def __init__(
+        self,
+        name: str,
+        shown: Callable[[], Page],
+        model: type[Model],
+        follow: Callable[[Locator], None],
+    ) -> None:
         self._name = name
         self._shown = shown
         self._model = model
+        self._follow = follow
 
     @property
     def name(self) -> str:
@@ -88,6 +120,38 @@ class FieldFilters(Sequence[FieldFilter]):
         """The filter's ``selected``, or a list of them for a field with several filters."""
         selected = [_selected(block) for block in self._read()]
         return selected[0] if len(selected) == 1 else selected
+
+    def apply(self, choice: str) -> None:
+        """Apply ``choice`` through whichever of the field's filters offers it, as
+        ``FieldFilter.apply`` does.
+
+        A label that more than one of the filters offers, such as "All", raises ``LookupError``
+        naming them by index, so it is applied through one of them, as in ``group[1]``.
+        """
+        blocks = self._read()
+        found = [
+            (index, block, position)
+            for index, block in enumerate(blocks)
+            for position in _matching(block, choice)
+        ]
+        if len(found) == 1:
+            _, block, position = found[0]
+            _click(block, position, self._follow)
+            return
+        if not found:
+            choices = [
+                (_shown_index(index, len(blocks)), _choices(block))
+                for index, block in enumerate(blocks)
+            ]
+            raise LookupError(_no_choice(self._name, choice, choices))
+        offering = sorted({index for index, _, _ in found})
+        if len(offering) == 1:
+            raise LookupError(_several(self._name, choice, _shown_index(offering[0], len(blocks))))
+        raise LookupError(
+            f"The filters on {self._name!r} at index {_and(offering)} each offer {choice!r}. "
+            f"Apply it through one of them, such as "
+            f"page.filters[{self._name!r}][{offering[0]}].apply({choice!r})."
+        )
 
     @overload
     def __getitem__(self, index: int) -> FieldFilter: ...
@@ -130,19 +194,26 @@ class ChangelistFilters(Mapping[str, FieldFilters]):
 
     A read-only mapping that reads the page each time it is used, as each group of filters
     does. A miss lists the fields there are. ``shown`` gives the page once it is known to be
-    the changelist the filters are on, and ``model`` is the changelist's model.
+    the changelist the filters are on, ``model`` is the changelist's model, and ``follow``
+    clicks a link on the page and waits for the page it leads to.
     """
 
-    def __init__(self, shown: Callable[[], Page], model: type[Model]) -> None:
+    def __init__(
+        self,
+        shown: Callable[[], Page],
+        model: type[Model],
+        follow: Callable[[Locator], None],
+    ) -> None:
         self._shown = shown
         self._model = model
+        self._follow = follow
 
     def __getitem__(self, key: str) -> FieldFilters:
         names = self._names()
         if key not in names:
             listed = ", ".join(repr(name) for name in names) or "none"
             raise KeyError(f"No filter on a field named {key!r} here. Fields: {listed}.")
-        return FieldFilters(key, self._shown, self._model)
+        return FieldFilters(key, self._shown, self._model, self._follow)
 
     def __iter__(self) -> Iterator[str]:
         return iter(self._names())
@@ -201,6 +272,48 @@ def _choices(block: Locator) -> list[str]:
 def _selected(block: Locator) -> str | None:
     labels = block.locator("li.selected a").all_text_contents()
     return " ".join(labels[0].split()) if labels else None
+
+
+def _matching(block: Locator, choice: str) -> list[int]:
+    """The positions of the links labeled ``choice``, with or without the count Django adds."""
+    if not isinstance(choice, str):
+        return []
+    counted = re.compile(re.escape(choice) + r" \((?:\d+|-)\)")
+    return [
+        position
+        for position, label in enumerate(_choices(block))
+        if label == choice or counted.fullmatch(label)
+    ]
+
+
+def _click(block: Locator, position: int, follow: Callable[[Locator], None]) -> None:
+    # A filter the user collapsed hides its links, and a hidden link can't be clicked.
+    block.evaluate("ul => { const box = ul.closest('details'); if (box) box.open = true; }")
+    follow(block.locator("a").nth(position))
+
+
+def _no_choice(name: str, choice: str, choices: list[tuple[int | None, list[str]]]) -> str:
+    lines = [f"No filter on {name!r} offers {choice!r}.", "", "Choices:"]
+    lines += [
+        "    " + ("" if index is None else f"[{index}] ") + ", ".join(map(repr, labels))
+        for index, labels in choices
+    ]
+    return "\n".join(lines)
+
+
+def _several(name: str, choice: str, index: int | None) -> str:
+    where = "" if index is None else f" at index {index}"
+    return f"The filter on {name!r}{where} offers {choice!r} more than once."
+
+
+def _shown_index(index: int, count: int) -> int | None:
+    # A message names a filter by its index only when its field has several.
+    return index if count > 1 else None
+
+
+def _and(items: list[int]) -> str:
+    words = [str(item) for item in items]
+    return " and ".join([", ".join(words[:-1]), words[-1]]) if len(words) > 1 else words[0]
 
 
 def _own_parameters(hrefs: list[str]) -> set[str]:

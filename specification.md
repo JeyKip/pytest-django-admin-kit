@@ -885,6 +885,41 @@ assert dates.choices == [                                   # done
 assert dates.selected == ["Any date", "All"]                # done
 ```
 
+A filter applies a choice by its label. It returns nothing: the page stays the same object, and
+the count, summary and rows read the results.
+
+```python
+active.apply("No")                                          # done
+
+assert active.selected == "No"                              # done
+assert page.count == 0                                      # done
+```
+
+`apply` clicks the link the admin renders, so Django decides what the click keeps: a search and the
+other filters' values. A label also matches with Django's count after it, so `apply("Yes")` applies
+"Yes (3)". A label the filter doesn't offer, or offers more than once, raises `LookupError`, and
+nothing is clicked. A filter the user collapsed is opened first. If the admin sends the browser
+elsewhere, such as to the login page after the session ended, the page stands for where it landed
+(section 3.9) and reports it as `denied` or `redirected`.
+
+On a group, `apply` uses whichever filter offers the label. A label several of them offer, such as
+"All", raises `LookupError` naming them by index, and is applied through one of them:
+
+```python
+dates[1].apply("All")                                       # done
+```
+
+Two filters on one field don't always agree about the URL. The date filter's links leave out every
+parameter of its field, so "Empty" then "Has date" drops "Empty", while "Has date" then "Empty"
+keeps both, and the date filter then marks no choice. The package reports what Django does:
+
+```python
+dates.apply("Empty")
+dates.apply("Has date")
+
+assert dates.selected == ["Has date", "All"]                # done
+```
+
 ---
 
 # 9. Changelist Row Matching (done)

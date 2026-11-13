@@ -1,5 +1,7 @@
 """The filters a changelist offers in its sidebar, grouped by the field they filter."""
 
+from urllib.parse import parse_qs, urlsplit
+
 import django
 import pytest
 from django.contrib.admin import EmptyFieldListFilter, RelatedOnlyFieldListFilter
@@ -429,6 +431,276 @@ def test_a_held_filter_whose_position_is_gone_raises(admin_ui, superuser, stocke
     assert str(failure.value) == (
         "The page no longer shows a filter on 'released_on' at index 1; it shows 1."
     )
+
+
+def test_the_same_page_reads_the_results_of_a_filter(admin_ui, superuser, stocked):
+    admin_ui.login(superuser)
+    page = admin_ui.list(Product)
+
+    assert page.filters["category"].apply("Tools") is None
+
+    assert page.works
+    assert page.status_code == 200
+    assert page.destination == admin_ui.url.list(Product)
+    assert page.count == 1
+    assert [row["name"].value for row in page.rows] == ["Bolt"]
+
+
+def test_a_held_group_reads_the_choice_it_applied(admin_ui, superuser, stocked):
+    admin_ui.login(superuser)
+    page = admin_ui.list(Product)
+    group = page.filters["category"]
+
+    group.apply("Toys")
+
+    assert group.selected == "Toys"
+    assert [row["name"].value for row in page.rows] == ["Kite"]
+
+
+def test_a_filter_is_applied_through_its_index_in_a_group_of_one(admin_ui, superuser, stocked):
+    admin_ui.login(superuser)
+    page = admin_ui.list(Product)
+
+    page.filters["category"][0].apply("Toys")
+
+    assert page.filters["category"].selected == "Toys"
+
+
+def test_filters_on_two_fields_applied_one_after_the_other_both_hold(admin_ui, superuser, stocked):
+    admin_ui.login(superuser)
+    page = admin_ui.list(Product)
+
+    page.filters["category"].apply("Tools")
+    page.filters["is_active"].apply("No")
+
+    assert page.filters["category"].selected == "Tools"
+    assert page.filters["is_active"].selected == "No"
+    assert page.count == 0
+
+
+def test_the_first_choice_clears_one_filter_and_keeps_the_other(admin_ui, superuser, stocked):
+    admin_ui.login(superuser)
+    page = admin_ui.list(Product)
+    page.filters["category"].apply("Tools")
+    page.filters["is_active"].apply("Yes")
+
+    page.filters["category"].apply("All")
+
+    assert page.filters["category"].selected == "All"
+    assert page.filters["is_active"].selected == "Yes"
+    assert page.count == 2
+
+
+def test_a_filter_keeps_a_search(admin_ui, superuser, stocked):
+    admin_ui.login(superuser)
+    page = admin_ui.list(Product)
+    page.search("Bolt")
+
+    page.filters["category"].apply("Toys")
+
+    assert page.search_term == "Bolt"
+    assert page.count == 0
+
+
+def test_a_search_keeps_a_filter(admin_ui, superuser, stocked):
+    admin_ui.login(superuser)
+    page = admin_ui.list(Product)
+    page.filters["category"].apply("Tools")
+
+    page.search("Kite")
+
+    assert page.filters["category"].selected == "Tools"
+    assert page.count == 0
+
+
+def test_a_choice_the_filter_does_not_offer_raises_and_nothing_is_clicked(
+    admin_ui, superuser, stocked
+):
+    admin_ui.login(superuser)
+    page = admin_ui.list(Product)
+    address = page.native.url
+
+    for apply in (page.filters["is_active"].apply, page.filters["is_active"][0].apply):
+        with pytest.raises(LookupError) as failure:
+            apply("Maybe")
+        assert str(failure.value) == (
+            "No filter on 'is_active' offers 'Maybe'.\n\nChoices:\n    'All', 'Yes', 'No'"
+        )
+
+    assert page.native.url == address
+
+
+def test_a_choice_that_is_no_string_matches_nothing(admin_ui, superuser, stocked):
+    admin_ui.login(superuser)
+    group = admin_ui.list(Product).filters["is_active"]
+
+    with pytest.raises(LookupError, match="offers 1"):
+        group.apply(1)
+
+
+def test_a_label_one_filter_offers_twice_raises(admin_ui, superuser, stocked):
+    """Two categories may share a name, and the filter then shows it twice."""
+    Category.objects.create(name="Tools")
+    admin_ui.login(superuser)
+    group = admin_ui.list(Product).filters["category"]
+
+    with pytest.raises(LookupError) as failure:
+        group.apply("Tools")
+
+    assert str(failure.value) == "The filter on 'category' offers 'Tools' more than once."
+
+
+def test_a_choice_one_filter_of_a_group_offers_applies_there(
+    admin_ui, superuser, stocked, list_filter
+):
+    list_filter("released_on", ("released_on", EmptyFieldListFilter))
+    admin_ui.login(superuser)
+    group = admin_ui.list(Product).filters["released_on"]
+
+    group.apply("Has date")
+
+    assert group.selected == ["Has date", "All"]
+
+
+def test_a_choice_no_filter_of_a_group_offers_raises_listing_each(
+    admin_ui, superuser, stocked, list_filter
+):
+    list_filter("released_on", ("released_on", EmptyFieldListFilter))
+    admin_ui.login(superuser)
+    group = admin_ui.list(Product).filters["released_on"]
+
+    with pytest.raises(LookupError) as failure:
+        group.apply("Maybe")
+
+    assert str(failure.value) == (
+        "No filter on 'released_on' offers 'Maybe'.\n"
+        "\n"
+        "Choices:\n"
+        f"    [0] {', '.join(map(repr, DATE_CHOICES))}\n"
+        "    [1] 'All', 'Empty', 'Not empty'"
+    )
+
+
+def test_a_choice_several_filters_of_a_group_offer_raises_naming_them(
+    admin_ui, superuser, stocked, list_filter
+):
+    list_filter("category", ("category", RelatedOnlyFieldListFilter))
+    admin_ui.login(superuser)
+    page = admin_ui.list(Product)
+    address = page.native.url
+
+    with pytest.raises(LookupError) as failure:
+        page.filters["category"].apply("Tools")
+
+    assert str(failure.value) == (
+        "The filters on 'category' at index 0 and 1 each offer 'Tools'. Apply it through one "
+        "of them, such as page.filters['category'][0].apply('Tools')."
+    )
+    assert page.native.url == address
+
+
+def test_a_filter_of_a_group_is_applied_through_its_index(
+    admin_ui, superuser, stocked, list_filter
+):
+    """Both filters take the same parameter, and Django marks the choice on the first."""
+    list_filter("category", ("category", RelatedOnlyFieldListFilter))
+    admin_ui.login(superuser)
+    page = admin_ui.list(Product)
+    group = page.filters["category"]
+
+    group[1].apply("Toys")
+
+    assert [row["name"].value for row in page.rows] == ["Kite"]
+    assert group.selected == ["Toys", "All"]
+
+
+def test_empty_then_has_date_drops_empty_as_django_does(admin_ui, superuser, stocked, list_filter):
+    """The date filter's links leave out every parameter of its field."""
+    list_filter("released_on", ("released_on", EmptyFieldListFilter))
+    admin_ui.login(superuser)
+    group = admin_ui.list(Product).filters["released_on"]
+
+    group.apply("Empty")
+    group.apply("Has date")
+
+    assert group.selected == ["Has date", "All"]
+
+
+def test_has_date_then_empty_keeps_both_as_django_does(admin_ui, superuser, stocked, list_filter):
+    """The empty filter's links keep the date filter's parameter, which the date filter then
+    no longer marks."""
+    list_filter("released_on", ("released_on", EmptyFieldListFilter))
+    admin_ui.login(superuser)
+    page = admin_ui.list(Product)
+    group = page.filters["released_on"]
+
+    group.apply("Has date")
+    group.apply("Empty")
+
+    # The date filter marks a choice only when a link of its own sends exactly the field's
+    # parameters in the URL, and none of its links sends `released_on__isempty`.
+    assert group.selected == [None, "Empty"]
+    assert parse_qs(urlsplit(page.native.url).query) == {
+        "released_on__isempty": ["1"],
+        "released_on__isnull": ["False"],
+    }
+
+
+def test_a_custom_filter_sends_both_of_its_parameters_in_one_click(
+    admin_ui, superuser, stocked, list_filter
+):
+    list_filter(("price", PriceRangeFilter))
+    admin_ui.login(superuser)
+    page = admin_ui.list(Product)
+
+    page.filters["price"].apply("Under 10")
+
+    assert page.filters["price"].selected == "Under 10"
+    assert [row["name"].value for row in page.rows] == ["Bolt"]
+    assert "price__gte=0" in page.native.url
+    assert "price__lt=10" in page.native.url
+
+
+@pytest.mark.skipif(django.VERSION < (5, 0), reason="Django 5.0 added counts to filters.")
+def test_a_choice_applies_without_its_count(admin_ui, superuser, stocked, monkeypatch):
+    from django.contrib.admin import ShowFacets
+
+    monkeypatch.setattr(ProductAdmin, "show_facets", ShowFacets.ALWAYS)
+    admin_ui.login(superuser)
+    page = admin_ui.list(Product)
+
+    page.filters["is_active"].apply("Yes")
+
+    assert page.filters["is_active"].selected == "Yes (2)"
+    assert page.count == 2
+
+
+@pytest.mark.skipif(django.VERSION < (4, 1), reason="Django 4.1 made filters collapsible.")
+def test_a_collapsed_filter_still_applies(admin_ui, superuser, stocked):
+    admin_ui.login(superuser)
+    page = admin_ui.list(Product)
+    group = page.filters["is_active"]
+    group.native.evaluate("ul => { ul.closest('details').open = false; }")
+    assert not group.native.locator("a").first.is_visible()
+
+    group.apply("No")
+
+    assert group.selected == "No"
+
+
+def test_a_filter_applied_after_the_session_ended_leaves_the_page_denied(
+    admin_ui, superuser, stocked
+):
+    admin_ui.login(superuser)
+    page = admin_ui.list(Product)
+    group = page.filters["category"]
+
+    admin_ui.logout()
+    group.apply("Tools")
+
+    assert page.denied
+    assert page.redirected
+    assert page.destination == admin_ui.url.login()
 
 
 @pytest.mark.parametrize(("model", "parameters", "name"), NAMES.values(), ids=NAMES.keys())

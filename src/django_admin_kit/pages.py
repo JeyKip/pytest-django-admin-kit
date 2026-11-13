@@ -532,13 +532,7 @@ class ChangelistPage(ModelPage):
         if not box.count():
             raise LookupError("The page offers no search.")
         box.fill(term)
-        with self._page.expect_navigation() as navigation:
-            self._search_form.locator('input[type="submit"]').click()
-        response = navigation.value
-        # A navigation of the page always comes with a response.
-        assert response is not None
-        self._status_code = response.status
-        self._landed()
+        self._follow(self._search_form.locator('input[type="submit"]'))
 
     @property
     def search_term(self) -> str:
@@ -573,7 +567,18 @@ class ChangelistPage(ModelPage):
         """
         # A page that did not open fails here rather than at the first use of what it hands out.
         self._shown()
-        return ChangelistFilters(self._shown, self._model)
+        return ChangelistFilters(self._shown, self._model, self._follow)
+
+    def _follow(self, element: Locator) -> None:
+        """Click ``element`` and wait for the page it leads to, which this page then stands
+        for, wherever the admin sent the browser."""
+        with self._page.expect_navigation() as navigation:
+            element.click()
+        response = navigation.value
+        # A navigation of the page always comes with a response.
+        assert response is not None
+        self._status_code = response.status
+        self._landed()
 
 
 class FormPage(ModelPage):
