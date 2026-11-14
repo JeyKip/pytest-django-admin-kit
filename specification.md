@@ -769,6 +769,19 @@ This follows what the page shows rather than `ModelAdmin.sortable_by`, so it als
 has no sortable columns. It is a list, like `columns` and `headers`, rather than a set like the
 field groups of section 12, because it is read alongside them in the order shown.
 
+A column also reads how it is sorted, as section 8.5 describes:
+
+```python
+assert price.sort_direction == "desc"                     # done
+assert price.sort_direction == SortDirection.DESCENDING   # done
+assert price.sort_priority == 1                           # done
+```
+
+`SortDirection` comes from `django_admin_kit.columns`. Its members are strings, so a direction
+compares equal to `"asc"` or `"desc"` as well as to its member. Both are `None` for a column
+that isn't sorted or can't be. Django shows a priority number only while two or more columns are
+sorted, so a lone sorted column reads `1`.
+
 ---
 
 # 8. Changelist Result Set (done)
@@ -970,6 +983,32 @@ as a rule, and a group's clears each of its filters in order. Each does nothing 
 would clear is applied, and the page isn't loaded again. A changelist without filters raises
 `LookupError`, and so does a filter applied without a choice that clears it, such as one of the
 project's own without "All".
+
+---
+
+## 8.5 Sorting
+
+Django sorts a changelist by several columns at once. Clicking a header makes that column the
+first sort key and keeps the columns sorted before behind it, so a changelist sorted by name and
+then clicked on "Price" is sorted by price and then by name. A sorted header has an arrow, which
+flips its direction and keeps its place, and a link that removes it from the sort.
+
+A changelist lists the columns it shows sorted, in priority order, with `-` in front of a
+descending one, the way `ModelAdmin.ordering` writes them:
+
+```python
+page = admin_ui.list(Product)
+
+assert page.sorted_columns == ["name"]                # done
+```
+
+These are the marks Django puts on the headers, as `sort_direction` and `sort_priority` of
+section 7.3 are. While the URL asks for no sort, Django marks the columns of the admin's default
+ordering it can match to a column: a field that isn't a column and an expression such as
+`Lower("name")` are left out, and of two columns on one field only the first is marked. It never
+marks the `-pk` it adds last to break ties. So these follow the headers, and the rows show the
+real order. `sorted_columns` is `[]` when no column is marked, and on an empty changelist, which
+shows no table.
 
 ---
 

@@ -25,7 +25,7 @@ from playwright.sync_api import Locator, Page, Response
 
 from . import matching
 from ._html import class_suffix, stripped_text
-from .columns import ChangelistColumn, _sortable
+from .columns import ChangelistColumn, SortDirection, _sort_state, _sortable
 from .errors import ValidationErrors
 from .fields import Fields, Fieldset, FormField
 from .filters import ChangelistFilters
@@ -452,6 +452,27 @@ class ChangelistPage(ModelPage):
         changelist shows no table, so it has none.
         """
         return [class_suffix(cell, "column-") for cell in self._header_cells if _sortable(cell)]
+
+    @property
+    def sorted_columns(self) -> list[str]:
+        """The names of the columns the headers show sorted, in priority order, with ``-`` in
+        front of a descending one, such as ``["-price", "name"]``.
+
+        These are the marks Django puts on the headers. Without a sort in the URL, it marks the
+        columns of the admin's default ordering it can match to a column, and never the ``-pk``
+        it adds last, so the rows show the real order. An empty changelist shows no table, so it
+        has none.
+        """
+        # One pass over the header cells rather than a `column()` per name: each column finds its
+        # cell again for every attribute, which made this about seven times slower.
+        marked = []
+        for cell in self._header_cells:
+            state = _sort_state(cell)
+            if state is not None:
+                direction, priority = state
+                sign = "-" if direction is SortDirection.DESCENDING else ""
+                marked.append((priority, sign + class_suffix(cell, "column-")))
+        return [name for _, name in sorted(marked)]
 
     @property
     def rows(self) -> list[Row]:

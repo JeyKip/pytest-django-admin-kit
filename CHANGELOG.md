@@ -19,6 +19,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - Clear every filter with `page.filters.clear()`, one field's with `page.filters[name].clear()`, or one filter's with `filter.clear()`. None of them needs a label, and each does nothing when nothing is applied.
 - List the columns a changelist can sort by with `page.sortable_columns`, in the order shown. It follows what the page shows, so a method column counts when it has an ordering.
 - Read one changelist column as an object with `page.column(name)`, with its `name`, its `label`, its header cell as `native`, and whether it is `sortable`.
+- Read the columns a changelist shows sorted with `page.sorted_columns`, in priority order with `-` for descending, such as `["-price", "name"]`.
+- Read how a column is sorted with `column.sort_direction`, a `SortDirection` equal to `"asc"` or `"desc"`, and `column.sort_priority`. Both are `None` for a column that isn't sorted.
 
 ### Fixed
 
