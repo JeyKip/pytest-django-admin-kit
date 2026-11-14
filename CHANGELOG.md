@@ -18,6 +18,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - Apply a filter's choice by its label with `filter.apply(choice)`. The same page then reads the results, a label matches with or without Django's count after it, and on a field with several filters it applies through whichever filter offers it.
 - Clear every filter with `page.filters.clear()`, one field's with `page.filters[name].clear()`, or one filter's with `filter.clear()`. None of them needs a label, and each does nothing when nothing is applied.
 - List the columns a changelist can sort by with `page.sortable_columns`, in the order shown. It follows what the page shows, so a method column counts when it has an ordering.
+- Read one changelist column as an object with `page.column(name)`, with its `name`, its `label`, its header cell as `native`, and whether it is `sortable`.
 
 ### Fixed
 

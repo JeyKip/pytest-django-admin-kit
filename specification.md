@@ -735,9 +735,26 @@ are read as data; names are how a test addresses a cell, as sections 3.5 and 9.7
 
 ---
 
-## 7.3 Sortable columns (done)
+## 7.3 Column objects (done)
 
-A changelist lists the columns the user can sort by, by name, in the order shown:
+One column is read as an object by its name:
+
+```python
+price = page.column("price")    # done
+
+assert price.name == "price"    # done
+assert price.label == "Price"   # done
+assert price.sortable           # done
+price.native                    # done
+```
+
+Its label is what `headers` lists for it, and its native handle is its header cell. A name that
+isn't among `columns` raises `LookupError` listing the ones there are. The column is found by its
+name each time it is used, so the same object keeps working after the page loads again, such as
+after a search, and raises `LookupError` once the page no longer shows it. `columns` itself stays
+a list of names, so it can be compared with a list as section 7.2 shows.
+
+A changelist also lists the columns the user can sort by, by name, in the order shown:
 
 ```python
 page = admin_ui.list(Product)
@@ -2483,6 +2500,8 @@ AdminSession
 ├── EditPage
 ├── DeletePage           (the confirmation the admin asks for before deleting)
 │
+├── ChangelistColumn     (one changelist column, section 7.3)
+│
 ├── ChangelistFilters    (a changelist's filters by field, section 8.4)
 │   └── FieldFilters     (the filters on one field)
 │       └── FieldFilter
@@ -2511,6 +2530,8 @@ them, so they have none. (done)
 
 A `SubmissionResult` reports on a submission rather than standing for anything on the page, so
 it has none either; the page it carries has one. (done)
+
+A `ChangelistColumn`'s handle is its header cell. (done)
 
 `ChangelistFilters` is a mapping of groups rather than an element, so it has none. A
 `FieldFilter`'s handle is its list of links, and a `FieldFilters` handle is that list, or a list

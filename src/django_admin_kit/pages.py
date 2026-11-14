@@ -24,6 +24,8 @@ from django.urls import Resolver404, resolve
 from playwright.sync_api import Locator, Page, Response
 
 from . import matching
+from ._html import class_suffix, stripped_text
+from .columns import ChangelistColumn, _sortable
 from .errors import ValidationErrors
 from .fields import Fields, Fieldset, FormField
 from .filters import ChangelistFilters
@@ -150,14 +152,14 @@ class AdminPage:
     @property
     def title(self) -> str:
         """The title the admin renders for the page, or ``""`` when it renders none."""
-        return _text(self._shown().locator("#content h1").first)
+        return stripped_text(self._shown().locator("#content h1").first)
 
     @property
     def subtitle(self) -> str:
         """The subtitle under the title, such as the object's name on a change page."""
         # The subtitle is the heading right after the title. The content area holds
         # other h2 elements, for filters and the like, but none next to the h1.
-        return _text(self._shown().locator("#content h1 + h2"))
+        return stripped_text(self._shown().locator("#content h1 + h2"))
 
     @property
     def messages(self) -> Messages:
@@ -288,8 +290,8 @@ class IndexPage(AdminPage):
         for app in self._shown().locator("#content-main div.module").all():
             # `text_content`, not `inner_text`: the admin's stylesheet upper-cases
             # captions, and the name is what the document says, not how it is drawn.
-            name = _text(app.locator("caption"))
-            app_label = _token(app, "app-")
+            name = stripped_text(app.locator("caption"))
+            app_label = class_suffix(app, "app-")
             app_list[name] = [
                 model
                 for row in app.locator("tr[class*='model-']").all()
@@ -302,7 +304,7 @@ class IndexPage(AdminPage):
         # user may only add, which the admin lists without a link. A row that is no
         # registered model, which a third-party app may add, is left out.
         try:
-            model = apps.get_model(app_label, _token(row, "model-"))
+            model = apps.get_model(app_label, class_suffix(row, "model-"))
         except LookupError:
             return None
         return model if self._tools.urls.site.is_registered(model) else None
@@ -411,7 +413,7 @@ class ChangelistPage(ModelPage):
 
         An empty changelist shows no table, so it has no headers either.
         """
-        return [_text(cell.locator("div.text")) for cell in self._header_cells]
+        return [stripped_text(cell.locator("div.text")) for cell in self._header_cells]
 
     def has_header(self, label: str) -> bool:
         return label in self.headers
@@ -419,10 +421,27 @@ class ChangelistPage(ModelPage):
     @property
     def columns(self) -> list[str]:
         """The same columns by the names the admin is configured with, in the same order."""
-        return [_token(cell, "column-") for cell in self._header_cells]
+        return [class_suffix(cell, "column-") for cell in self._header_cells]
 
     def has_column(self, name: str) -> bool:
         return name in self.columns
+
+    def column(self, name: str) -> ChangelistColumn:
+        """The column ``name`` names, as an object that reads its header.
+
+        A name the page doesn't show among ``columns`` raises ``LookupError`` listing the ones
+        it does. The column is found by its name each time it is used, so it keeps working after
+        the page loads again.
+        """
+        columns = self.columns
+        if name not in columns:
+            shown = (
+                f"Columns: {', '.join(repr(column) for column in columns)}."
+                if columns
+                else "The changelist shows no columns."
+            )
+            raise LookupError(f"No column named {name!r} here. {shown}")
+        return ChangelistColumn(name, self._shown)
 
     @property
     def sortable_columns(self) -> list[str]:
@@ -432,7 +451,7 @@ class ChangelistPage(ModelPage):
         ``get_sortable_by()``, and a method column counts when it has an ordering. An empty
         changelist shows no table, so it has none.
         """
-        return [_token(cell, "column-") for cell in self._header_cells if _sortable(cell)]
+        return [class_suffix(cell, "column-") for cell in self._header_cells if _sortable(cell)]
 
     @property
     def rows(self) -> list[Row]:
@@ -1000,10 +1019,6 @@ def _value_of(source: Any, name: str) -> Any:
     return getattr(source, name, _NOTHING)
 
 
-def _text(element: Locator) -> str:
-    return (element.text_content() or "").strip() if element.count() else ""
-
-
 def _own_text(item: Locator) -> str:
     """The text of a list entry without the entries nested in it, whitespace collapsed."""
     text = item.evaluate(
@@ -1012,13 +1027,3 @@ def _own_text(item: Locator) -> str:
         ".map(node => node.textContent).join('')"
     )
     return " ".join(str(text).split())
-
-
-def _sortable(cell: Locator) -> bool:
-    """Whether the admin marks a changelist header cell as one the user can sort by."""
-    return "sortable" in (cell.get_attribute("class") or "").split()
-
-
-def _token(element: Locator, prefix: str) -> str:
-    classes = (element.get_attribute("class") or "").split()
-    return next(c[len(prefix) :] for c in classes if c.startswith(prefix))
