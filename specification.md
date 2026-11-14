@@ -735,6 +735,25 @@ are read as data; names are how a test addresses a cell, as sections 3.5 and 9.7
 
 ---
 
+## 7.3 Sortable columns (done)
+
+A changelist lists the columns the user can sort by, by name, in the order shown:
+
+```python
+page = admin_ui.list(Product)
+
+assert page.sortable_columns == ["name", "sku", "price"]    # done
+assert "price_with_tax" not in page.sortable_columns         # done
+```
+
+This follows what the page shows rather than `ModelAdmin.sortable_by`, so it also follows
+`get_sortable_by()`. A column of a method counts only when the method has an ordering, from
+`@admin.display(ordering=...)` or `admin_order_field`. An empty changelist shows no table, so it
+has no sortable columns. It is a list, like `columns` and `headers`, rather than a set like the
+field groups of section 12, because it is read alongside them in the order shown.
+
+---
+
 # 8. Changelist Result Set (done)
 
 ## 8.1 Record count (done)

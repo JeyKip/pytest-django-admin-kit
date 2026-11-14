@@ -425,6 +425,16 @@ class ChangelistPage(ModelPage):
         return name in self.columns
 
     @property
+    def sortable_columns(self) -> list[str]:
+        """The names of the columns the user can sort by, in the order shown.
+
+        This reads the page rather than ``ModelAdmin.sortable_by``, so it follows
+        ``get_sortable_by()``, and a method column counts when it has an ordering. An empty
+        changelist shows no table, so it has none.
+        """
+        return [_token(cell, "column-") for cell in self._header_cells if _sortable(cell)]
+
+    @property
     def rows(self) -> list[Row]:
         """The rows the changelist shows, in order.
 
@@ -1002,6 +1012,11 @@ def _own_text(item: Locator) -> str:
         ".map(node => node.textContent).join('')"
     )
     return " ".join(str(text).split())
+
+
+def _sortable(cell: Locator) -> bool:
+    """Whether the admin marks a changelist header cell as one the user can sort by."""
+    return "sortable" in (cell.get_attribute("class") or "").split()
 
 
 def _token(element: Locator, prefix: str) -> str:
