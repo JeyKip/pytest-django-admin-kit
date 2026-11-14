@@ -1010,6 +1010,46 @@ marks the `-pk` it adds last to break ties. So these follow the headers, and the
 real order. `sorted_columns` is `[]` when no column is marked, and on an empty changelist, which
 shows no table.
 
+A column changes how it is sorted with three methods, one for each thing a user does on its
+header:
+
+```python
+price = page.column("price")
+
+price.make_primary_sort("desc")                       # done
+assert page.sorted_columns == ["-price", "name"]      # done
+
+price.set_sort_direction("asc")                       # done
+assert page.sorted_columns == ["price", "name"]       # done
+
+price.remove_from_sort()                              # done
+assert page.sorted_columns == ["name"]                # done
+```
+
+`make_primary_sort` makes the column the first sort key, ascending unless it is given `"desc"`,
+and keeps the columns sorted before after it in their order. It clicks the header, then the
+arrow when the click left the column in the other direction, since a click on a sorted header
+flips it. `set_sort_direction` keeps the column's place and clicks the arrow when its direction
+differs. `remove_from_sort` clicks the link that removes the column, which the admin shows only
+while the pointer is over the header, so the pointer is moved there first. A direction is a
+`SortDirection` or its string; anything else raises `ValueError`.
+
+Each returns nothing: the page stays the same object, and the count, the rows and the sort read
+the results. Each does nothing, and the page isn't loaded again, when the column is already
+sorted as asked: first in that direction, in that direction, or not sorted at all. A column the
+user can't sort by raises `LookupError`, and so does `set_sort_direction` on a column that isn't
+sorted, which has no place to keep: Django adds a column to the sort only as the first one, so
+the error points to `make_primary_sort`. Nothing is clicked in either case. If the admin sends
+the browser elsewhere, such as to the login page after the session ended, the page stands for
+where it landed (section 3.9), reports it as `denied` or `redirected`, and nothing more is
+clicked.
+
+The links come from Django, which keeps the rest of the URL: sorting keeps a search and the
+filters applied, and a search, a filter and "Clear all filters" keep the sort. Once the last
+column is removed, the URL asks for an empty sort, and the headers mark no column. Django 5.2
+and later then order the records by the admin's default ordering again; earlier versions order
+them by their primary key alone, newest first.
+
 ---
 
 # 9. Changelist Row Matching (done)

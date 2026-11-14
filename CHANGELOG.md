@@ -21,6 +21,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - Read one changelist column as an object with `page.column(name)`, with its `name`, its `label`, its header cell as `native`, and whether it is `sortable`.
 - Read the columns a changelist shows sorted with `page.sorted_columns`, in priority order with `-` for descending, such as `["-price", "name"]`.
 - Read how a column is sorted with `column.sort_direction`, a `SortDirection` equal to `"asc"` or `"desc"`, and `column.sort_priority`. Both are `None` for a column that isn't sorted.
+- Change how a column is sorted with `column.make_primary_sort(direction)`, `column.set_sort_direction(direction)` and `column.remove_from_sort()`. The same page then reads the results, and each does nothing when the column is already sorted as asked.
 
 ### Fixed
 

@@ -32,9 +32,12 @@ class SortDirection(str, Enum):
 class ChangelistColumn:
     """One changelist column, read from its header cell each time it is used."""
 
-    def __init__(self, name: str, shown: Callable[[], Page]) -> None:
+    def __init__(
+        self, name: str, shown: Callable[[], Page], follow: Callable[[Locator], bool]
+    ) -> None:
         self._name = name
         self._shown = shown
+        self._follow = follow
 
     @property
     def name(self) -> str:
@@ -77,6 +80,77 @@ class ChangelistColumn:
         state = _sort_state(self.native)
         return state[1] if state else None
 
+    def make_primary_sort(self, direction: SortDirection | str = SortDirection.ASCENDING) -> None:
+        """Make the column the first one the changelist is sorted by, in ``direction``.
+
+        The columns sorted before keep their order after it. This clicks the header, which
+        flips a column that is already sorted, then the arrow when the direction came out wrong,
+        so it takes one or two page loads, and none when the column is already first in that
+        direction. This same page then reads the results.
+
+        ``direction`` is a ``SortDirection`` or its string, ``"asc"`` or ``"desc"``; anything
+        else raises ``ValueError``. A column the user can't sort by raises ``LookupError``. If
+        the admin sends the browser elsewhere, such as to the login page after the session
+        ended, the page stands for where it landed and reports it as ``denied`` or
+        ``redirected``.
+        """
+        wanted = _direction(direction)
+        cell = self._sortable_cell()
+        state = _sort_state(cell)
+        if state == (wanted, 1):
+            return
+        if state is not None and state[1] == 1:
+            self._follow(cell.locator(".sortoptions a.toggle"))
+            return
+        if self._follow(cell.locator("div.text a")) and self.sort_direction is not wanted:
+            self._follow(self.native.locator(".sortoptions a.toggle"))
+
+    def set_sort_direction(self, direction: SortDirection | str) -> None:
+        """Sort the column in ``direction`` and keep its place among the sorted columns.
+
+        This clicks the arrow when the direction differs, and nothing when it is already
+        ``direction``. This same page then reads the results. A column that isn't sorted has no
+        place to keep, so it raises ``LookupError``: Django adds a column only as the first one,
+        which ``make_primary_sort`` does.
+
+        ``direction`` is checked as for ``make_primary_sort``, and so are a column the user
+        can't sort by and a page the admin sends elsewhere.
+        """
+        wanted = _direction(direction)
+        cell = self._sortable_cell()
+        state = _sort_state(cell)
+        if state is None:
+            raise LookupError(
+                f"The column {self._name!r} is not sorted, so it has no direction to set. "
+                f"Sort by it with make_primary_sort({wanted.value!r}), which puts it first and "
+                "keeps the other sorted columns after it."
+            )
+        if state[0] is not wanted:
+            self._follow(cell.locator(".sortoptions a.toggle"))
+
+    def remove_from_sort(self) -> None:
+        """Take the column out of the sort, which the other sorted columns keep in their order.
+
+        This clicks the header's remove link, and nothing when the column isn't sorted. This
+        same page then reads the results. Once no column is sorted, the headers mark none, and
+        Django orders the records by the admin's default ordering again from 5.2, and before
+        that by their primary key alone, newest first.
+
+        A column the user can't sort by raises ``LookupError``, and a page the admin sends
+        elsewhere is reported as for ``make_primary_sort``.
+        """
+        cell = self._sortable_cell()
+        if _sort_state(cell) is not None:
+            # The admin shows the link only while the pointer is over the header, as a user's is.
+            cell.hover()
+            self._follow(cell.locator(".sortoptions a.sortremove"))
+
+    def _sortable_cell(self) -> Locator:
+        cell = self.native
+        if not _sortable(cell):
+            raise LookupError(f"The column {self._name!r} cannot be sorted.")
+        return cell
+
     def __repr__(self) -> str:
         return f"ChangelistColumn({self._name!r})"
 
@@ -98,3 +172,11 @@ def _sort_state(cell: Locator) -> tuple[SortDirection, int] | None:
     direction = SortDirection.DESCENDING if "descending" in classes else SortDirection.ASCENDING
     priority = cell.locator(".sortoptions .sortpriority")
     return direction, int(stripped_text(priority)) if priority.count() else 1
+
+
+def _direction(direction: SortDirection | str) -> SortDirection:
+    """``direction`` as a member, or ``ValueError`` when it names no direction."""
+    try:
+        return SortDirection(direction)
+    except ValueError:
+        raise ValueError(f"{direction!r} is not a sort direction. Use 'asc' or 'desc'.") from None

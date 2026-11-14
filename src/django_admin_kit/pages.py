@@ -441,7 +441,7 @@ class ChangelistPage(ModelPage):
                 else "The changelist shows no columns."
             )
             raise LookupError(f"No column named {name!r} here. {shown}")
-        return ChangelistColumn(name, self._shown)
+        return ChangelistColumn(name, self._shown, self._follow)
 
     @property
     def sortable_columns(self) -> list[str]:
@@ -619,9 +619,13 @@ class ChangelistPage(ModelPage):
         self._shown()
         return ChangelistFilters(self._shown, self._model, self._follow)
 
-    def _follow(self, element: Locator) -> None:
+    def _follow(self, element: Locator) -> bool:
         """Click ``element`` and wait for the page it leads to, which this page then stands
-        for, wherever the admin sent the browser."""
+        for, wherever the admin sent the browser.
+
+        Returns whether the page opened, so a step of several clicks stops at one the admin
+        refused, such as after the session ended.
+        """
         with self._page.expect_navigation() as navigation:
             element.click()
         response = navigation.value
@@ -629,6 +633,7 @@ class ChangelistPage(ModelPage):
         assert response is not None
         self._status_code = response.status
         self._landed()
+        return self._works
 
 
 class FormPage(ModelPage):
