@@ -118,7 +118,7 @@ class FieldFilters(Sequence[FieldFilter]):
         name: str,
         shown: Callable[[], Page],
         model: type[Model],
-        follow: Callable[[Locator], None],
+        follow: Callable[[Locator], bool],
     ) -> None:
         self._name = name
         self._shown = shown
@@ -239,7 +239,7 @@ class ChangelistFilters(Mapping[str, FieldFilters]):
         self,
         shown: Callable[[], Page],
         model: type[Model],
-        follow: Callable[[Locator], None],
+        follow: Callable[[Locator], bool],
     ) -> None:
         self._shown = shown
         self._model = model
@@ -337,7 +337,7 @@ def _matching(block: Locator, choice: str) -> list[int]:
     ]
 
 
-def _click(block: Locator, position: int, follow: Callable[[Locator], None]) -> None:
+def _click(block: Locator, position: int, follow: Callable[[Locator], bool]) -> None:
     # A filter the user collapsed hides its links, and a hidden link can't be clicked.
     block.evaluate("ul => { const box = ul.closest('details'); if (box) box.open = true; }")
     follow(block.locator("a").nth(position))

@@ -171,8 +171,9 @@ class ProductAdmin(admin.ModelAdmin):
     )
 
     # A bool the admin renders as text, because the column does not ask for the
-    # icon.
-    @admin.display(description="Released")
+    # icon. It sorts by the release date, so the changelist has a method column the
+    # user can sort by.
+    @admin.display(description="Released", ordering="released_on")
     def is_released(self, product):
         return product.released_on is not None
 
@@ -208,6 +209,8 @@ class ProductAdmin(admin.ModelAdmin):
 @admin.register(Feed)
 class FeedAdmin(admin.ModelAdmin):
     save_as = True
+    # The mode is left out, so the changelist has a field column the user cannot sort by.
+    sortable_by = ("source", "refreshed_at", "refresh_time")
     # A field with choices, a date-time and a time, each read by a rule of its own, a method
     # the admin draws as a boolean icon, and one with an empty value of its own.
     list_display = (

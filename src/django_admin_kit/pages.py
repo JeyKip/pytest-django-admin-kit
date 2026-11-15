@@ -24,6 +24,8 @@ from django.urls import Resolver404, resolve
 from playwright.sync_api import Locator, Page, Response
 
 from . import matching
+from ._html import class_suffix, stripped_text
+from .columns import ChangelistColumn, SortDirection, _sort_state, _sortable
 from .errors import ValidationErrors
 from .fields import Fields, Fieldset, FormField
 from .filters import ChangelistFilters
@@ -150,14 +152,14 @@ class AdminPage:
     @property
     def title(self) -> str:
         """The title the admin renders for the page, or ``""`` when it renders none."""
-        return _text(self._shown().locator("#content h1").first)
+        return stripped_text(self._shown().locator("#content h1").first)
 
     @property
     def subtitle(self) -> str:
         """The subtitle under the title, such as the object's name on a change page."""
         # The subtitle is the heading right after the title. The content area holds
         # other h2 elements, for filters and the like, but none next to the h1.
-        return _text(self._shown().locator("#content h1 + h2"))
+        return stripped_text(self._shown().locator("#content h1 + h2"))
 
     @property
     def messages(self) -> Messages:
@@ -288,8 +290,8 @@ class IndexPage(AdminPage):
         for app in self._shown().locator("#content-main div.module").all():
             # `text_content`, not `inner_text`: the admin's stylesheet upper-cases
             # captions, and the name is what the document says, not how it is drawn.
-            name = _text(app.locator("caption"))
-            app_label = _token(app, "app-")
+            name = stripped_text(app.locator("caption"))
+            app_label = class_suffix(app, "app-")
             app_list[name] = [
                 model
                 for row in app.locator("tr[class*='model-']").all()
@@ -302,7 +304,7 @@ class IndexPage(AdminPage):
         # user may only add, which the admin lists without a link. A row that is no
         # registered model, which a third-party app may add, is left out.
         try:
-            model = apps.get_model(app_label, _token(row, "model-"))
+            model = apps.get_model(app_label, class_suffix(row, "model-"))
         except LookupError:
             return None
         return model if self._tools.urls.site.is_registered(model) else None
@@ -411,7 +413,7 @@ class ChangelistPage(ModelPage):
 
         An empty changelist shows no table, so it has no headers either.
         """
-        return [_text(cell.locator("div.text")) for cell in self._header_cells]
+        return [stripped_text(cell.locator("div.text")) for cell in self._header_cells]
 
     def has_header(self, label: str) -> bool:
         return label in self.headers
@@ -419,10 +421,117 @@ class ChangelistPage(ModelPage):
     @property
     def columns(self) -> list[str]:
         """The same columns by the names the admin is configured with, in the same order."""
-        return [_token(cell, "column-") for cell in self._header_cells]
+        return [class_suffix(cell, "column-") for cell in self._header_cells]
 
     def has_column(self, name: str) -> bool:
         return name in self.columns
+
+    def column(self, name: str) -> ChangelistColumn:
+        """The column ``name`` names, as an object that reads its header.
+
+        A name the page doesn't show among ``columns`` raises ``LookupError`` listing the ones
+        it does. The column is found by its name each time it is used, so it keeps working after
+        the page loads again.
+        """
+        columns = self.columns
+        if name not in columns:
+            raise LookupError(_no_column(name, columns))
+        return ChangelistColumn(name, self._shown, self._follow)
+
+    @property
+    def sortable_columns(self) -> list[str]:
+        """The names of the columns the user can sort by, in the order shown.
+
+        This reads the page rather than ``ModelAdmin.sortable_by``, so it follows
+        ``get_sortable_by()``, and a method column counts when it has an ordering. An empty
+        changelist shows no table, so it has none.
+        """
+        return [class_suffix(cell, "column-") for cell in self._header_cells if _sortable(cell)]
+
+    @property
+    def sorted_columns(self) -> list[str]:
+        """The names of the columns the headers show sorted, in priority order, with ``-`` in
+        front of a descending one, such as ``["-price", "name"]``.
+
+        These are the marks Django puts on the headers. Without a sort in the URL, it marks the
+        columns of the admin's default ordering it can match to a column, and never the ``-pk``
+        it adds last, so the rows show the real order. An empty changelist shows no table, so it
+        has none.
+        """
+        # One pass over the header cells rather than a `column()` per name: each column finds its
+        # cell again for every attribute, which made this about seven times slower.
+        marked = []
+        for cell in self._header_cells:
+            state = _sort_state(cell)
+            if state is not None:
+                direction, priority = state
+                sign = "-" if direction is SortDirection.DESCENDING else ""
+                marked.append((priority, sign + class_suffix(cell, "column-")))
+        return [name for _, name in sorted(marked)]
+
+    def sort(self, *columns: str) -> None:
+        """Sort the changelist by exactly ``columns``, the first one first, as
+        ``sort("-price", "name")``.
+
+        A name is one of ``columns``, with ``-`` in front for a descending sort, as
+        ``sorted_columns`` lists them, so ``sort(*saved)`` restores a sort read from it. A column
+        sorted before and left out is no longer sorted, and ``sort()`` sorts by none, which
+        orders the records as ``ChangelistColumn.remove_from_sort`` says. To add one column in
+        front of the current sort instead, use ``column(name).make_primary_sort()``.
+
+        This clicks the headers' controls as a user would, and nothing when the headers already
+        show that sort. This same page then reads the results, and a search and filters stay
+        applied. A name that isn't a column, or names a column the user can't sort by, raises
+        ``LookupError``, and a column given twice raises ``ValueError``, before anything is
+        clicked. If the admin sends the browser elsewhere, such as to the login page after the
+        session ended, the page stands for where it landed and reports it as ``denied`` or
+        ``redirected``.
+        """
+        wanted = self._sort_order(columns)
+        names = {name for name, _ in wanted}
+        shown = [_sorted_column(column) for column in self.sorted_columns]
+        for name, _ in shown:
+            if name not in names:
+                self.column(name).remove_from_sort()
+                if not self._works:
+                    return
+        kept = dict(column for column in shown if column[0] in names)
+        moved = _columns_to_move([name for name, _ in wanted], list(kept))
+        # The columns the headers already end with, in that order, keep their place, and the
+        # arrow flips one sorted the other way.
+        for name, direction in wanted[moved:]:
+            if kept[name] is not direction:
+                self.column(name).set_sort_direction(direction)
+                if not self._works:
+                    return
+        # Each column made primary pushes the earlier ones down, so the others are clicked from
+        # the least important.
+        for name, direction in reversed(wanted[:moved]):
+            self.column(name).make_primary_sort(direction)
+            if not self._works:
+                return
+
+    def _sort_order(self, columns: tuple[str, ...]) -> list[tuple[str, SortDirection]]:
+        """``columns`` as names and directions, once each is known to be a column the user can
+        sort by, given once."""
+        names = self.columns
+        sortable = self.sortable_columns
+        order: list[tuple[str, SortDirection]] = []
+        for column in columns:
+            name, direction = _sorted_column(column)
+            if name not in names:
+                raise LookupError(_no_column(name, names))
+            if name not in sortable:
+                listed = (
+                    f"Sortable columns: {', '.join(repr(each) for each in sortable)}."
+                    if sortable
+                    else "No column can be sorted."
+                )
+                raise LookupError(f"The column {name!r} cannot be sorted. {listed}")
+            if any(name == seen for seen, _ in order):
+                raise ValueError(f"The column {name!r} is given more than once.")
+            order.append((name, direction))
+        return order
 
     @property
     def rows(self) -> list[Row]:
@@ -569,9 +678,13 @@ class ChangelistPage(ModelPage):
         self._shown()
         return ChangelistFilters(self._shown, self._model, self._follow)
 
-    def _follow(self, element: Locator) -> None:
+    def _follow(self, element: Locator) -> bool:
         """Click ``element`` and wait for the page it leads to, which this page then stands
-        for, wherever the admin sent the browser."""
+        for, wherever the admin sent the browser.
+
+        Returns whether the page opened, so a step of several clicks stops at one the admin
+        refused, such as after the session ended.
+        """
         with self._page.expect_navigation() as navigation:
             element.click()
         response = navigation.value
@@ -579,6 +692,7 @@ class ChangelistPage(ModelPage):
         assert response is not None
         self._status_code = response.status
         self._landed()
+        return self._works
 
 
 class FormPage(ModelPage):
@@ -990,10 +1104,6 @@ def _value_of(source: Any, name: str) -> Any:
     return getattr(source, name, _NOTHING)
 
 
-def _text(element: Locator) -> str:
-    return (element.text_content() or "").strip() if element.count() else ""
-
-
 def _own_text(item: Locator) -> str:
     """The text of a list entry without the entries nested in it, whitespace collapsed."""
     text = item.evaluate(
@@ -1004,6 +1114,33 @@ def _own_text(item: Locator) -> str:
     return " ".join(str(text).split())
 
 
-def _token(element: Locator, prefix: str) -> str:
-    classes = (element.get_attribute("class") or "").split()
-    return next(c[len(prefix) :] for c in classes if c.startswith(prefix))
+def _no_column(name: str, columns: list[str]) -> str:
+    """What to say when the changelist shows no column ``name``, listing the ones it does."""
+    shown = (
+        f"Columns: {', '.join(repr(column) for column in columns)}."
+        if columns
+        else "The changelist shows no columns."
+    )
+    return f"No column named {name!r} here. {shown}"
+
+
+def _sorted_column(column: str) -> tuple[str, SortDirection]:
+    """A name as ``sorted_columns`` lists it, such as ``"-price"``, split into the column's
+    name and its direction."""
+    if column.startswith("-"):
+        return column[1:], SortDirection.DESCENDING
+    return column, SortDirection.ASCENDING
+
+
+def _columns_to_move(wanted: list[str], kept: list[str]) -> int:
+    """How many of the ``wanted`` columns, from the first, have to be made primary for the
+    headers to show them in that order, when they show ``kept`` sorted now.
+
+    The columns after those keep their place, so they have to be what ``kept`` is without the
+    ones moved. Their directions don't count, since the arrow flips a column in its place.
+    """
+    for count in range(len(wanted)):
+        moved = set(wanted[:count])
+        if [name for name in kept if name not in moved] == wanted[count:]:
+            return count
+    return len(wanted)

@@ -195,6 +195,35 @@ each, and a label only one of them offers applies through it. A filter is also r
 as in `page.filters["released_on"][1].apply("Empty")`. `clear()` needs no label: on
 `page.filters` it clears everything, on a field its filters, and on a filter just that one.
 
+**Sorting a changelist.** `sort` sorts by exactly the columns given, the first one first, with
+`-` in front of a descending one, and `sorted_columns` reads the sort back in the same format. A
+column left out is no longer sorted. The same page then reads the results, and a sort keeps a
+search and the filters applied.
+
+```python
+page = admin_ui.list(Product)
+
+assert "price" in page.sortable_columns
+
+page.sort("-price", "name")
+
+assert page.sorted_columns == ["-price", "name"]
+
+# One column at a time, the way a user clicks its header:
+price = page.column("price")
+
+price.set_sort_direction("asc")
+price.remove_from_sort()
+price.make_primary_sort("desc")
+
+assert price.sort_direction == "desc"
+assert price.sort_priority == 1
+```
+
+`make_primary_sort` puts a column first and keeps the others sorted after it, as a click on its
+header does. `set_sort_direction` flips a column in its place, and `remove_from_sort` takes it out
+of the sort.
+
 **Reading form fields.** The create and edit pages list their fields by name, in the order the
 admin presents them, whether the user may fill them or only read them. A field the admin renders
 hidden is not shown, so it is not listed. Whether a field is required is read the way the user
