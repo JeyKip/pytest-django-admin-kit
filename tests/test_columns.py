@@ -30,6 +30,8 @@ NEWEST_FIRST = ["Washer", "Nut", "Bolt"]
 # How the products are ordered once no column is sorted: by the model's ordering again from
 # Django 5.2, and before that by the primary key alone.
 UNSORTED = ["Bolt", "Nut", "Washer"] if django.VERSION >= (5, 2) else NEWEST_FIRST
+# The sortable product columns, as the error of a column that can't be sorted lists them.
+SORTABLE_LIST = ", ".join(repr(name) for name in SORTABLE)
 # Each way to change how a column is sorted.
 SORT_METHODS = {
     "make_primary_sort": lambda column: column.make_primary_sort(),
@@ -310,6 +312,19 @@ def names(page):
     return [row["name"].value for row in page.rows]
 
 
+def loads(page, change):
+    """How many times ``change`` loads a page in the browser."""
+    loaded = []
+
+    def count(_):
+        loaded.append(1)
+
+    page.native.on("load", count)
+    change()
+    page.native.remove_listener("load", count)
+    return len(loaded)
+
+
 def loads_nothing(page, change):
     """Whether ``change`` leaves the browser on the same document, which a marker set on it
     survives only then."""
@@ -326,7 +341,11 @@ def test_making_an_unsorted_column_primary_sorts_by_it_first(admin_ui, superuser
 
     assert page.works
     assert page.sorted_columns == ["price", "name"]
-    assert page.column("price").sort_direction == "asc"
+    price, name = page.column("price"), page.column("name")
+    assert price.sort_direction == "asc"
+    assert price.sort_priority == 1
+    assert name.sort_direction == "asc"
+    assert name.sort_priority == 2
     assert names(page) == BY_PRICE
 
 
@@ -412,18 +431,22 @@ def test_setting_the_direction_a_column_has_loads_nothing(admin_ui, superuser, p
     assert page.sorted_columns == ["name"]
 
 
-def test_setting_the_direction_of_an_unsorted_column_raises(admin_ui, superuser, priced):
+@pytest.mark.parametrize(("direction", "name"), [("desc", "-price"), ("asc", "price")])
+def test_setting_the_direction_of_an_unsorted_column_raises(
+    admin_ui, superuser, priced, direction, name
+):
     """Django adds a column to the sort only as the first one."""
     admin_ui.login(superuser)
     page = admin_ui.list(Product)
 
     with pytest.raises(LookupError) as raised:
-        page.column("price").set_sort_direction("desc")
+        page.column("price").set_sort_direction(direction)
 
     assert str(raised.value) == (
         "The column 'price' is not sorted, so it has no direction to set. Sort by it with "
-        "make_primary_sort('desc'), which puts it first and keeps the other sorted columns "
-        "after it."
+        f"make_primary_sort({direction!r}), which puts it first and keeps the other sorted "
+        f"columns after it, or with page.sort({name!r}, ...), which sorts by exactly the "
+        "columns given."
     )
     assert page.sorted_columns == ["name"]
 
@@ -436,7 +459,11 @@ def test_removing_a_column_from_the_sort_moves_the_others_up(admin_ui, superuser
     assert page.column("price").remove_from_sort() is None
 
     assert page.sorted_columns == ["name"]
-    assert page.column("name").sort_priority == 1
+    price, name = page.column("price"), page.column("name")
+    assert price.sort_direction is None
+    assert price.sort_priority is None
+    assert name.sort_direction == "asc"
+    assert name.sort_priority == 1
 
 
 def test_removing_the_last_sorted_column_leaves_no_column_marked(admin_ui, superuser, priced):
@@ -541,3 +568,203 @@ def test_a_sort_after_the_session_ended_reports_the_refusal(admin_ui, superuser,
     assert page.destination == admin_ui.url.login()
     with pytest.raises(LookupError, match="The page did not open"):
         _ = page.sorted_columns
+
+
+def test_sorting_by_one_column_sorts_by_it_alone(admin_ui, superuser, priced):
+    """The admin sorts by the name at first."""
+    admin_ui.login(superuser)
+    page = admin_ui.list(Product)
+
+    assert page.sort("price") is None
+
+    assert page.works
+    assert page.sorted_columns == ["price"]
+    price, name = page.column("price"), page.column("name")
+    assert price.sort_direction == "asc"
+    assert price.sort_priority == 1
+    assert name.sort_direction is None
+    assert name.sort_priority is None
+    assert names(page) == BY_PRICE
+
+
+def test_sorting_by_several_columns_sorts_by_them_in_the_order_given(admin_ui, superuser, priced):
+    admin_ui.login(superuser)
+    page = admin_ui.list(Product)
+
+    page.sort("-price", "name")
+
+    assert page.sorted_columns == ["-price", "name"]
+    price, name = page.column("price"), page.column("name")
+    assert price.sort_direction == "desc"
+    assert price.sort_priority == 1
+    assert name.sort_direction == "asc"
+    assert name.sort_priority == 2
+    assert names(page) == BY_PRICE_DESCENDING
+
+
+def test_a_sort_replaces_the_one_before(admin_ui, superuser, priced):
+    admin_ui.login(superuser)
+    page = admin_ui.list(Product)
+    page.sort("sku")
+
+    page.sort("-price", "name")
+
+    assert page.sorted_columns == ["-price", "name"]
+    sku = page.column("sku")
+    assert sku.sort_direction is None
+    assert sku.sort_priority is None
+
+
+@pytest.mark.parametrize("order", ["1.-3", "3.1", "-3.-1"])
+def test_columns_sorted_in_another_order_or_direction_end_as_given(
+    admin_ui, superuser, priced, order
+):
+    admin_ui.login(superuser)
+    page = admin_ui.list(Product)
+    sort_by(admin_ui, page, order)
+
+    page.sort("-price", "name")
+
+    assert page.sorted_columns == ["-price", "name"]
+
+
+def test_sorting_by_no_column_leaves_none_sorted(admin_ui, superuser, priced):
+    """The headers mark none once the URL asks for an empty sort, whatever order Django's
+    version then gives the records."""
+    admin_ui.login(superuser)
+    page = admin_ui.list(Product)
+
+    page.sort()
+
+    assert page.sorted_columns == []
+    assert names(page) == UNSORTED
+
+
+def test_a_sort_read_from_the_headers_is_restored(admin_ui, superuser, priced):
+    admin_ui.login(superuser)
+    page = admin_ui.list(Product)
+    page.sort("-price", "name")
+    saved = page.sorted_columns
+
+    page.sort("sku")
+    page.sort(*saved)
+
+    assert page.sorted_columns == ["-price", "name"]
+    assert names(page) == BY_PRICE_DESCENDING
+
+
+@pytest.mark.parametrize(
+    ("order", "columns"), [(None, ("name",)), ("-3.1", ("-price", "name")), ("", ())]
+)
+def test_sorting_as_the_headers_show_loads_nothing(admin_ui, superuser, priced, order, columns):
+    """With no order in the URL, the admin sorts by the name."""
+    admin_ui.login(superuser)
+    page = admin_ui.list(Product)
+    if order is not None:
+        sort_by(admin_ui, page, order)
+
+    assert loads_nothing(page, lambda: page.sort(*columns))
+    assert page.sorted_columns == list(columns)
+
+
+@pytest.mark.parametrize(
+    ("before", "after", "expected"),
+    [
+        # The header and the arrow of the price.
+        (("name",), ("-price", "name"), 2),
+        # The remove link of the SKU, the header of the name, and the header and the arrow of
+        # the price.
+        (("sku",), ("-price", "name"), 4),
+        # The arrow of the price, which keeps its place.
+        (("name", "price"), ("name", "-price"), 1),
+        # The header and the arrow of the price, which leave the name behind it.
+        (("name", "price"), ("price", "name"), 2),
+        # The remove link of the name, then the header of the SKU.
+        (("name", "price", "released_on"), ("sku", "price", "released_on"), 2),
+        # The header and the arrow of the price, then of the release date; the name stays last.
+        (("name", "price", "released_on"), ("released_on", "price", "name"), 4),
+    ],
+)
+def test_a_sort_clicks_only_the_columns_out_of_place(
+    admin_ui, superuser, priced, before, after, expected
+):
+    admin_ui.login(superuser)
+    page = admin_ui.list(Product)
+    page.sort(*before)
+
+    assert loads(page, lambda: page.sort(*after)) == expected
+    assert page.sorted_columns == list(after)
+
+
+@pytest.mark.parametrize(
+    ("columns", "error", "message"),
+    [
+        (("sku", "color"), LookupError, f"No column named 'color' here. Columns: {COLUMN_LIST}."),
+        (("sku", ""), LookupError, f"No column named '' here. Columns: {COLUMN_LIST}."),
+        (("sku", "-"), LookupError, f"No column named '' here. Columns: {COLUMN_LIST}."),
+        (
+            ("sku", "--price"),
+            LookupError,
+            f"No column named '-price' here. Columns: {COLUMN_LIST}.",
+        ),
+        (
+            ("sku", "price_with_tax"),
+            LookupError,
+            f"The column 'price_with_tax' cannot be sorted. Sortable columns: {SORTABLE_LIST}.",
+        ),
+        (("price", "sku", "-price"), ValueError, "The column 'price' is given more than once."),
+    ],
+)
+def test_a_sort_that_names_no_sortable_column_once_raises_before_any_click(
+    admin_ui, superuser, priced, columns, error, message
+):
+    """The SKU comes first in each, so a click before the check would leave it sorted."""
+    admin_ui.login(superuser)
+    page = admin_ui.list(Product)
+
+    with pytest.raises(error) as raised:
+        page.sort(*columns)
+
+    assert str(raised.value) == message
+    assert page.sorted_columns == ["name"]
+
+
+def test_a_page_that_did_not_open_cannot_be_sorted(admin_ui, adder):
+    admin_ui.login(adder)
+    page = admin_ui.list(Product)
+
+    with pytest.raises(LookupError, match="The page did not open"):
+        page.sort("price")
+
+
+def test_sorting_by_the_columns_given_keeps_the_search_and_the_filters_applied(
+    admin_ui, superuser, priced
+):
+    """The term is in the name or the SKU of the bolt and the nut."""
+    admin_ui.login(superuser)
+    page = admin_ui.list(Product, search="t")
+    page.filters["is_active"].apply("Yes")
+
+    page.sort("-price")
+
+    assert page.search_term == "t"
+    assert page.filters["is_active"].selected == "Yes"
+    assert names(page) == ["Bolt", "Nut"]
+
+
+@pytest.mark.parametrize("columns", [("price",), ("sku", "-name"), ("sku", "price", "name")])
+def test_sorting_by_the_columns_given_after_the_session_ended_reports_the_refusal(
+    admin_ui, superuser, priced, columns
+):
+    """The admin sends the browser to the login page at the first click, which removes the
+    name, flips it, or sorts by the price, and the page stands for where it landed rather than
+    clicking on."""
+    admin_ui.login(superuser)
+    page = admin_ui.list(Product)
+    admin_ui.logout()
+
+    page.sort(*columns)
+
+    assert page.denied
+    assert page.redirected
+    assert page.destination == admin_ui.url.login()

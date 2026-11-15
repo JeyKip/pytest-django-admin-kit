@@ -120,10 +120,12 @@ class ChangelistColumn:
         cell = self._sortable_cell()
         state = _sort_state(cell)
         if state is None:
+            sign = "-" if wanted is SortDirection.DESCENDING else ""
             raise LookupError(
                 f"The column {self._name!r} is not sorted, so it has no direction to set. "
                 f"Sort by it with make_primary_sort({wanted.value!r}), which puts it first and "
-                "keeps the other sorted columns after it."
+                "keeps the other sorted columns after it, or with "
+                f"page.sort({sign + self._name!r}, ...), which sorts by exactly the columns given."
             )
         if state[0] is not wanted:
             self._follow(cell.locator(".sortoptions a.toggle"))

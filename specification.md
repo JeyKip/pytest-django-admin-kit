@@ -986,7 +986,7 @@ project's own without "All".
 
 ---
 
-## 8.5 Sorting
+## 8.5 Sorting (done)
 
 Django sorts a changelist by several columns at once. Clicking a header makes that column the
 first sort key and keeps the columns sorted before behind it, so a changelist sorted by name and
@@ -1044,9 +1044,47 @@ the browser elsewhere, such as to the login page after the session ended, the pa
 where it landed (section 3.9), reports it as `denied` or `redirected`, and nothing more is
 clicked.
 
+A test that wants the changelist sorted one way, whatever it was sorted by before, gives the
+whole sort to `page.sort`, in the format `sorted_columns` reads:
+
+```python
+page.sort("-price", "name")                           # done
+assert page.sorted_columns == ["-price", "name"]      # done
+
+page.sort("sku")                                      # done
+assert page.sorted_columns == ["sku"]                 # done
+
+saved = page.sorted_columns                           # done
+page.sort()                                           # done
+assert page.sorted_columns == []                      # done
+page.sort(*saved)                                     # done
+```
+
+The two differ in what they keep. `make_primary_sort` changes one column and keeps the others
+sorted after it, as a click on a header does. `page.sort` sorts by exactly the columns given, so
+a column sorted before and left out is no longer sorted, and `page.sort()` sorts by none. To add
+a column in front of the current sort, a test uses `make_primary_sort`.
+
+`page.sort` works through the same controls. It removes the sorted columns it leaves out. The
+columns given that the headers already end with, in that order, keep their place, and the arrow
+flips any of them sorted the other way. The rest are made primary from the last to the first,
+since each one made primary goes in front. From a changelist sorted by SKU, `page.sort("-price",
+"name")` removes the SKU, clicks the header of the name, then the header and the arrow of the
+price. From one sorted by name and price, `page.sort("name", "-price")` clicks only the arrow of
+the price. When the headers already show the sort asked for, nothing is clicked and the page
+isn't loaded again.
+
+Every name is checked before the first click. A name that isn't a column, `""`, `"-"` and
+`"--price"` included, raises `LookupError` as `page.column` does. A column the user can't sort by
+raises `LookupError` listing the ones they can, and a column given twice, in either direction,
+raises `ValueError`. A refused click is reported as for the column's methods, and nothing more
+is clicked. The error of `set_sort_direction` on a column that isn't sorted points to
+`page.sort` too.
+
 The links come from Django, which keeps the rest of the URL: sorting keeps a search and the
 filters applied, and a search, a filter and "Clear all filters" keep the sort. Once the last
-column is removed, the URL asks for an empty sort, and the headers mark no column. Django 5.2
+column is removed, or `page.sort()` sorts by none, the URL asks for an empty sort, and the
+headers mark no column. Django 5.2
 and later then order the records by the admin's default ordering again; earlier versions order
 them by their primary key alone, newest first.
 
@@ -3435,7 +3473,7 @@ Login page:
   results, the search term it shows, and the count and summary of its results; a changelist
   whose admin declares no search fields reports that it offers no search (done);
 * filters: the filters a changelist offers, their choices, and applying them (done);
-* ordering: the order a changelist shows, sortable columns, and sorting by them;
+* ordering: the order a changelist shows, sortable columns, and sorting by them (done);
 * pagination and page traversal;
 * actions: the actions a changelist offers, selecting rows, and running an action, including
   the admin's own "delete selected" and its confirmation.
