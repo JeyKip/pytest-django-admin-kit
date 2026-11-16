@@ -1090,7 +1090,7 @@ them by their primary key alone, newest first.
 
 ---
 
-## 8.6 Pagination
+## 8.6 Pagination (done)
 
 Django shows `list_per_page` records a page, 100 unless the admin says otherwise. A changelist
 reads which page it shows, counting from 1, and how many pages there are:
@@ -1140,6 +1140,33 @@ for number in range(1, page.page_count + 1):          # done
     page.go_to_page(number)                           # done
     names += [row["name"].value for row in page.rows] # done
 ```
+
+A changelist says whether it offers "Show all", shows all of its records on one page, and says
+whether it shows them all:
+
+```python
+assert page.can_show_all                              # done
+
+page.show_all()                                       # done
+
+assert page.shows_all                                 # done
+assert len(page.rows) == page.count                   # done
+```
+
+Django draws "Show all" while the records span several pages and number no more than the admin's
+`list_max_show_all`, 200 unless it says otherwise. `show_all` clicks it and returns nothing, and
+the same page then reads all the rows. It does nothing when the page already shows all, and the
+page isn't loaded again. A changelist that doesn't offer it, because it fits on one page or has
+too many records, raises `LookupError`, and nothing is clicked. A refused click is reported as
+for `go_to_page`.
+
+While it shows all, the paginator draws no page links, so the changelist is page 1 of 1, and
+`go_to_page` with any other number raises `LookupError` saying so. A search, a filter and a sort
+keep showing all, and Django draws no control that goes back to the pages.
+
+`shows_all` is the one reader that goes by the address rather than the markup. A changelist
+showing all looks like one that fits on one page, so `shows_all` is true when the address asks for
+all records and the paginator draws no page links, which it would if there were too many to show.
 
 ---
 
@@ -3527,7 +3554,7 @@ Login page:
   whose admin declares no search fields reports that it offers no search (done);
 * filters: the filters a changelist offers, their choices, and applying them (done);
 * ordering: the order a changelist shows, sortable columns, and sorting by them (done);
-* pagination and page traversal;
+* pagination and page traversal (done);
 * actions: the actions a changelist offers, selecting rows, and running an action, including
   the admin's own "delete selected" and its confirmation.
 

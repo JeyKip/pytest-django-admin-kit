@@ -19,7 +19,7 @@ from typing import Any, Dict
 from urllib.parse import parse_qsl, urlencode, urljoin, urlsplit, urlunsplit
 
 from django.apps import apps
-from django.contrib.admin.views.main import PAGE_VAR
+from django.contrib.admin.views.main import ALL_VAR, PAGE_VAR
 from django.db.models import Model
 from django.urls import Resolver404, resolve
 from playwright.sync_api import Locator, Page, Response
@@ -631,15 +631,21 @@ class ChangelistPage(ModelPage):
         This same page then reads the results, and a search, filters and a sort stay applied.
 
         A number that isn't an ``int`` raises ``TypeError``, and one that isn't among the pages
-        raises ``LookupError``, before anything is clicked. If the admin sends the browser
-        elsewhere, such as to the login page after the session ended, the page stands for where
-        it landed and reports it as ``denied`` or ``redirected``.
+        raises ``LookupError``, before anything is clicked. While ``shows_all``, the only page is
+        1. If the admin sends the browser elsewhere, such as to the login page after the session
+        ended, the page stands for where it landed and reports it as ``denied`` or
+        ``redirected``.
         """
         # A bool is an int, but `True` taken as page 1 would hide a mistake.
         if isinstance(number, bool) or not isinstance(number, int):
             raise TypeError(f"A page number is an int, not {type(number).__name__}.")
         count = self.page_count
         if not 1 <= number <= count:
+            if self.shows_all:
+                raise LookupError(
+                    f"The changelist shows all of its records on one page, so there is no page "
+                    f"{number}."
+                )
             pages = "1 page" if count == 1 else f"{count} pages"
             raise LookupError(f"The changelist has {pages}, so there is no page {number}.")
         if number == self.page_number:
@@ -650,6 +656,48 @@ class ChangelistPage(ModelPage):
             self._follow(links.nth(shown.index(number)))
         else:
             self._visit(_with_page(self._page.url, links.first.get_attribute("href") or "", number))
+
+    @property
+    def can_show_all(self) -> bool:
+        """Whether the changelist offers "Show all".
+
+        Django draws it while the records span several pages and number no more than the admin's
+        ``list_max_show_all``, 200 unless it says otherwise.
+        """
+        return self._show_all_link.count() > 0
+
+    @property
+    def shows_all(self) -> bool:
+        """Whether the changelist shows all of its records on one page, after "Show all".
+
+        The page has no mark for it, and looks like a changelist that fits on one page, so this
+        reads the address: it asks for all records, and the paginator draws no page links, which
+        it would if there were too many to show.
+        """
+        query = parse_qsl(urlsplit(self._shown().url).query, keep_blank_values=True)
+        return any(name == ALL_VAR for name, _ in query) and not self._page_links.count()
+
+    def show_all(self) -> None:
+        """Show all of the changelist's records on one page, by clicking "Show all".
+
+        This same page then reads the results, so ``rows`` are all of them, and a search, filters
+        and a sort stay applied and keep showing all. It does nothing when ``shows_all``, and the
+        page isn't loaded again. A changelist that doesn't offer "Show all", because it fits on
+        one page or has more records than the admin's ``list_max_show_all``, raises
+        ``LookupError``, and nothing is clicked. If the admin sends the browser elsewhere, such as
+        to the login page after the session ended, the page stands for where it landed and
+        reports it as ``denied`` or ``redirected``.
+        """
+        if self.shows_all:
+            return
+        link = self._show_all_link
+        if not link.count():
+            raise LookupError("The changelist doesn't offer to show all of its records.")
+        self._follow(link)
+
+    @property
+    def _show_all_link(self) -> Locator:
+        return self._paginator.locator("a.showall")
 
     @property
     def _paginator(self) -> Locator:

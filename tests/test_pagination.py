@@ -17,6 +17,12 @@ def per_page(monkeypatch):
 
 
 @pytest.fixture
+def max_show_all(monkeypatch):
+    """Sets how many products "Show all" may show at most, for one test."""
+    return lambda count: monkeypatch.setattr(ProductAdmin, "list_max_show_all", count)
+
+
+@pytest.fixture
 def many_products(db):
     """Creates ``count`` products, named so the changelist lists them in the order created."""
     return lambda count: [
@@ -324,3 +330,201 @@ def test_the_address_of_a_page_without_a_link_is_a_drawn_link_with_its_number_ch
     href, address
 ):
     assert _with_page(f"{CHANGELIST}?p=1", href, 5) == address
+
+
+def test_a_changelist_of_several_pages_offers_to_show_all(
+    admin_ui, superuser, per_page, many_products
+):
+    per_page(2)
+    many_products(5)
+    admin_ui.login(superuser)
+
+    page = admin_ui.list(Product)
+
+    assert page.can_show_all is True
+    assert page.shows_all is False
+
+
+def test_a_changelist_of_one_page_offers_no_show_all(admin_ui, superuser, products):
+    admin_ui.login(superuser)
+
+    page = admin_ui.list(Product)
+
+    assert page.can_show_all is False
+    assert page.shows_all is False
+
+
+def test_too_many_records_to_show_at_once_offer_no_show_all(
+    admin_ui, superuser, per_page, max_show_all, many_products
+):
+    per_page(2)
+    max_show_all(4)
+    many_products(5)
+    admin_ui.login(superuser)
+
+    page = admin_ui.list(Product)
+
+    assert page.can_show_all is False
+    assert page.page_count == 3
+
+
+def test_showing_all_puts_every_record_on_one_page(admin_ui, superuser, per_page, many_products):
+    per_page(2)
+    many_products(5)
+    admin_ui.login(superuser)
+    page = admin_ui.list(Product)
+
+    assert loads(page, page.show_all) == 1
+
+    assert page.works
+    assert page.destination == admin_ui.url.list(Product)
+    assert page.shows_all is True
+    assert page.can_show_all is False
+    assert page.page_number == 1
+    assert page.page_count == 1
+    assert page.count == 5
+    assert names(page) == [f"Product {number:02}" for number in range(1, 6)]
+
+
+def test_showing_all_from_another_page_shows_them_all_too(
+    admin_ui, superuser, per_page, many_products
+):
+    per_page(2)
+    many_products(5)
+    admin_ui.login(superuser)
+    page = admin_ui.list(Product)
+    page.go_to_page(3)
+
+    page.show_all()
+
+    assert page.shows_all
+    assert len(page.rows) == 5
+
+
+def test_showing_all_again_loads_nothing(admin_ui, superuser, per_page, many_products):
+    per_page(2)
+    many_products(5)
+    admin_ui.login(superuser)
+    page = admin_ui.list(Product)
+    page.show_all()
+
+    assert loads(page, page.show_all) == 0
+
+    assert page.shows_all
+
+
+def test_a_changelist_of_one_page_reads_as_showing_all_once_asked(admin_ui, superuser, products):
+    """The address asks for all records, and they are all on the page."""
+    admin_ui.login(superuser)
+    page = admin_ui.list(Product)
+
+    page.native.goto(f"{page.native.url}?all=")
+
+    assert page.shows_all is True
+
+
+def test_asking_for_all_of_too_many_records_does_not_show_all(
+    admin_ui, superuser, per_page, max_show_all, many_products
+):
+    """Django ignores the request and shows the pages."""
+    per_page(2)
+    max_show_all(4)
+    many_products(5)
+    admin_ui.login(superuser)
+    page = admin_ui.list(Product)
+
+    page.native.goto(f"{page.native.url}?all=")
+
+    assert page.shows_all is False
+    assert page.page_count == 3
+
+
+@pytest.mark.parametrize("fits", [True, False], ids=["one-page", "too-many"])
+def test_a_changelist_that_cannot_show_all_refuses_before_anything_is_clicked(
+    admin_ui, superuser, per_page, max_show_all, many_products, fits
+):
+    if not fits:
+        per_page(2)
+        max_show_all(4)
+    many_products(5)
+    admin_ui.login(superuser)
+    page = admin_ui.list(Product)
+
+    def show():
+        with pytest.raises(LookupError) as raised:
+            page.show_all()
+        assert str(raised.value) == "The changelist doesn't offer to show all of its records."
+
+    assert loads(page, show) == 0
+
+
+@pytest.mark.parametrize(
+    "change",
+    [
+        lambda page: page.search("Product"),
+        lambda page: page.filters["is_active"].apply("Yes"),
+        lambda page: page.sort("-name"),
+    ],
+    ids=["search", "filter", "sort"],
+)
+def test_a_search_a_filter_or_a_sort_keeps_showing_all(
+    admin_ui, superuser, per_page, many_products, change
+):
+    per_page(2)
+    many_products(5)
+    admin_ui.login(superuser)
+    page = admin_ui.list(Product)
+    page.show_all()
+
+    change(page)
+
+    assert page.shows_all
+    assert len(page.rows) == 5
+
+
+def test_no_page_but_the_first_can_be_gone_to_while_showing_all(
+    admin_ui, superuser, per_page, many_products
+):
+    per_page(2)
+    many_products(5)
+    admin_ui.login(superuser)
+    page = admin_ui.list(Product)
+    page.show_all()
+
+    with pytest.raises(LookupError) as raised:
+        page.go_to_page(2)
+
+    assert str(raised.value) == (
+        "The changelist shows all of its records on one page, so there is no page 2."
+    )
+    assert loads(page, lambda: page.go_to_page(1)) == 0
+
+
+def test_showing_all_after_the_session_ended_reports_the_refusal(
+    admin_ui, superuser, per_page, many_products
+):
+    per_page(2)
+    many_products(5)
+    admin_ui.login(superuser)
+    page = admin_ui.list(Product)
+    admin_ui.logout()
+
+    page.show_all()
+
+    assert page.denied
+    assert page.redirected
+    assert page.destination == admin_ui.url.login()
+    with pytest.raises(LookupError, match="The page did not open"):
+        _ = page.shows_all
+
+
+def test_a_page_that_did_not_open_cannot_show_all(admin_ui, adder):
+    admin_ui.login(adder)
+    page = admin_ui.list(Product)
+
+    with pytest.raises(LookupError, match="The page did not open"):
+        _ = page.can_show_all
+    with pytest.raises(LookupError, match="The page did not open"):
+        _ = page.shows_all
+    with pytest.raises(LookupError, match="The page did not open"):
+        page.show_all()
