@@ -1109,6 +1109,38 @@ changelist that fits on one page shows no page links, so it is page 1 of 1, and 
 one. `count` is the number of records across every page, and `rows` are the rows of the page
 shown.
 
+`page.go_to_page` shows another page by its number. It returns nothing: the page stays the same
+object, and the rows read the new page.
+
+```python
+page.go_to_page(3)                                    # done
+
+assert page.page_number == 3                          # done
+```
+
+When the paginator shows the number, its link is clicked. From page 1 of 20 it shows
+`1 2 3 4 … 19 20`, so page 10 has no link. For such a page, the address of a link Django drew is
+opened with only its page number changed, so it carries the search, filters and sort as the
+link does. Either way the page loads once, and going to the page shown loads nothing.
+
+A page link keeps a search, the filters and the sort. A search, a filter and a sort go back to
+page 1, because Django's links for them leave out the page number.
+
+A number that isn't an `int` raises `TypeError`, `True` and `False` included, since `True`
+taken as page 1 would hide a mistake. A number outside 1 to `page_count` raises `LookupError`
+saying how many pages there are. Both are raised before anything is clicked. If the admin sends
+the browser elsewhere, such as to the login page after the session ended, the page stands for
+where it landed (section 3.9) and reports it as `denied` or `redirected`.
+
+A test that reads every page goes through them in turn:
+
+```python
+names = []
+for number in range(1, page.page_count + 1):          # done
+    page.go_to_page(number)                           # done
+    names += [row["name"].value for row in page.rows] # done
+```
+
 ---
 
 # 9. Changelist Row Matching (done)

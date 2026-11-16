@@ -16,9 +16,10 @@ import re
 from collections.abc import Mapping
 from enum import Enum
 from typing import Any, Dict
-from urllib.parse import urlsplit
+from urllib.parse import parse_qsl, urlencode, urljoin, urlsplit, urlunsplit
 
 from django.apps import apps
+from django.contrib.admin.views.main import PAGE_VAR
 from django.db.models import Model
 from django.urls import Resolver404, resolve
 from playwright.sync_api import Locator, Page, Response
@@ -621,9 +622,43 @@ class ChangelistPage(ModelPage):
         numbers = self._paginator.locator(".this-page, a:not(.showall)").all_text_contents()
         return max((integer(number) for number in numbers), default=1)
 
+    def go_to_page(self, number: int) -> None:
+        """Show page ``number`` of the changelist, counting from 1.
+
+        This clicks the page's link. Django leaves out the numbers far from the current page,
+        so for one it doesn't show, this opens the address of a page link it drew with only the
+        page number changed. Either way the page loads once, and not at all for the page shown.
+        This same page then reads the results, and a search, filters and a sort stay applied.
+
+        A number that isn't an ``int`` raises ``TypeError``, and one that isn't among the pages
+        raises ``LookupError``, before anything is clicked. If the admin sends the browser
+        elsewhere, such as to the login page after the session ended, the page stands for where
+        it landed and reports it as ``denied`` or ``redirected``.
+        """
+        # A bool is an int, but `True` taken as page 1 would hide a mistake.
+        if isinstance(number, bool) or not isinstance(number, int):
+            raise TypeError(f"A page number is an int, not {type(number).__name__}.")
+        count = self.page_count
+        if not 1 <= number <= count:
+            pages = "1 page" if count == 1 else f"{count} pages"
+            raise LookupError(f"The changelist has {pages}, so there is no page {number}.")
+        if number == self.page_number:
+            return
+        links = self._page_links
+        shown = [integer(text) for text in links.all_text_contents()]
+        if number in shown:
+            self._follow(links.nth(shown.index(number)))
+        else:
+            self._visit(_with_page(self._page.url, links.first.get_attribute("href") or "", number))
+
     @property
     def _paginator(self) -> Locator:
         return self._shown().locator("#changelist .paginator")
+
+    @property
+    def _page_links(self) -> Locator:
+        # From Django 6.0 the current page is a link too, to `href=""`, so it is left out.
+        return self._paginator.locator('a:not(.showall):not([aria-current="page"])')
 
     @property
     def _count_line(self) -> re.Match[str]:
@@ -714,7 +749,14 @@ class ChangelistPage(ModelPage):
         """
         with self._page.expect_navigation() as navigation:
             element.click()
-        response = navigation.value
+        return self._arrived(navigation.value)
+
+    def _visit(self, url: str) -> bool:
+        """Open ``url`` in the browser page, which this page then stands for, as ``_follow``
+        does for a click."""
+        return self._arrived(self._page.goto(url))
+
+    def _arrived(self, response: Response | None) -> bool:
         # A navigation of the page always comes with a response.
         assert response is not None
         self._status_code = response.status
@@ -1171,3 +1213,15 @@ def _columns_to_move(wanted: list[str], kept: list[str]) -> int:
         if [name for name in kept if name not in moved] == wanted[count:]:
             return count
     return len(wanted)
+
+
+def _with_page(url: str, href: str, number: int) -> str:
+    """The address of the link ``href`` on the page at ``url``, asking for page ``number``.
+
+    Every other parameter is kept as the link has it, blank values included, so the search,
+    filters and sort stay applied.
+    """
+    link = urlsplit(urljoin(url, href))
+    query = [pair for pair in parse_qsl(link.query, keep_blank_values=True) if pair[0] != PAGE_VAR]
+    query.append((PAGE_VAR, str(number)))
+    return urlunsplit(link._replace(query=urlencode(query)))

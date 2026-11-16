@@ -226,13 +226,18 @@ of the sort.
 
 **Paging through a changelist.** `page_number` is the page shown, counting from 1, and
 `page_count` how many there are, both read from the paginator. `count` covers every page, while
-`rows` are those of the page shown.
+`rows` are those of the page shown. `go_to_page` shows another page in one load, and the search,
+filters and sort stay applied.
 
 ```python
 page = admin_ui.list(Product)
 
 assert page.page_number == 1
 assert page.page_count == 3
+
+page.go_to_page(3)
+
+assert page.page_number == 3
 ```
 
 **Reading form fields.** The create and edit pages list their fields by name, in the order the
