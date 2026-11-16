@@ -1090,6 +1090,86 @@ them by their primary key alone, newest first.
 
 ---
 
+## 8.6 Pagination (done)
+
+Django shows `list_per_page` records a page, 100 unless the admin says otherwise. A changelist
+reads which page it shows, counting from 1, and how many pages there are:
+
+```python
+page = admin_ui.list(Product)
+
+assert page.page_number == 1                          # done
+assert page.page_count == 3                           # done
+```
+
+Both are read from the paginator, never from the admin's `list_per_page`. `page_number` is the
+page the paginator marks current. `page_count` is the highest number it shows: with more than 10
+pages Django leaves out the numbers far from the current page, but always shows the last one. A
+changelist that fits on one page shows no page links, so it is page 1 of 1, and so is an empty
+one. `count` is the number of records across every page, and `rows` are the rows of the page
+shown.
+
+`page.go_to_page` shows another page by its number. It returns nothing: the page stays the same
+object, and the rows read the new page.
+
+```python
+page.go_to_page(3)                                    # done
+
+assert page.page_number == 3                          # done
+```
+
+When the paginator shows the number, its link is clicked. From page 1 of 20 it shows
+`1 2 3 4 … 19 20`, so page 10 has no link. For such a page, the address of a link Django drew is
+opened with only its page number changed, so it carries the search, filters and sort as the
+link does. Either way the page loads once, and going to the page shown loads nothing.
+
+A page link keeps a search, the filters and the sort. A search, a filter and a sort go back to
+page 1, because Django's links for them leave out the page number.
+
+A number that isn't an `int` raises `TypeError`, `True` and `False` included, since `True`
+taken as page 1 would hide a mistake. A number outside 1 to `page_count` raises `LookupError`
+saying how many pages there are. Both are raised before anything is clicked. If the admin sends
+the browser elsewhere, such as to the login page after the session ended, the page stands for
+where it landed (section 3.9) and reports it as `denied` or `redirected`.
+
+A test that reads every page goes through them in turn:
+
+```python
+names = []
+for number in range(1, page.page_count + 1):          # done
+    page.go_to_page(number)                           # done
+    names += [row["name"].value for row in page.rows] # done
+```
+
+A changelist says whether it offers "Show all", shows all of its records on one page, and says
+whether it shows them all:
+
+```python
+assert page.can_show_all                              # done
+
+page.show_all()                                       # done
+
+assert page.shows_all                                 # done
+assert len(page.rows) == page.count                   # done
+```
+
+Django draws "Show all" while the records span several pages and number no more than the admin's
+`list_max_show_all`, 200 unless it says otherwise. `show_all` clicks it and returns nothing, and
+the same page then reads all the rows. It does nothing when the page already shows all, and the
+page isn't loaded again. A changelist that doesn't offer it, because it fits on one page or has
+too many records, raises `LookupError`, and nothing is clicked. A refused click is reported as
+for `go_to_page`.
+
+While it shows all, the paginator draws no page links, so the changelist is page 1 of 1, and
+`go_to_page` with any other number raises `LookupError` saying so. A search, a filter and a sort
+keep showing all, and Django draws no control that goes back to the pages.
+
+`shows_all` is the one reader that goes by the address rather than the markup. A changelist
+showing all looks like one that fits on one page, so `shows_all` is true when the address asks for
+all records and the paginator draws no page links, which it would if there were too many to show.
+
+---
+
 # 9. Changelist Row Matching (done)
 
 One of the main 1.0.0 features is concise verification of rows shown on a changelist.
@@ -3474,7 +3554,7 @@ Login page:
   whose admin declares no search fields reports that it offers no search (done);
 * filters: the filters a changelist offers, their choices, and applying them (done);
 * ordering: the order a changelist shows, sortable columns, and sorting by them (done);
-* pagination and page traversal;
+* pagination and page traversal (done);
 * actions: the actions a changelist offers, selecting rows, and running an action, including
   the admin's own "delete selected" and its confirmation.
 

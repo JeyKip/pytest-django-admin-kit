@@ -23,6 +23,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - Read how a column is sorted with `column.sort_direction`, a `SortDirection` equal to `"asc"` or `"desc"`, and `column.sort_priority`. Both are `None` for a column that isn't sorted.
 - Change how a column is sorted with `column.make_primary_sort(direction)`, `column.set_sort_direction(direction)` and `column.remove_from_sort()`. The same page then reads the results, and each does nothing when the column is already sorted as asked.
 - Sort a changelist by exactly the columns given with `page.sort(*columns)`, `-` for descending. A column left out is no longer sorted.
+- Read which page a changelist shows with `page.page_number`, counting from 1, and how many pages it has with `page.page_count`. Both are `1` for a changelist that fits on one page.
+- Go to another page of a changelist with `page.go_to_page(number)`. The same page then reads its rows, and a search, filters and a sort stay applied.
+- Show every record of a changelist on one page with `page.show_all()`, and read whether it offers that with `page.can_show_all` and whether it does with `page.shows_all`.
 
 ### Fixed
 
