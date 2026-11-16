@@ -1090,6 +1090,27 @@ them by their primary key alone, newest first.
 
 ---
 
+## 8.6 Pagination
+
+Django shows `list_per_page` records a page, 100 unless the admin says otherwise. A changelist
+reads which page it shows, counting from 1, and how many pages there are:
+
+```python
+page = admin_ui.list(Product)
+
+assert page.page_number == 1                          # done
+assert page.page_count == 3                           # done
+```
+
+Both are read from the paginator, never from the admin's `list_per_page`. `page_number` is the
+page the paginator marks current. `page_count` is the highest number it shows: with more than 10
+pages Django leaves out the numbers far from the current page, but always shows the last one. A
+changelist that fits on one page shows no page links, so it is page 1 of 1, and so is an empty
+one. `count` is the number of records across every page, and `rows` are the rows of the page
+shown.
+
+---
+
 # 9. Changelist Row Matching (done)
 
 One of the main 1.0.0 features is concise verification of rows shown on a changelist.

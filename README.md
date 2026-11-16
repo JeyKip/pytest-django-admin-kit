@@ -224,6 +224,17 @@ assert price.sort_priority == 1
 header does. `set_sort_direction` flips a column in its place, and `remove_from_sort` takes it out
 of the sort.
 
+**Paging through a changelist.** `page_number` is the page shown, counting from 1, and
+`page_count` how many there are, both read from the paginator. `count` covers every page, while
+`rows` are those of the page shown.
+
+```python
+page = admin_ui.list(Product)
+
+assert page.page_number == 1
+assert page.page_count == 3
+```
+
 **Reading form fields.** The create and edit pages list their fields by name, in the order the
 admin presents them, whether the user may fill them or only read them. A field the admin renders
 hidden is not shown, so it is not listed. Whether a field is required is read the way the user

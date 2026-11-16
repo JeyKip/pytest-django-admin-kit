@@ -535,7 +535,7 @@ class ChangelistPage(ModelPage):
 
     @property
     def rows(self) -> list[Row]:
-        """The rows the changelist shows, in order.
+        """The rows of the page shown, in order.
 
         An empty changelist shows no table, so it has no rows either.
         """
@@ -598,12 +598,39 @@ class ChangelistPage(ModelPage):
         return self.count == 0
 
     @property
+    def page_number(self) -> int:
+        """The page of the changelist shown, counting from 1.
+
+        This is the page the paginator marks current. A changelist that fits on one page shows
+        no page links, so it reads ``1``, and so does an empty one.
+        """
+        # The current page is a `span.this-page` up to Django 5.2, and a link marked
+        # `aria-current` from 6.0.
+        current = self._paginator.locator('.this-page, [aria-current="page"]')
+        return integer(stripped_text(current)) if current.count() else 1
+
+    @property
+    def page_count(self) -> int:
+        """How many pages the changelist has, ``1`` when it shows no page links.
+
+        This is the highest number the paginator shows. Django leaves out the numbers far from
+        the current page, but always shows the last one.
+        """
+        # Every number is a link but the current page up to 5.2. The ellipsis between them is
+        # loose text up to 5.2 and a list item without a link from 6.0, so it is never read.
+        numbers = self._paginator.locator(".this-page, a:not(.showall)").all_text_contents()
+        return max((integer(number) for number in numbers), default=1)
+
+    @property
+    def _paginator(self) -> Locator:
+        return self._shown().locator("#changelist .paginator")
+
+    @property
     def _count_line(self) -> re.Match[str]:
         # The count is the paginator's own text. Page links, "Show all" and, from
         # Django 6.0, a heading for screen readers are all inside child elements, so
         # only the element's direct text nodes are read.
-        paginator = self._shown().locator("#changelist .paginator")
-        text = paginator.evaluate(
+        text = self._paginator.evaluate(
             "el => Array.from(el.childNodes)"
             ".filter(node => node.nodeType === Node.TEXT_NODE)"
             ".map(node => node.textContent).join(' ')"
