@@ -1170,6 +1170,34 @@ all records and the paginator draws no page links, which it would if there were 
 
 ---
 
+## 8.7 Actions
+
+A changelist lists the actions it offers in its action bar, by name, in the order the bar lists
+them. `page.actions` is a read-only mapping, as `page.filters` is, and each action reads its
+name, its label and its `<option>` as `native`:
+
+```python
+page = admin_ui.list(Product)
+
+assert list(page.actions) == ["delete_selected", "mark_inactive"]           # done
+assert page.actions["mark_inactive"].label == "Mark selected products as inactive"  # done
+```
+
+An action is addressed by the name the admin registers it under, and its label, the description
+the bar shows, is read as data (section 3.5). The bar's blank `---------` option is no action.
+The actions are read from the page, never from `ModelAdmin.get_actions`, so they follow the
+user's permissions: Django leaves out an action the user may not run, and draws no bar when
+none is left. It draws none either while it counts the records and finds none. Without a bar,
+`page.actions` is empty. An admin that draws a bar above the table and one below lists the same
+actions in both, and the first is read.
+
+A key that names no action raises `KeyError` listing the names there are, or saying the
+changelist offers none. A label raises it too, and so does `""`. The mapping and each action
+read the page again whenever they are used (section 3.9), so an action held across a search
+still works, and one the page no longer offers raises `LookupError`.
+
+---
+
 # 9. Changelist Row Matching (done)
 
 One of the main 1.0.0 features is concise verification of rows shown on a changelist.

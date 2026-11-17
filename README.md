@@ -246,6 +246,18 @@ if page.can_show_all:
     assert len(page.rows) == page.count
 ```
 
+**Running changelist actions.** `page.actions` lists the actions a changelist offers by name, in
+the order its action bar lists them, and each reads the label the bar shows. They're read from
+the page, so a user who may not delete isn't offered "Delete selected", and a user allowed no
+action sees none.
+
+```python
+page = admin_ui.list(Product)
+
+assert list(page.actions) == ["delete_selected", "mark_inactive"]
+assert page.actions["mark_inactive"].label == "Mark selected products as inactive"
+```
+
 **Reading form fields.** The create and edit pages list their fields by name, in the order the
 admin presents them, whether the user may fill them or only read them. A field the admin renders
 hidden is not shown, so it is not listed. Whether a field is required is read the way the user

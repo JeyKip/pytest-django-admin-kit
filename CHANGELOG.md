@@ -26,6 +26,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - Read which page a changelist shows with `page.page_number`, counting from 1, and how many pages it has with `page.page_count`. Both are `1` for a changelist that fits on one page.
 - Go to another page of a changelist with `page.go_to_page(number)`. The same page then reads its rows, and a search, filters and a sort stay applied.
 - Show every record of a changelist on one page with `page.show_all()`, and read whether it offers that with `page.can_show_all` and whether it does with `page.shows_all`.
+- List the actions a changelist offers by name with `page.actions`, each with its `label` and its `<option>` as `native`. It follows what the page shows, so a user allowed no action is offered none.
 
 ### Fixed
 

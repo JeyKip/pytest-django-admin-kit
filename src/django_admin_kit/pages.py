@@ -26,6 +26,7 @@ from playwright.sync_api import Locator, Page, Response
 
 from . import matching
 from ._html import class_suffix, stripped_text
+from .actions import ChangelistActions
 from .columns import ChangelistColumn, SortDirection, _sort_state, _sortable
 from .errors import ValidationErrors
 from .fields import Fields, Fieldset, FormField
@@ -787,6 +788,17 @@ class ChangelistPage(ModelPage):
         # A page that did not open fails here rather than at the first use of what it hands out.
         self._shown()
         return ChangelistFilters(self._shown, self._model, self._follow)
+
+    @property
+    def actions(self) -> ChangelistActions:
+        """The actions the changelist offers, by name, in the order its action bar lists them.
+
+        It is empty when the page draws no action bar, as for a user allowed no action. The
+        actions are read from the page again whenever they are used.
+        """
+        # A page that did not open fails here rather than at the first use of what it hands out.
+        self._shown()
+        return ChangelistActions(self._shown)
 
     def _follow(self, element: Locator) -> bool:
         """Click ``element`` and wait for the page it leads to, which this page then stands
