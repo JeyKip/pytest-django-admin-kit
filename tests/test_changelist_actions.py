@@ -5,6 +5,7 @@ from django.contrib.auth.models import Permission
 
 from django_admin_kit.actions import ChangelistAction
 from django_admin_kit.rows import NO_ACTIONS
+from helpers import count_page_loads
 from project.shop.admin import CategoryAdmin, ProductAdmin
 from project.shop.models import Category, Product
 
@@ -14,19 +15,6 @@ PRODUCT_ACTIONS = {
     "mark_inactive": "Mark selected products as inactive",
     "open_first": "Open the first selected product",
 }
-
-
-def loads(page, change):
-    """How many times ``change`` loads a page in the browser."""
-    loaded = []
-
-    def count(_):
-        loaded.append(1)
-
-    page.native.on("load", count)
-    change()
-    page.native.remove_listener("load", count)
-    return len(loaded)
 
 
 def selection(page):
@@ -193,9 +181,9 @@ def test_a_row_is_selected_and_deselected_without_a_page_load(admin_ui, superuse
     page = admin_ui.list(Product)
     row = page.rows[1]
 
-    assert loads(page, row.select) == 0
+    assert count_page_loads(page, row.select) == 0
     assert selection(page) == [False, True, False]
-    assert loads(page, row.deselect) == 0
+    assert count_page_loads(page, row.deselect) == 0
     assert selection(page) == [False, False, False]
 
 
@@ -224,7 +212,7 @@ def test_every_row_is_selected_at_once_without_a_page_load(admin_ui, superuser, 
     page = admin_ui.list(Product)
     page.rows[1].select()
 
-    assert loads(page, page.select_all) == 0
+    assert count_page_loads(page, page.select_all) == 0
     assert selection(page) == [True, True, True]
 
 
@@ -245,7 +233,7 @@ def test_every_row_is_deselected_at_once_without_a_page_load(admin_ui, superuser
     page.rows[0].select()
     page.rows[2].select()
 
-    assert loads(page, page.deselect_all) == 0
+    assert count_page_loads(page, page.deselect_all) == 0
     assert selection(page) == [False, False, False]
 
 

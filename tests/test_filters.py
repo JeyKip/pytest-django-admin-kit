@@ -8,6 +8,7 @@ from django.contrib.admin import EmptyFieldListFilter, RelatedOnlyFieldListFilte
 from playwright.sync_api import Locator
 
 from django_admin_kit.filters import FieldFilter, _field_of
+from helpers import collect_page_loads
 from project.shop.admin import PriceInputFilter, PriceRangeFilter, ProductAdmin, StatusFilter
 from project.shop.models import Category, Feed, Product, Review
 
@@ -71,13 +72,6 @@ def list_filter(monkeypatch):
 def links(element):
     """The labels of the links in a filter's list, as the user reads them."""
     return [" ".join(text.split()) for text in element.locator("a").all_text_contents()]
-
-
-def page_loads(page):
-    """The address of each page the browser loads from now on."""
-    loads = []
-    page.native.on("load", lambda loaded: loads.append(loaded.url))
-    return loads
 
 
 def click(page, parameter):
@@ -758,7 +752,7 @@ def test_a_search_survives_clearing(admin_ui, superuser, stocked, clear):
 def test_clearing_what_is_not_applied_loads_nothing(admin_ui, superuser, stocked):
     admin_ui.login(superuser)
     page = admin_ui.list(Product)
-    loads = page_loads(page)
+    loads = collect_page_loads(page)
 
     page.filters.clear()
     page.filters["category"].clear()
@@ -787,7 +781,7 @@ def test_clearing_the_date_filter_alone_clears_the_empty_filter_on_its_field_too
     group = page.filters["released_on"]
     group.apply("Has date")
     group.apply("Empty")
-    loads = page_loads(page)
+    loads = collect_page_loads(page)
 
     group[0].clear()
 
@@ -807,7 +801,7 @@ def test_clearing_a_field_clicks_each_of_its_filters_still_applied(
     group = page.filters["released_on"]
     group.apply("Has date")
     group.apply("Empty")
-    loads = page_loads(page)
+    loads = collect_page_loads(page)
 
     group.clear()
 
@@ -821,7 +815,7 @@ def test_a_filter_without_a_choice_that_clears_it_raises(admin_ui, superuser, st
     admin_ui.login(superuser)
     page = admin_ui.list(Product)
     page.filters["status"].apply("Inactive")
-    loads = page_loads(page)
+    loads = collect_page_loads(page)
 
     with pytest.raises(LookupError) as failure:
         page.filters["status"].clear()

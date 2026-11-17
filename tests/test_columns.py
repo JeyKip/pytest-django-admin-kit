@@ -6,6 +6,7 @@ import django
 import pytest
 
 from django_admin_kit.columns import SortDirection
+from helpers import count_page_loads
 from project.shop.models import Feed, Product
 
 # The product columns the user can sort by: the fields, and the method with an ordering.
@@ -310,19 +311,6 @@ def test_a_column_reads_how_it_is_sorted_now(admin_ui, superuser, products):
 
 def names(page):
     return [row["name"].value for row in page.rows]
-
-
-def loads(page, change):
-    """How many times ``change`` loads a page in the browser."""
-    loaded = []
-
-    def count(_):
-        loaded.append(1)
-
-    page.native.on("load", count)
-    change()
-    page.native.remove_listener("load", count)
-    return len(loaded)
 
 
 def loads_nothing(page, change):
@@ -692,7 +680,7 @@ def test_a_sort_clicks_only_the_columns_out_of_place(
     page = admin_ui.list(Product)
     page.sort(*before)
 
-    assert loads(page, lambda: page.sort(*after)) == expected
+    assert count_page_loads(page, lambda: page.sort(*after)) == expected
     assert page.sorted_columns == list(after)
 
 
