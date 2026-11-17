@@ -1196,6 +1196,32 @@ changelist offers none. A label raises it too, and so does `""`. The mapping and
 read the page again whenever they are used (section 3.9), so an action held across a search
 still works, and one the page no longer offers raises `LookupError`.
 
+An action runs on the rows selected. A row is selected through its checkbox, and every row on
+the page at once through the checkbox over them:
+
+```python
+page.rows[0].select()                                 # done
+page.rows[2].select()                                 # done
+
+assert [row.selected for row in page.rows] == [True, False, True]  # done
+
+page.rows[0].deselect()                               # done
+page.select_all()                                     # done
+page.deselect_all()                                   # done
+```
+
+None of them loads a page: the selection lives in the browser until an action is run, as a
+user's does. Each does nothing when the rows are already as asked. They check and uncheck the
+boxes as a user does, so the admin's script keeps the box over the rows and the counter in step.
+A row is addressed by its position (section 3.5), so after a search or a sort the same row may
+be another record, and the page loaded again starts with nothing selected.
+
+A changelist that offers no actions draws no checkboxes. Its rows read as not selected, and
+`select`, `deselect`, `select_all` and `deselect_all` raise `LookupError` saying it offers no
+actions. A row held after the browser moved on raises `LookupError`, as reading its cells does.
+There is no `page.select(*indexes)`, which would be a second way to write
+`page.rows[0].select()`.
+
 ---
 
 # 9. Changelist Row Matching (done)

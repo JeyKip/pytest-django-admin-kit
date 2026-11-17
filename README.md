@@ -258,6 +258,17 @@ assert list(page.actions) == ["delete_selected", "mark_inactive"]
 assert page.actions["mark_inactive"].label == "Mark selected products as inactive"
 ```
 
+A row is selected with `row.select()` and deselected with `row.deselect()`, and
+`page.select_all()` and `page.deselect_all()` do the same for every row on the page. None of
+them loads a page.
+
+```python
+page.rows[0].select()
+page.rows[2].select()
+
+assert [row.selected for row in page.rows] == [True, False, True]
+```
+
 **Reading form fields.** The create and edit pages list their fields by name, in the order the
 admin presents them, whether the user may fill them or only read them. A field the admin renders
 hidden is not shown, so it is not listed. Whether a field is required is read the way the user

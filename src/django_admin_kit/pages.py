@@ -35,7 +35,7 @@ from .messages import Messages
 from .normalize import integer
 from .rendered import text_of
 from .results import SubmissionResult
-from .rows import Row
+from .rows import NO_ACTIONS, Row
 from .tools import PageTools
 from .urls import model_admin
 
@@ -799,6 +799,35 @@ class ChangelistPage(ModelPage):
         # A page that did not open fails here rather than at the first use of what it hands out.
         self._shown()
         return ChangelistActions(self._shown)
+
+    def select_all(self) -> None:
+        """Select every row on the page through the checkbox over them, which loads nothing.
+
+        Nothing changes when every row is already selected. A changelist that offers no actions
+        has no checkboxes, so this raises ``LookupError``.
+        """
+        self._action_toggle().check()
+
+    def deselect_all(self) -> None:
+        """Deselect every row on the page, which loads nothing.
+
+        Nothing changes when no row is selected. A changelist that offers no actions has no
+        checkboxes, so this raises ``LookupError``.
+        """
+        # The admin's script shows the toggle checked only while every row is, so it is checked
+        # first, and unchecking it then clears every row in one click, where unchecking the rows
+        # one by one takes a click each.
+        toggle = self._action_toggle()
+        toggle.check()
+        toggle.uncheck()
+
+    def _action_toggle(self) -> Locator:
+        """The checkbox over the rows that selects them all, or ``LookupError`` when the
+        changelist offers no actions."""
+        toggle = self._shown().locator("#action-toggle")
+        if not toggle.count():
+            raise LookupError(NO_ACTIONS)
+        return toggle
 
     def _follow(self, element: Locator) -> bool:
         """Click ``element`` and wait for the page it leads to, which this page then stands

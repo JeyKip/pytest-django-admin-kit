@@ -27,6 +27,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - Go to another page of a changelist with `page.go_to_page(number)`. The same page then reads its rows, and a search, filters and a sort stay applied.
 - Show every record of a changelist on one page with `page.show_all()`, and read whether it offers that with `page.can_show_all` and whether it does with `page.shows_all`.
 - List the actions a changelist offers by name with `page.actions`, each with its `label` and its `<option>` as `native`. It follows what the page shows, so a user allowed no action is offered none.
+- Select changelist rows with `row.select()` and `row.deselect()`, every row on the page with `page.select_all()` and `page.deselect_all()`, and read a row's selection with `row.selected`. None of them loads a page.
 
 ### Fixed
 

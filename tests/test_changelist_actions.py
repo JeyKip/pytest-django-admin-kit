@@ -1,9 +1,10 @@
-"""The actions a changelist offers in its action bar, by name."""
+"""The actions a changelist offers in its action bar, by name, and the rows they run on."""
 
 import pytest
 from django.contrib.auth.models import Permission
 
 from django_admin_kit.actions import ChangelistAction
+from django_admin_kit.rows import NO_ACTIONS
 from project.shop.admin import CategoryAdmin, ProductAdmin
 from project.shop.models import Category, Product
 
@@ -13,6 +14,24 @@ PRODUCT_ACTIONS = {
     "mark_inactive": "Mark selected products as inactive",
     "open_first": "Open the first selected product",
 }
+
+
+def loads(page, change):
+    """How many times ``change`` loads a page in the browser."""
+    loaded = []
+
+    def count(_):
+        loaded.append(1)
+
+    page.native.on("load", count)
+    change()
+    page.native.remove_listener("load", count)
+    return len(loaded)
+
+
+def selection(page):
+    """Whether each row on the page is selected, in order."""
+    return [row.selected for row in page.rows]
 
 
 def test_the_actions_are_listed_by_name_in_the_order_the_bar_lists_them(
@@ -159,3 +178,118 @@ def test_a_page_that_did_not_open_has_no_actions_to_read(admin_ui, adder):
 
     with pytest.raises(LookupError, match="The page did not open"):
         _ = page.actions
+
+
+def test_the_rows_start_unselected(admin_ui, superuser, products):
+    admin_ui.login(superuser)
+
+    page = admin_ui.list(Product)
+
+    assert selection(page) == [False, False, False]
+
+
+def test_a_row_is_selected_and_deselected_without_a_page_load(admin_ui, superuser, products):
+    admin_ui.login(superuser)
+    page = admin_ui.list(Product)
+    row = page.rows[1]
+
+    assert loads(page, row.select) == 0
+    assert selection(page) == [False, True, False]
+    assert loads(page, row.deselect) == 0
+    assert selection(page) == [False, False, False]
+
+
+def test_selecting_a_selected_row_changes_nothing(admin_ui, superuser, products):
+    admin_ui.login(superuser)
+    page = admin_ui.list(Product)
+
+    page.rows[0].select()
+    page.rows[0].select()
+
+    assert selection(page) == [True, False, False]
+
+
+def test_deselecting_a_row_that_isnt_selected_changes_nothing(admin_ui, superuser, products):
+    admin_ui.login(superuser)
+    page = admin_ui.list(Product)
+    page.rows[0].select()
+
+    page.rows[2].deselect()
+
+    assert selection(page) == [True, False, False]
+
+
+def test_every_row_is_selected_at_once_without_a_page_load(admin_ui, superuser, products):
+    admin_ui.login(superuser)
+    page = admin_ui.list(Product)
+    page.rows[1].select()
+
+    assert loads(page, page.select_all) == 0
+    assert selection(page) == [True, True, True]
+
+
+def test_selecting_every_row_when_each_is_selected_changes_nothing(admin_ui, superuser, products):
+    admin_ui.login(superuser)
+    page = admin_ui.list(Product)
+    for row in page.rows:
+        row.select()
+
+    page.select_all()
+
+    assert selection(page) == [True, True, True]
+
+
+def test_every_row_is_deselected_at_once_without_a_page_load(admin_ui, superuser, products):
+    admin_ui.login(superuser)
+    page = admin_ui.list(Product)
+    page.rows[0].select()
+    page.rows[2].select()
+
+    assert loads(page, page.deselect_all) == 0
+    assert selection(page) == [False, False, False]
+
+
+def test_deselecting_every_row_after_selecting_all_deselects_them(admin_ui, superuser, products):
+    admin_ui.login(superuser)
+    page = admin_ui.list(Product)
+    page.select_all()
+
+    page.deselect_all()
+
+    assert selection(page) == [False, False, False]
+
+
+def test_deselecting_every_row_when_none_is_selected_changes_nothing(admin_ui, superuser, products):
+    admin_ui.login(superuser)
+    page = admin_ui.list(Product)
+
+    page.deselect_all()
+
+    assert selection(page) == [False, False, False]
+
+
+def test_rows_offered_no_actions_read_unselected_and_cannot_be_selected(admin_ui, viewer, products):
+    admin_ui.login(viewer)
+    page = admin_ui.list(Product)
+    row = page.rows[0]
+
+    assert selection(page) == [False, False, False]
+    for select in (row.select, row.deselect, page.select_all, page.deselect_all):
+        with pytest.raises(LookupError) as failure:
+            select()
+        assert str(failure.value) == NO_ACTIONS
+
+
+def test_a_row_held_after_the_browser_left_cannot_be_selected(
+    admin_ui, left_for, superuser, products
+):
+    admin_ui.login(superuser)
+    page = admin_ui.list(Product)
+    row = page.rows[0]
+
+    page.native.goto(admin_ui.absolute(admin_ui.url.index()))
+
+    for read in (lambda: row.selected, row.select, row.deselect):
+        with pytest.raises(LookupError) as failure:
+            read()
+        assert str(failure.value) == left_for(admin_ui.url.index())
