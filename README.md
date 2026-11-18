@@ -246,6 +246,57 @@ if page.can_show_all:
     assert len(page.rows) == page.count
 ```
 
+**Running changelist actions.** `page.actions` lists the actions a changelist offers by name, in
+the order its action bar lists them, and each reads the label the bar shows. They're read from
+the page, so a user who may not delete isn't offered "Delete selected", and a user allowed no
+action sees none.
+
+```python
+page = admin_ui.list(Product)
+
+assert list(page.actions) == ["delete_selected", "mark_inactive"]
+assert page.actions["mark_inactive"].label == "Mark selected products as inactive"
+```
+
+A row is selected with `row.select()` and deselected with `row.deselect()`, and
+`page.select_all()` and `page.deselect_all()` do the same for every row on the page. None of
+them loads a page.
+
+```python
+page.rows[0].select()
+page.rows[2].select()
+
+assert [row.selected for row in page.rows] == [True, False, True]
+```
+
+`page.select_across_pages()` clicks the admin's "Select all N" after selecting every row, so an
+action runs on every record the search and filters let through, on every page.
+
+`action.run()` runs the action on the rows selected and returns the page the browser shows
+after it. That's the same changelist object when the admin comes back to it, and a new page
+object when the action leads elsewhere.
+
+```python
+landed = page.actions["mark_inactive"].run()
+
+assert landed is page
+assert page.messages == [("success", "2 products were marked as inactive.")]
+```
+
+"Delete selected" leads to a `DeletePage`, read and confirmed as the page for deleting one
+object is.
+
+```python
+from django_admin_kit.pages import DeletePage
+
+page.select_all()
+confirmation = page.actions["delete_selected"].run()
+
+assert isinstance(confirmation, DeletePage)
+assert confirmation.deletion_counts == {"Products": 3}
+assert confirmation.confirm_deleting().redirected_to_list(Product)
+```
+
 **Reading form fields.** The create and edit pages list their fields by name, in the order the
 admin presents them, whether the user may fill them or only read them. A field the admin renders
 hidden is not shown, so it is not listed. Whether a field is required is read the way the user

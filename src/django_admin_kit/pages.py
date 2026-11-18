@@ -26,6 +26,7 @@ from playwright.sync_api import Locator, Page, Response
 
 from . import matching
 from ._html import class_suffix, stripped_text
+from .actions import ChangelistActions
 from .columns import ChangelistColumn, SortDirection, _sort_state, _sortable
 from .errors import ValidationErrors
 from .fields import Fields, Fieldset, FormField
@@ -34,7 +35,7 @@ from .messages import Messages
 from .normalize import integer
 from .rendered import text_of
 from .results import SubmissionResult
-from .rows import Row
+from .rows import NO_ACTIONS, Row
 from .tools import PageTools
 from .urls import model_admin
 
@@ -75,8 +76,8 @@ class AdminPage:
     # whether the browser still shows this page. The class is needed when the admin
     # answers with a different page at the same URL and status 200: for example, a
     # project's `response_add` or `response_change` that renders a confirmation page
-    # instead of redirecting, or, once changelist actions are supported, the
-    # confirmation page of "Delete selected".
+    # instead of redirecting, or the confirmation page of "Delete selected", which the
+    # changelist's URL answers.
     _kind: str | None = None
 
     def __init__(
@@ -788,6 +789,91 @@ class ChangelistPage(ModelPage):
         self._shown()
         return ChangelistFilters(self._shown, self._model, self._follow)
 
+    @property
+    def actions(self) -> ChangelistActions:
+        """The actions the changelist offers, by name, in the order its action bar lists them.
+
+        It is empty when the page draws no action bar, as for a user allowed no action. The
+        actions are read from the page again whenever they are used.
+        """
+        # A page that did not open fails here rather than at the first use of what it hands out.
+        self._shown()
+        return ChangelistActions(self._shown, self._run_action)
+
+    def select_all(self) -> None:
+        """Select every row on the page through the checkbox over them, which loads nothing.
+
+        Nothing changes when every row is already selected. A changelist that offers no actions
+        has no checkboxes, so this raises ``LookupError``.
+        """
+        self._action_toggle().check()
+
+    def deselect_all(self) -> None:
+        """Deselect every row on the page, which loads nothing.
+
+        Nothing changes when no row is selected. A changelist that offers no actions has no
+        checkboxes, so this raises ``LookupError``.
+        """
+        # The admin's script shows the toggle checked only while every row is, so it is checked
+        # first, and unchecking it then clears every row in one click, where unchecking the rows
+        # one by one takes a click each.
+        toggle = self._action_toggle()
+        toggle.check()
+        toggle.uncheck()
+
+    def select_across_pages(self) -> None:
+        """Select every record the changelist lists, on every page, which loads nothing.
+
+        This selects every row on the page, then clicks the admin's "Select all N", so an action
+        then runs on every record that the search and the filters let through. Nothing changes
+        when the page already selects across pages. Deselecting a row, or every row, selects
+        only the rows checked again.
+
+        Django offers this only while the records span several pages and the admin shows its
+        selection counter, so otherwise this raises ``LookupError``, and nothing is clicked. A
+        changelist that offers no actions raises it too.
+        """
+        self._action_toggle()
+        if self.selects_across_pages:
+            return
+        # The admin draws the link hidden, and shows it once every row is selected. It draws
+        # none when every record is on the page or `actions_selection_counter` is off.
+        link = self._shown().locator("div.actions span.question a")
+        if not link.count():
+            raise LookupError(
+                "The changelist doesn't offer to select its records across pages: it shows "
+                "every record on this page, or its admin turns off the selection counter."
+            )
+        self.select_all()
+        link.first.click()
+
+    @property
+    def selects_across_pages(self) -> bool:
+        """Whether the page selects every record across the pages, as ``select_across_pages``
+        does; ``False`` on a changelist that offers no actions."""
+        field = self._shown().locator("div.actions input.select-across")
+        return field.count() > 0 and field.first.input_value() == "1"
+
+    def _run_action(self, name: str) -> AdminPage:
+        """Choose the action ``name`` in the first action bar, click that bar's button, and
+        return the page the browser shows after it: this object when it is still the
+        changelist, and a new one otherwise."""
+        bar = self._shown().locator("div.actions").first
+        bar.locator('select[name="action"]').select_option(name)
+        # The admin tells the bars apart by the button's value, so the first bar's button
+        # runs the action chosen in the first bar's select.
+        with self._page.expect_navigation() as navigation:
+            bar.locator('button[name="index"]').click()
+        return self._submitted(navigation.value).page
+
+    def _action_toggle(self) -> Locator:
+        """The checkbox over the rows that selects them all, or ``LookupError`` when the
+        changelist offers no actions."""
+        toggle = self._shown().locator("#action-toggle")
+        if not toggle.count():
+            raise LookupError(NO_ACTIONS)
+        return toggle
+
     def _follow(self, element: Locator) -> bool:
         """Click ``element`` and wait for the page it leads to, which this page then stands
         for, wherever the admin sent the browser.
@@ -1034,7 +1120,13 @@ class EditPage(FormPage):
 
 
 class DeletePage(ModelPage):
-    """The page that asks whether to delete one instance."""
+    """The page that asks whether to delete one instance, or the rows selected on a changelist,
+    which "Delete selected" leads to.
+
+    Django draws both alike, so both read the same way. The one for the rows is at the
+    changelist's own URL, since Django answers the action with it without a redirect, and its
+    ``deletions`` list every object selected in turn, each followed by what it takes with it.
+    """
 
     _kind = "delete-confirmation"
 
@@ -1050,8 +1142,8 @@ class DeletePage(ModelPage):
 
     @property
     def deletions(self) -> list[str]:
-        """What the deletion will remove, as the page lists it: the object itself, then every
-        related object it takes with it, in the order shown.
+        """What the deletion will remove, as the page lists it: each object, then every related
+        object it takes with it, in the order shown.
 
         Each entry is the text the page shows, such as ``"Product: Widget"``, whether or not
         the admin links it. The page draws the list nested; it is read top to bottom. A page
@@ -1059,10 +1151,11 @@ class DeletePage(ModelPage):
         that sets ``delete_confirmation_max_display`` shows only part of the list, ending in
         an entry such as "…and 2 more objects.", which is read as shown too.
         """
-        # The list of what is removed follows its heading, which follows the summary's list.
-        # The lists a page shows when it cannot be confirmed follow the opening sentence,
-        # and before Django 4.2 none of the lists has an id to tell them apart.
-        items = self._shown().locator("#content > ul + h2 + ul li").all()
+        # The lists of what is removed, one per object deleted, follow their heading, which
+        # follows the summary's list. The lists a page shows when it cannot be confirmed follow
+        # the opening sentence, and before Django 4.2 none of the lists has an id to tell them
+        # apart.
+        items = self._shown().locator("#content > ul + h2 ~ ul li").all()
         return [_own_text(item) for item in items]
 
     @property
@@ -1141,12 +1234,14 @@ class DeletionCounts(Dict[str, int]):
         )
 
 
-# The page class for each admin view of a model, by the end of the view's URL name.
-_MODEL_PAGES: dict[str, type[ModelPage]] = {
-    "changelist": ChangelistPage,
-    "add": CreatePage,
-    "change": EditPage,
-    "delete": DeletePage,
+# The page classes each admin view of a model can show, by the end of the view's URL name, in
+# the order they are tried. The changelist's URL also answers "Delete selected" with a delete
+# confirmation, whose `body` carries the single delete page's class.
+_MODEL_PAGES: dict[str, tuple[type[ModelPage], ...]] = {
+    "changelist": (ChangelistPage, DeletePage),
+    "add": (CreatePage,),
+    "change": (EditPage,),
+    "delete": (DeletePage,),
 }
 
 
@@ -1178,9 +1273,9 @@ def _page_at(page: Page, status_code: int, tools: PageTools) -> AdminPage:
             continue
         prefix = f"{model._meta.app_label}_{model._meta.model_name}_"
         if url_name.startswith(prefix):
-            page_class = _MODEL_PAGES.get(url_name[len(prefix) :])
-            if page_class is not None and _is_kind(page, page_class._kind):
-                return page_class(page, status_code, path, tools, model)
+            for page_class in _MODEL_PAGES.get(url_name[len(prefix) :], ()):
+                if _is_kind(page, page_class._kind):
+                    return page_class(page, status_code, path, tools, model)
     return AdminPage(page, status_code, path, tools)
 
 

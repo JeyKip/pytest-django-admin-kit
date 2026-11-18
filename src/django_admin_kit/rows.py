@@ -19,6 +19,9 @@ from .normalize import Normalizers
 from .rendered import RenderedValue, display_text
 from .urls import AdminUrls, model_admin
 
+# What selecting a row says on a changelist without an action bar, which has no checkboxes.
+NO_ACTIONS = "The changelist offers no actions, so its rows can't be selected."
+
 
 class Cell(RenderedValue):
     """One cell of a changelist row."""
@@ -123,6 +126,31 @@ class Row:
                     return self._model._default_manager.get(pk=unquote(match.kwargs["object_id"]))
         return None
 
+    @property
+    def selected(self) -> bool:
+        """Whether the row's checkbox for actions is checked.
+
+        ``False`` on a changelist that offers no actions, since its rows have no checkbox.
+        """
+        box = self._box()
+        return box.count() > 0 and box.is_checked()
+
+    def select(self) -> None:
+        """Check the row's checkbox for actions, which loads nothing.
+
+        Nothing changes when the row is already selected. A changelist that offers no actions
+        has no checkbox, so this raises ``LookupError``.
+        """
+        self._offered_box().check()
+
+    def deselect(self) -> None:
+        """Uncheck the row's checkbox for actions, which loads nothing.
+
+        Nothing changes when the row isn't selected. A changelist that offers no actions has no
+        checkbox, so this raises ``LookupError``.
+        """
+        self._offered_box().uncheck()
+
     def __len__(self) -> int:
         return len(self._cells)
 
@@ -139,6 +167,16 @@ class Row:
                 f"The row has no column named {key!r}. Columns: "
                 f"{', '.join(repr(name) for name in self._columns)}."
             ) from None
+
+    def _box(self) -> Locator:
+        self._check()
+        return self._element.locator(":scope > td.action-checkbox input.action-select")
+
+    def _offered_box(self) -> Locator:
+        box = self._box()
+        if not box.count():
+            raise LookupError(NO_ACTIONS)
+        return box
 
     @property
     def _cells(self) -> list[Cell]:

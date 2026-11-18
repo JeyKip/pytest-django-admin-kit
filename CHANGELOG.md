@@ -26,6 +26,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - Read which page a changelist shows with `page.page_number`, counting from 1, and how many pages it has with `page.page_count`. Both are `1` for a changelist that fits on one page.
 - Go to another page of a changelist with `page.go_to_page(number)`. The same page then reads its rows, and a search, filters and a sort stay applied.
 - Show every record of a changelist on one page with `page.show_all()`, and read whether it offers that with `page.can_show_all` and whether it does with `page.shows_all`.
+- List the actions a changelist offers by name with `page.actions`, each with its `label` and its `<option>` as `native`. It follows what the page shows, so a user allowed no action is offered none.
+- Select changelist rows with `row.select()` and `row.deselect()`, every row on the page with `page.select_all()` and `page.deselect_all()`, and read a row's selection with `row.selected`. None of them loads a page.
+- Run a changelist action on the selected rows with `action.run()`, which returns the page the browser shows after it: the same changelist object when the admin comes back to it, or a new page object for wherever the action leads.
+- Read and confirm the confirmation of a changelist's "Delete selected" as a `DeletePage`, as the page for deleting one object is. Its `deletions` list each selected object, followed by what it takes with it.
+- Select every record of a changelist across its pages with `page.select_across_pages()`, and read whether it does with `page.selects_across_pages`.
 
 ### Fixed
 

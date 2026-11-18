@@ -195,6 +195,28 @@ class ProductAdmin(admin.ModelAdmin):
             sku=product.sku,
         )
 
+    # Actions of the project's own next to the admin's "Delete selected": one that changes the
+    # selected records and comes back to the changelist, and one that leads to another page.
+    # Both need the change permission, so a user who may only view is offered no action at all.
+    actions = ("mark_inactive", "open_first")
+
+    @admin.action(
+        description="Mark selected %(verbose_name_plural)s as inactive", permissions=("change",)
+    )
+    def mark_inactive(self, request, queryset):
+        count = queryset.update(is_active=False)
+        self.message_user(request, f"{count} products were marked as inactive.", messages.SUCCESS)
+
+    @admin.action(description="Open the first selected product", permissions=("change",))
+    def open_first(self, request, queryset):
+        return HttpResponseRedirect(
+            reverse(
+                "admin:shop_product_change",
+                args=[queryset.first().pk],
+                current_app=self.admin_site.name,
+            )
+        )
+
     # A released product stays on record. This gives the suite one page whose answer
     # depends on the object, not only on the user.
     def has_delete_permission(self, request, obj=None):

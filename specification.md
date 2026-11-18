@@ -1170,6 +1170,140 @@ all records and the paginator draws no page links, which it would if there were 
 
 ---
 
+## 8.7 Actions (done)
+
+A changelist lists the actions it offers in its action bar, by name, in the order the bar lists
+them. `page.actions` is a read-only mapping, as `page.filters` is, and each action reads its
+name, its label and its `<option>` as `native`:
+
+```python
+page = admin_ui.list(Product)
+
+assert list(page.actions) == ["delete_selected", "mark_inactive"]           # done
+assert page.actions["mark_inactive"].label == "Mark selected products as inactive"  # done
+```
+
+An action is addressed by the name the admin registers it under, and its label, the description
+the bar shows, is read as data (section 3.5). The bar's blank `---------` option is no action.
+The actions are read from the page, never from `ModelAdmin.get_actions`, so they follow the
+user's permissions: Django leaves out an action the user may not run, and draws no bar when
+none is left. It draws none either while it counts the records and finds none. Without a bar,
+`page.actions` is empty. An admin that draws a bar above the table and one below lists the same
+actions in both, and the first is read.
+
+A key that names no action raises `KeyError` listing the names there are, or saying the
+changelist offers none. A label raises it too, and so does `""`. The mapping and each action
+read the page again whenever they are used (section 3.9), so an action held across a search
+still works, and one the page no longer offers raises `LookupError`.
+
+An action runs on the rows selected. A row is selected through its checkbox, and every row on
+the page at once through the checkbox over them:
+
+```python
+page.rows[0].select()                                 # done
+page.rows[2].select()                                 # done
+
+assert [row.selected for row in page.rows] == [True, False, True]  # done
+
+page.rows[0].deselect()                               # done
+page.select_all()                                     # done
+page.deselect_all()                                   # done
+```
+
+None of them loads a page: the selection lives in the browser until an action is run, as a
+user's does. Each does nothing when the rows are already as asked. They check and uncheck the
+boxes as a user does, so the admin's script keeps the box over the rows and the counter in step.
+A row is addressed by its position (section 3.5), so after a search or a sort the same row may
+be another record, and the page loaded again starts with nothing selected.
+
+A changelist that offers no actions draws no checkboxes. Its rows read as not selected, and
+`select`, `deselect`, `select_all` and `deselect_all` raise `LookupError` saying it offers no
+actions. A row held after the browser moved on raises `LookupError`, as reading its cells does.
+There is no `page.select(*indexes)`, which would be a second way to write
+`page.rows[0].select()`.
+
+An action can run on every record the changelist lists, across its pages:
+
+```python
+page.select_across_pages()                            # done
+
+assert page.selects_across_pages                      # done
+```
+
+`select_across_pages` selects every row on the page, then clicks the admin's "Select all N",
+which loads nothing, as selecting a row doesn't. An action then runs on every record the search
+and the filters let through. Deselecting a row, or every row, selects only the rows checked
+again, as the admin's script does for a user. Django offers the link only while the records span
+several pages and the admin shows its selection counter (`actions_selection_counter`), so
+otherwise `select_across_pages` raises `LookupError`, and nothing is clicked. The package finds
+out from the page, which carries the link, hidden, whenever Django offers it. It does nothing
+when the page already selects across pages, and `selects_across_pages` is `False` on a
+changelist that offers no actions.
+
+`action.run()` chooses the action in the action bar, clicks the bar's button, and returns the
+page the browser shows after it:
+
+```python
+page.rows[0].select()                                 # done
+page.rows[2].select()                                 # done
+
+landed = page.actions["mark_inactive"].run()          # done
+
+assert landed is page                                 # done
+assert page.messages == [("success", "2 products were marked as inactive.")]  # done
+```
+
+When the admin comes back to the changelist, as it does after an action that returns no
+response, `run` returns this same changelist object, which then reads the page loaded again
+with the search and filters it had and nothing selected. Otherwise it returns a new page object
+for wherever the action led, the way a submission's `result.page` is built (section 16.4): an
+`EditPage` for the change page an action redirects to, or a plain `AdminPage` for a page of the
+project's own. Its type is `AdminPage`, since an action can lead anywhere, and a test narrows
+it with `isinstance`.
+
+`run` returns the page rather than a `SubmissionResult`, whose `success` says whether the admin
+redirected: Django redirects after refusing to run an action, so that would mean nothing here.
+
+An action runs with nothing selected too, as a user can run one. Django then changes nothing
+and comes back to the changelist with its warning, which `page.messages` reads:
+
+```python
+landed = page.actions["mark_inactive"].run()          # done
+
+assert landed is page                                 # done
+assert page.messages == [                             # done
+    ("warning", "Items must be selected in order to perform actions on them. "
+                "No items have been changed."),
+]
+```
+
+An action the changelist no longer offers raises `LookupError`, and nothing is clicked. With two
+action bars, the action is chosen in the first and that bar's button is clicked. After the
+session ended, the admin sends the browser to the login page, and `run` returns a `LoginPage`
+that reads as `denied`.
+
+The admin's own "Delete selected" leads to a confirmation, a `DeletePage`, read and confirmed
+as the page that deletes one object is (sections 23.4 and 23.5):
+
+```python
+page.select_all()
+
+confirmation = page.actions["delete_selected"].run()  # done
+
+assert isinstance(confirmation, DeletePage)           # done
+assert confirmation.deletion_counts == {"Products": 3}  # done
+assert confirmation.confirm_deleting().redirected_to_list(Product)  # done
+```
+
+Django draws both confirmations alike and answers the action with this one at the changelist's
+own URL, without a redirect, so its `destination` is the changelist's. `deletions` lists
+each selected object in turn, followed by what it takes with it. When objects protect the
+selection, or it would take with it objects the user may not delete, the page offers no
+confirmation and lists them as `blockers`, as the single page does. Confirming deletes the
+objects and leads back to the changelist, which says how many it deleted.
+
+---
+
 # 9. Changelist Row Matching (done)
 
 One of the main 1.0.0 features is concise verification of rows shown on a changelist.
@@ -2579,6 +2713,10 @@ changed its quote marks in 6.0, and on the language, so a project decides how fa
 A page that cannot be confirmed (section 23.5) removes nothing: `deletions` is `[]` and
 `deletion_counts` is `{}`.
 
+The confirmation "Delete selected" leads to on a changelist reads the same way (section 8.7).
+Its `deletions` list each selected object, followed by what it takes with it, one after the
+other.
+
 ---
 
 ## 23.5 Deletion refused (done)
@@ -3556,7 +3694,7 @@ Login page:
 * ordering: the order a changelist shows, sortable columns, and sorting by them (done);
 * pagination and page traversal (done);
 * actions: the actions a changelist offers, selecting rows, and running an action, including
-  the admin's own "delete selected" and its confirmation.
+  the admin's own "delete selected" and its confirmation (done).
 
 ---
 

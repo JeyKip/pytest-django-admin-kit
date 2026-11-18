@@ -3,6 +3,7 @@
 import pytest
 
 from django_admin_kit.pages import _with_page
+from helpers import count_page_loads
 from project.shop.admin import ProductAdmin
 from project.shop.models import Product
 
@@ -34,19 +35,6 @@ def many_products(db):
 def at_page(page, number):
     """Takes the browser to page ``number`` of the changelist, as its link would."""
     page.native.goto(f"{page.native.url.split('?')[0]}?p={number}")
-
-
-def loads(page, change):
-    """How many times ``change`` loads a page in the browser."""
-    loaded = []
-
-    def count(_):
-        loaded.append(1)
-
-    page.native.on("load", count)
-    change()
-    page.native.remove_listener("load", count)
-    return len(loaded)
 
 
 def names(page):
@@ -148,7 +136,7 @@ def test_going_to_a_page_with_a_link_clicks_it(
     page = admin_ui.list(Product)
     at_page(page, start)
 
-    assert loads(page, lambda: page.go_to_page(number)) == 1
+    assert count_page_loads(page, lambda: page.go_to_page(number)) == 1
 
     assert page.works
     assert page.destination == admin_ui.url.list(Product)
@@ -168,7 +156,7 @@ def test_going_to_a_page_without_a_link_opens_it_in_one_load(
     page = admin_ui.list(Product)
     at_page(page, start)
 
-    assert loads(page, lambda: page.go_to_page(number)) == 1
+    assert count_page_loads(page, lambda: page.go_to_page(number)) == 1
 
     assert page.works
     assert page.page_number == number
@@ -194,7 +182,7 @@ def test_going_to_the_page_shown_loads_nothing(admin_ui, superuser, per_page, ma
     admin_ui.login(superuser)
     page = admin_ui.list(Product)
 
-    assert loads(page, lambda: page.go_to_page(1)) == 0
+    assert count_page_loads(page, lambda: page.go_to_page(1)) == 0
 
     assert page.page_number == 1
 
@@ -271,7 +259,7 @@ def test_a_page_number_that_is_not_a_page_is_refused_before_anything_is_clicked(
             page.go_to_page(number)
         assert str(raised.value) == message
 
-    assert loads(page, go) == 0
+    assert count_page_loads(page, go) == 0
 
     assert page.page_number == 1
 
@@ -374,7 +362,7 @@ def test_showing_all_puts_every_record_on_one_page(admin_ui, superuser, per_page
     admin_ui.login(superuser)
     page = admin_ui.list(Product)
 
-    assert loads(page, page.show_all) == 1
+    assert count_page_loads(page, page.show_all) == 1
 
     assert page.works
     assert page.destination == admin_ui.url.list(Product)
@@ -408,7 +396,7 @@ def test_showing_all_again_loads_nothing(admin_ui, superuser, per_page, many_pro
     page = admin_ui.list(Product)
     page.show_all()
 
-    assert loads(page, page.show_all) == 0
+    assert count_page_loads(page, page.show_all) == 0
 
     assert page.shows_all
 
@@ -455,7 +443,7 @@ def test_a_changelist_that_cannot_show_all_refuses_before_anything_is_clicked(
             page.show_all()
         assert str(raised.value) == "The changelist doesn't offer to show all of its records."
 
-    assert loads(page, show) == 0
+    assert count_page_loads(page, show) == 0
 
 
 @pytest.mark.parametrize(
@@ -497,7 +485,7 @@ def test_no_page_but_the_first_can_be_gone_to_while_showing_all(
     assert str(raised.value) == (
         "The changelist shows all of its records on one page, so there is no page 2."
     )
-    assert loads(page, lambda: page.go_to_page(1)) == 0
+    assert count_page_loads(page, lambda: page.go_to_page(1)) == 0
 
 
 def test_showing_all_after_the_session_ended_reports_the_refusal(
