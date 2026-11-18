@@ -1,13 +1,21 @@
-"""The actions a changelist offers in its action bar, by name, and the rows they run on."""
+"""The actions a changelist offers in its action bar, by name, the rows they run on, and running
+them."""
 
 import pytest
 from django.contrib.auth.models import Permission
+from django.contrib.sessions.models import Session
 
 from django_admin_kit.actions import ChangelistAction
+from django_admin_kit.pages import EditPage, LoginPage
 from django_admin_kit.rows import NO_ACTIONS
-from helpers import count_page_loads
+from helpers import collect_page_loads, count_page_loads
 from project.shop.admin import CategoryAdmin, ProductAdmin
 from project.shop.models import Category, Product
+
+# Django's warning when an action is run with no row selected.
+NOTHING_SELECTED = (
+    "Items must be selected in order to perform actions on them. No items have been changed."
+)
 
 # What the superuser is offered on the product changelist, by name and by label.
 PRODUCT_ACTIONS = {
@@ -20,6 +28,11 @@ PRODUCT_ACTIONS = {
 def selection(page):
     """Whether each row on the page is selected, in order."""
     return [row.selected for row in page.rows]
+
+
+def stored_is_active(*products):
+    """Whether each of ``products`` is active, as stored now."""
+    return [Product.objects.get(pk=product.pk).is_active for product in products]
 
 
 def test_the_actions_are_listed_by_name_in_the_order_the_bar_lists_them(
@@ -281,3 +294,107 @@ def test_a_row_held_after_the_browser_left_cannot_be_selected(
         with pytest.raises(LookupError) as failure:
             read()
         assert str(failure.value) == left_for(admin_ui.url.index())
+
+
+def test_an_action_runs_on_the_selected_rows_and_comes_back_to_the_same_page(
+    admin_ui, superuser, products
+):
+    admin_ui.login(superuser)
+    page = admin_ui.list(Product)
+    page.rows[0].select()
+    page.rows[2].select()
+
+    landed = page.actions["mark_inactive"].run()
+
+    assert landed is page
+    assert page.messages == [("success", "2 products were marked as inactive.")]
+    assert stored_is_active(*products) == [False, True, False]
+    assert selection(page) == [False, False, False]
+
+
+def test_an_action_keeps_the_search_and_the_filters(admin_ui, superuser, products):
+    admin_ui.login(superuser)
+    page = admin_ui.list(Product)
+    page.filters["is_active"].apply("Yes")
+    page.search("Bolt")
+    page.rows[0].select()
+
+    landed = page.actions["mark_inactive"].run()
+
+    assert landed is page
+    assert page.search_term == "Bolt"
+    assert page.filters["is_active"].selected == "Yes"
+    assert stored_is_active(*products) == [False, True, True]
+
+
+def test_an_action_run_with_nothing_selected_brings_back_djangos_warning(
+    admin_ui, superuser, products
+):
+    admin_ui.login(superuser)
+    page = admin_ui.list(Product)
+
+    landed = page.actions["mark_inactive"].run()
+
+    assert landed is page
+    assert page.messages == [("warning", NOTHING_SELECTED)]
+    assert stored_is_active(*products) == [True, True, True]
+
+
+def test_an_action_that_leads_elsewhere_returns_the_page_it_leads_to(admin_ui, superuser, products):
+    admin_ui.login(superuser)
+    page = admin_ui.list(Product)
+    page.rows[1].select()
+    page.rows[2].select()
+
+    landed = page.actions["open_first"].run()
+
+    assert isinstance(landed, EditPage)
+    assert landed.destination == admin_ui.url.edit(products[1])
+    assert landed.works
+
+
+def test_an_action_the_page_no_longer_offers_is_not_run(admin_ui, editor, products):
+    """The editor loses the permission the action needs, and the page loads again."""
+    admin_ui.login(editor)
+    page = admin_ui.list(Product)
+    action = page.actions["mark_inactive"]
+    editor.user_permissions.remove(Permission.objects.get(codename="change_product"))
+    page.search("Bolt")
+    loads = collect_page_loads(page)
+
+    with pytest.raises(LookupError) as failure:
+        action.run()
+
+    assert str(failure.value) == "The changelist no longer offers the action 'mark_inactive'."
+    assert loads == []
+
+
+def test_with_two_action_bars_the_action_runs_once_from_the_first(
+    admin_ui, monkeypatch, superuser, products
+):
+    """Django runs what the bar of the button clicked chooses, and the second bar chooses
+    nothing, so the action ran from the first."""
+    monkeypatch.setattr(ProductAdmin, "actions_on_top", True)
+    monkeypatch.setattr(ProductAdmin, "actions_on_bottom", True)
+    admin_ui.login(superuser)
+    page = admin_ui.list(Product)
+    page.rows[0].select()
+
+    assert count_page_loads(page, page.actions["mark_inactive"].run) == 1
+    assert page.messages == [("success", "1 products were marked as inactive.")]
+    assert stored_is_active(*products) == [False, True, True]
+
+
+def test_an_action_run_after_the_session_ended_reports_the_refusal(admin_ui, superuser, products):
+    """The browser keeps its cookies, but the session behind them is gone."""
+    admin_ui.login(superuser)
+    page = admin_ui.list(Product)
+    page.rows[0].select()
+    Session.objects.all().delete()
+
+    landed = page.actions["mark_inactive"].run()
+
+    assert isinstance(landed, LoginPage)
+    assert landed.denied
+    assert landed.destination == admin_ui.url.login()
+    assert stored_is_active(*products) == [True, True, True]

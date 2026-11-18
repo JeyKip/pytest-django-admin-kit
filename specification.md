@@ -1222,6 +1222,48 @@ actions. A row held after the browser moved on raises `LookupError`, as reading 
 There is no `page.select(*indexes)`, which would be a second way to write
 `page.rows[0].select()`.
 
+`action.run()` chooses the action in the action bar, clicks the bar's button, and returns the
+page the browser shows after it:
+
+```python
+page.rows[0].select()                                 # done
+page.rows[2].select()                                 # done
+
+landed = page.actions["mark_inactive"].run()          # done
+
+assert landed is page                                 # done
+assert page.messages == [("success", "2 products were marked as inactive.")]  # done
+```
+
+When the admin comes back to the changelist, as it does after an action that returns no
+response, `run` returns this same changelist object, which then reads the page loaded again
+with the search and filters it had and nothing selected. Otherwise it returns a new page object
+for wherever the action led, the way a submission's `result.page` is built (section 16.4): an
+`EditPage` for the change page an action redirects to, or a plain `AdminPage` for a page of the
+project's own. Its type is `AdminPage`, since an action can lead anywhere, and a test narrows
+it with `isinstance`.
+
+`run` returns the page rather than a `SubmissionResult`, whose `success` says whether the admin
+redirected: Django redirects after refusing to run an action, so that would mean nothing here.
+
+An action runs with nothing selected too, as a user can run one. Django then changes nothing
+and comes back to the changelist with its warning, which `page.messages` reads:
+
+```python
+landed = page.actions["mark_inactive"].run()          # done
+
+assert landed is page                                 # done
+assert page.messages == [                             # done
+    ("warning", "Items must be selected in order to perform actions on them. "
+                "No items have been changed."),
+]
+```
+
+An action the changelist no longer offers raises `LookupError`, and nothing is clicked. With two
+action bars, the action is chosen in the first and that bar's button is clicked. After the
+session ended, the admin sends the browser to the login page, and `run` returns a `LoginPage`
+that reads as `denied`.
+
 ---
 
 # 9. Changelist Row Matching (done)

@@ -798,7 +798,7 @@ class ChangelistPage(ModelPage):
         """
         # A page that did not open fails here rather than at the first use of what it hands out.
         self._shown()
-        return ChangelistActions(self._shown)
+        return ChangelistActions(self._shown, self._run_action)
 
     def select_all(self) -> None:
         """Select every row on the page through the checkbox over them, which loads nothing.
@@ -820,6 +820,18 @@ class ChangelistPage(ModelPage):
         toggle = self._action_toggle()
         toggle.check()
         toggle.uncheck()
+
+    def _run_action(self, name: str) -> AdminPage:
+        """Choose the action ``name`` in the first action bar, click that bar's button, and
+        return the page the browser shows after it: this object when it is still the
+        changelist, and a new one otherwise."""
+        bar = self._shown().locator("div.actions").first
+        bar.locator('select[name="action"]').select_option(name)
+        # The admin tells the bars apart by the button's value, so the first bar's button
+        # runs the action chosen in the first bar's select.
+        with self._page.expect_navigation() as navigation:
+            bar.locator('button[name="index"]').click()
+        return self._submitted(navigation.value).page
 
     def _action_toggle(self) -> Locator:
         """The checkbox over the rows that selects them all, or ``LookupError`` when the

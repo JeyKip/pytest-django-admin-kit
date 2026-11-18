@@ -269,6 +269,17 @@ page.rows[2].select()
 assert [row.selected for row in page.rows] == [True, False, True]
 ```
 
+`action.run()` runs the action on the rows selected and returns the page the browser shows
+after it. That's the same changelist object when the admin comes back to it, and a new page
+object when the action leads elsewhere.
+
+```python
+landed = page.actions["mark_inactive"].run()
+
+assert landed is page
+assert page.messages == [("success", "2 products were marked as inactive.")]
+```
+
 **Reading form fields.** The create and edit pages list their fields by name, in the order the
 admin presents them, whether the user may fill them or only read them. A field the admin renders
 hidden is not shown, so it is not listed. Whether a field is required is read the way the user
