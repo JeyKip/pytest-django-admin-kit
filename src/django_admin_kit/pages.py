@@ -76,8 +76,8 @@ class AdminPage:
     # whether the browser still shows this page. The class is needed when the admin
     # answers with a different page at the same URL and status 200: for example, a
     # project's `response_add` or `response_change` that renders a confirmation page
-    # instead of redirecting, or, once changelist actions are supported, the
-    # confirmation page of "Delete selected".
+    # instead of redirecting, or the confirmation page of "Delete selected", which the
+    # changelist's URL answers.
     _kind: str | None = None
 
     def __init__(
@@ -1087,7 +1087,13 @@ class EditPage(FormPage):
 
 
 class DeletePage(ModelPage):
-    """The page that asks whether to delete one instance."""
+    """The page that asks whether to delete one instance, or the rows selected on a changelist,
+    which "Delete selected" leads to.
+
+    Django draws both alike, so both read the same way. The one for the rows is at the
+    changelist's own URL, since Django answers the action with it without a redirect, and its
+    ``deletions`` list every object selected in turn, each followed by what it takes with it.
+    """
 
     _kind = "delete-confirmation"
 
@@ -1103,8 +1109,8 @@ class DeletePage(ModelPage):
 
     @property
     def deletions(self) -> list[str]:
-        """What the deletion will remove, as the page lists it: the object itself, then every
-        related object it takes with it, in the order shown.
+        """What the deletion will remove, as the page lists it: each object, then every related
+        object it takes with it, in the order shown.
 
         Each entry is the text the page shows, such as ``"Product: Widget"``, whether or not
         the admin links it. The page draws the list nested; it is read top to bottom. A page
@@ -1112,10 +1118,11 @@ class DeletePage(ModelPage):
         that sets ``delete_confirmation_max_display`` shows only part of the list, ending in
         an entry such as "…and 2 more objects.", which is read as shown too.
         """
-        # The list of what is removed follows its heading, which follows the summary's list.
-        # The lists a page shows when it cannot be confirmed follow the opening sentence,
-        # and before Django 4.2 none of the lists has an id to tell them apart.
-        items = self._shown().locator("#content > ul + h2 + ul li").all()
+        # The lists of what is removed, one per object deleted, follow their heading, which
+        # follows the summary's list. The lists a page shows when it cannot be confirmed follow
+        # the opening sentence, and before Django 4.2 none of the lists has an id to tell them
+        # apart.
+        items = self._shown().locator("#content > ul + h2 ~ ul li").all()
         return [_own_text(item) for item in items]
 
     @property
@@ -1194,12 +1201,14 @@ class DeletionCounts(Dict[str, int]):
         )
 
 
-# The page class for each admin view of a model, by the end of the view's URL name.
-_MODEL_PAGES: dict[str, type[ModelPage]] = {
-    "changelist": ChangelistPage,
-    "add": CreatePage,
-    "change": EditPage,
-    "delete": DeletePage,
+# The page classes each admin view of a model can show, by the end of the view's URL name, in
+# the order they are tried. The changelist's URL also answers "Delete selected" with a delete
+# confirmation, whose `body` carries the single delete page's class.
+_MODEL_PAGES: dict[str, tuple[type[ModelPage], ...]] = {
+    "changelist": (ChangelistPage, DeletePage),
+    "add": (CreatePage,),
+    "change": (EditPage,),
+    "delete": (DeletePage,),
 }
 
 
@@ -1231,9 +1240,9 @@ def _page_at(page: Page, status_code: int, tools: PageTools) -> AdminPage:
             continue
         prefix = f"{model._meta.app_label}_{model._meta.model_name}_"
         if url_name.startswith(prefix):
-            page_class = _MODEL_PAGES.get(url_name[len(prefix) :])
-            if page_class is not None and _is_kind(page, page_class._kind):
-                return page_class(page, status_code, path, tools, model)
+            for page_class in _MODEL_PAGES.get(url_name[len(prefix) :], ()):
+                if _is_kind(page, page_class._kind):
+                    return page_class(page, status_code, path, tools, model)
     return AdminPage(page, status_code, path, tools)
 
 

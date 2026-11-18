@@ -1264,6 +1264,26 @@ action bars, the action is chosen in the first and that bar's button is clicked.
 session ended, the admin sends the browser to the login page, and `run` returns a `LoginPage`
 that reads as `denied`.
 
+The admin's own "Delete selected" leads to a confirmation, a `DeletePage`, read and confirmed
+as the page that deletes one object is (sections 23.4 and 23.5):
+
+```python
+page.select_all()
+
+confirmation = page.actions["delete_selected"].run()  # done
+
+assert isinstance(confirmation, DeletePage)           # done
+assert confirmation.deletion_counts == {"Products": 3}  # done
+assert confirmation.confirm_deleting().redirected_to_list(Product)  # done
+```
+
+Django draws both confirmations alike and answers the action with this one at the changelist's
+own URL, without a redirect, so its `destination` is the changelist's. `deletions` lists
+each selected object in turn, followed by what it takes with it. When objects protect the
+selection, or it would take with it objects the user may not delete, the page offers no
+confirmation and lists them as `blockers`, as the single page does. Confirming deletes the
+objects and leads back to the changelist, which says how many it deleted.
+
 ---
 
 # 9. Changelist Row Matching (done)
@@ -2674,6 +2694,10 @@ changed its quote marks in 6.0, and on the language, so a project decides how fa
 
 A page that cannot be confirmed (section 23.5) removes nothing: `deletions` is `[]` and
 `deletion_counts` is `{}`.
+
+The confirmation "Delete selected" leads to on a changelist reads the same way (section 8.7).
+Its `deletions` list each selected object, followed by what it takes with it, one after the
+other.
 
 ---
 

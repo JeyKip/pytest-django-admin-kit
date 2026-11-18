@@ -280,6 +280,20 @@ assert landed is page
 assert page.messages == [("success", "2 products were marked as inactive.")]
 ```
 
+"Delete selected" leads to a `DeletePage`, read and confirmed as the page for deleting one
+object is.
+
+```python
+from django_admin_kit.pages import DeletePage
+
+page.select_all()
+confirmation = page.actions["delete_selected"].run()
+
+assert isinstance(confirmation, DeletePage)
+assert confirmation.deletion_counts == {"Products": 3}
+assert confirmation.confirm_deleting().redirected_to_list(Product)
+```
+
 **Reading form fields.** The create and edit pages list their fields by name, in the order the
 admin presents them, whether the user may fill them or only read them. A field the admin renders
 hidden is not shown, so it is not listed. Whether a field is required is read the way the user

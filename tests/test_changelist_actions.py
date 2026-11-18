@@ -6,11 +6,11 @@ from django.contrib.auth.models import Permission
 from django.contrib.sessions.models import Session
 
 from django_admin_kit.actions import ChangelistAction
-from django_admin_kit.pages import EditPage, LoginPage
+from django_admin_kit.pages import ChangelistPage, DeletePage, EditPage, LoginPage
 from django_admin_kit.rows import NO_ACTIONS
 from helpers import collect_page_loads, count_page_loads
 from project.shop.admin import CategoryAdmin, ProductAdmin
-from project.shop.models import Category, Product
+from project.shop.models import Category, Product, Review
 
 # Django's warning when an action is run with no row selected.
 NOTHING_SELECTED = (
@@ -23,6 +23,24 @@ PRODUCT_ACTIONS = {
     "mark_inactive": "Mark selected products as inactive",
     "open_first": "Open the first selected product",
 }
+
+
+@pytest.fixture
+def reviewed(products):
+    """The products, the first of which has two reviews, which deleting it takes with it."""
+    Review.objects.create(product=products[0], text="Great")
+    Review.objects.create(product=products[0], text="Fine")
+    return products
+
+
+@pytest.fixture
+def used_categories(products):
+    """Two categories, each used by a product, which protects it from deletion."""
+    tools = Category.objects.create(name="Tools")
+    toys = Category.objects.create(name="Toys")
+    Product.objects.filter(pk=products[0].pk).update(category=tools)
+    Product.objects.filter(pk=products[1].pk).update(category=toys)
+    return [tools, toys]
 
 
 def selection(page):
@@ -398,3 +416,105 @@ def test_an_action_run_after_the_session_ended_reports_the_refusal(admin_ui, sup
     assert landed.denied
     assert landed.destination == admin_ui.url.login()
     assert stored_is_active(*products) == [True, True, True]
+
+
+def test_delete_selected_asks_to_confirm_on_a_delete_page_at_the_changelists_url(
+    admin_ui, superuser, reviewed
+):
+    admin_ui.login(superuser)
+    page = admin_ui.list(Product)
+    page.rows[0].select()
+    page.rows[1].select()
+
+    confirmation = page.actions["delete_selected"].run()
+
+    assert isinstance(confirmation, DeletePage)
+    assert confirmation.works
+    assert confirmation.destination == admin_ui.url.list(Product)
+    assert confirmation.intro == (
+        "Are you sure you want to delete the selected products? "
+        "All of the following objects and their related items will be deleted:"
+    )
+    assert confirmation.can_confirm_deleting
+    assert confirmation.blockers == []
+
+
+def test_the_confirmation_lists_each_selected_object_with_what_it_takes(
+    admin_ui, superuser, reviewed
+):
+    admin_ui.login(superuser)
+    page = admin_ui.list(Product)
+    page.rows[0].select()
+    page.rows[1].select()
+
+    confirmation = page.actions["delete_selected"].run()
+
+    assert confirmation.deletions == [
+        "Product: Bolt",
+        "Review: Great",
+        "Review: Fine",
+        "Product: Nut",
+    ]
+    assert confirmation.deletion_counts == {"Products": 2, "Reviews": 2}
+
+
+def test_confirming_deletes_the_selected_objects_and_returns_to_the_changelist(
+    admin_ui, superuser, reviewed
+):
+    admin_ui.login(superuser)
+    page = admin_ui.list(Product)
+    page.rows[0].select()
+    page.rows[1].select()
+    confirmation = page.actions["delete_selected"].run()
+
+    result = confirmation.confirm_deleting()
+
+    assert result.redirected_to_list(Product)
+    assert isinstance(result.page, ChangelistPage)
+    assert result.page.messages == [("success", "Successfully deleted 2 products.")]
+    assert [row["name"].value for row in result.page.rows] == ["Washer"]
+    assert list(Product.objects.values_list("name", flat=True)) == ["Washer"]
+    assert not Review.objects.exists()
+
+
+def test_objects_that_protect_the_selection_keep_it_from_being_confirmed(
+    admin_ui, superuser, used_categories
+):
+    admin_ui.login(superuser)
+    page = admin_ui.list(Category)
+    page.select_all()
+
+    confirmation = page.actions["delete_selected"].run()
+
+    assert isinstance(confirmation, DeletePage)
+    assert confirmation.intro == (
+        "Deleting the selected categories would require deleting the following protected "
+        "related objects:"
+    )
+    assert not confirmation.can_confirm_deleting
+    assert sorted(confirmation.blockers) == ["Product: Bolt", "Product: Nut"]
+    assert confirmation.deletions == []
+    assert confirmation.deletion_counts == {}
+    with pytest.raises(LookupError, match="The page offers no way to confirm the deletion"):
+        confirmation.confirm_deleting()
+    assert Category.objects.count() == 2
+
+
+def test_kinds_the_user_may_not_delete_keep_the_selection_from_being_confirmed(
+    admin_ui, superuser, released
+):
+    """The shop's rule keeps a released product on record, so deleting the category it uses
+    would take with it a product the user may not delete. The admin lists only the kind."""
+    admin_ui.login(superuser)
+    page = admin_ui.list(Category)
+    page.select_all()
+
+    confirmation = page.actions["delete_selected"].run()
+
+    assert isinstance(confirmation, DeletePage)
+    assert confirmation.intro == (
+        "Deleting the selected category would result in deleting related objects, but your "
+        "account doesn't have permission to delete the following types of objects:"
+    )
+    assert not confirmation.can_confirm_deleting
+    assert confirmation.blockers == ["product"]
