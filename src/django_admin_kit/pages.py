@@ -821,6 +821,39 @@ class ChangelistPage(ModelPage):
         toggle.check()
         toggle.uncheck()
 
+    def select_across_pages(self) -> None:
+        """Select every record the changelist lists, on every page, which loads nothing.
+
+        This selects every row on the page, then clicks the admin's "Select all N", so an action
+        then runs on every record that the search and the filters let through. Nothing changes
+        when the page already selects across pages. Deselecting a row, or every row, selects
+        only the rows checked again.
+
+        Django offers this only while the records span several pages and the admin shows its
+        selection counter, so otherwise this raises ``LookupError``, and nothing is clicked. A
+        changelist that offers no actions raises it too.
+        """
+        self._action_toggle()
+        if self.selects_across_pages:
+            return
+        # The admin draws the link hidden, and shows it once every row is selected. It draws
+        # none when every record is on the page or `actions_selection_counter` is off.
+        link = self._shown().locator("div.actions span.question a")
+        if not link.count():
+            raise LookupError(
+                "The changelist doesn't offer to select its records across pages: it shows "
+                "every record on this page, or its admin turns off the selection counter."
+            )
+        self.select_all()
+        link.first.click()
+
+    @property
+    def selects_across_pages(self) -> bool:
+        """Whether the page selects every record across the pages, as ``select_across_pages``
+        does; ``False`` on a changelist that offers no actions."""
+        field = self._shown().locator("div.actions input.select-across")
+        return field.count() > 0 and field.first.input_value() == "1"
+
     def _run_action(self, name: str) -> AdminPage:
         """Choose the action ``name`` in the first action bar, click that bar's button, and
         return the page the browser shows after it: this object when it is still the

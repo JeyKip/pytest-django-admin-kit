@@ -1170,7 +1170,7 @@ all records and the paginator draws no page links, which it would if there were 
 
 ---
 
-## 8.7 Actions
+## 8.7 Actions (done)
 
 A changelist lists the actions it offers in its action bar, by name, in the order the bar lists
 them. `page.actions` is a read-only mapping, as `page.filters` is, and each action reads its
@@ -1221,6 +1221,24 @@ A changelist that offers no actions draws no checkboxes. Its rows read as not se
 actions. A row held after the browser moved on raises `LookupError`, as reading its cells does.
 There is no `page.select(*indexes)`, which would be a second way to write
 `page.rows[0].select()`.
+
+An action can run on every record the changelist lists, across its pages:
+
+```python
+page.select_across_pages()                            # done
+
+assert page.selects_across_pages                      # done
+```
+
+`select_across_pages` selects every row on the page, then clicks the admin's "Select all N",
+which loads nothing, as selecting a row doesn't. An action then runs on every record the search
+and the filters let through. Deselecting a row, or every row, selects only the rows checked
+again, as the admin's script does for a user. Django offers the link only while the records span
+several pages and the admin shows its selection counter (`actions_selection_counter`), so
+otherwise `select_across_pages` raises `LookupError`, and nothing is clicked. The package finds
+out from the page, which carries the link, hidden, whenever Django offers it. It does nothing
+when the page already selects across pages, and `selects_across_pages` is `False` on a
+changelist that offers no actions.
 
 `action.run()` chooses the action in the action bar, clicks the bar's button, and returns the
 page the browser shows after it:
@@ -3676,7 +3694,7 @@ Login page:
 * ordering: the order a changelist shows, sortable columns, and sorting by them (done);
 * pagination and page traversal (done);
 * actions: the actions a changelist offers, selecting rows, and running an action, including
-  the admin's own "delete selected" and its confirmation.
+  the admin's own "delete selected" and its confirmation (done).
 
 ---
 

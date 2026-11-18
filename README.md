@@ -269,6 +269,9 @@ page.rows[2].select()
 assert [row.selected for row in page.rows] == [True, False, True]
 ```
 
+`page.select_across_pages()` clicks the admin's "Select all N" after selecting every row, so an
+action runs on every record the search and filters let through, on every page.
+
 `action.run()` runs the action on the rows selected and returns the page the browser shows
 after it. That's the same changelist object when the admin comes back to it, and a new page
 object when the action leads elsewhere.

@@ -43,6 +43,16 @@ def used_categories(products):
     return [tools, toys]
 
 
+@pytest.fixture
+def paged(monkeypatch, db):
+    """Five products, shown two a page, so the changelist has three pages."""
+    monkeypatch.setattr(ProductAdmin, "list_per_page", 2)
+    return [
+        Product.objects.create(name=f"Product {number}", sku=f"SKU-{number}", price="1.00")
+        for number in range(1, 6)
+    ]
+
+
 def selection(page):
     """Whether each row on the page is selected, in order."""
     return [row.selected for row in page.rows]
@@ -518,3 +528,103 @@ def test_kinds_the_user_may_not_delete_keep_the_selection_from_being_confirmed(
     )
     assert not confirmation.can_confirm_deleting
     assert confirmation.blockers == ["product"]
+
+
+def test_every_record_is_selected_across_the_pages_without_a_page_load(admin_ui, superuser, paged):
+    admin_ui.login(superuser)
+    page = admin_ui.list(Product)
+
+    assert not page.selects_across_pages
+    assert count_page_loads(page, page.select_across_pages) == 0
+    assert page.selects_across_pages
+    assert selection(page) == [True, True]
+
+
+def test_selecting_across_the_pages_twice_changes_nothing(admin_ui, superuser, paged):
+    admin_ui.login(superuser)
+    page = admin_ui.list(Product)
+    page.select_across_pages()
+
+    page.select_across_pages()
+
+    assert page.selects_across_pages
+    assert selection(page) == [True, True]
+
+
+def test_an_action_run_across_the_pages_runs_on_every_record(admin_ui, superuser, paged):
+    admin_ui.login(superuser)
+    page = admin_ui.list(Product)
+    page.select_across_pages()
+
+    page.actions["mark_inactive"].run()
+
+    assert page.messages == [("success", "5 products were marked as inactive.")]
+    assert stored_is_active(*paged) == [False] * 5
+
+
+def test_an_action_run_across_the_pages_runs_on_the_records_the_filters_let_through(
+    admin_ui, superuser, paged
+):
+    """The last product is inactive already, so the filter leaves four on two pages."""
+    Product.objects.filter(pk=paged[-1].pk).update(is_active=False)
+    admin_ui.login(superuser)
+    page = admin_ui.list(Product)
+    page.filters["is_active"].apply("Yes")
+    page.select_across_pages()
+
+    confirmation = page.actions["delete_selected"].run()
+
+    assert confirmation.deletion_counts == {"Products": 4}
+
+
+@pytest.mark.parametrize(
+    "deselect",
+    [lambda page: page.deselect_all(), lambda page: page.rows[0].deselect()],
+    ids=["every row", "one row"],
+)
+def test_deselecting_stops_selecting_across_the_pages(admin_ui, superuser, paged, deselect):
+    admin_ui.login(superuser)
+    page = admin_ui.list(Product)
+    page.select_across_pages()
+
+    deselect(page)
+
+    assert not page.selects_across_pages
+
+
+def test_a_changelist_on_one_page_offers_no_selection_across_pages(admin_ui, superuser, products):
+    admin_ui.login(superuser)
+    page = admin_ui.list(Product)
+
+    with pytest.raises(LookupError) as failure:
+        page.select_across_pages()
+
+    assert str(failure.value) == (
+        "The changelist doesn't offer to select its records across pages: it shows every "
+        "record on this page, or its admin turns off the selection counter."
+    )
+    assert selection(page) == [False, False, False]
+
+
+def test_an_admin_without_the_selection_counter_offers_no_selection_across_pages(
+    admin_ui, monkeypatch, superuser, paged
+):
+    monkeypatch.setattr(ProductAdmin, "actions_selection_counter", False)
+    admin_ui.login(superuser)
+    page = admin_ui.list(Product)
+
+    with pytest.raises(LookupError, match="doesn't offer to select its records across pages"):
+        page.select_across_pages()
+
+    assert selection(page) == [False, False]
+
+
+def test_a_changelist_offered_no_actions_selects_nothing_across_pages(admin_ui, viewer, paged):
+    admin_ui.login(viewer)
+    page = admin_ui.list(Product)
+
+    assert not page.selects_across_pages
+    with pytest.raises(LookupError) as failure:
+        page.select_across_pages()
+
+    assert str(failure.value) == NO_ACTIONS
