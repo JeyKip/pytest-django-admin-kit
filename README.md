@@ -24,7 +24,7 @@ Before writing admin tests, read https://raw.githubusercontent.com/JeyKip/pytest
 
 ## Status
 
-Version 1.1.0 implements the API written up in
+Version 1.2.0 implements the API written up in
 [specification.md](https://github.com/JeyKip/pytest-django-admin-kit/blob/main/specification.md),
 and its public API is stable. What changed in each release is in
 [CHANGELOG.md](https://github.com/JeyKip/pytest-django-admin-kit/blob/main/CHANGELOG.md), and what
@@ -271,6 +271,7 @@ assert [row.selected for row in page.rows] == [True, False, True]
 
 `page.select_across_pages()` clicks the admin's "Select all N" after selecting every row, so an
 action runs on every record the search and filters let through, on every page.
+`page.selects_across_pages` reads whether it does.
 
 `action.run()` runs the action on the rows selected and returns the page the browser shows
 after it. That's the same changelist object when the admin comes back to it, and a new page
