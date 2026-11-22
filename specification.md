@@ -1768,7 +1768,11 @@ file compares equal to a `(name, href)` pair, and is filled from a path, as text
 object; a path that is no file raises `FileNotFoundError`. `None` or `""` empties the field: it
 drops a chosen file and checks "Clear" for a stored one, after which the field reads as `None`,
 what the submission sends. The admin draws no "Clear" for a required field, so emptying one that
-holds a stored file raises `ValueError`. An image field has the same input and reads the same:
+holds a stored file raises `ValueError`. A Django `File`, such as the `FieldFile` a model
+instance holds, fills the field with its content, uploaded under its name without folders and
+read through the file itself, so a file in any storage is uploaded; a `FieldFile` with no file
+empties the field, and a `File` without a name raises `ValueError`. An image field has the same
+input and reads the same:
 
 ```python
 page = admin_ui.edit(manual)
@@ -2055,6 +2059,9 @@ instance picks that option. (done)
 
 A many-to-many field is filled with the related objects of a saved instance. An unsaved one has
 none yet, so the field is left as rendered. (done)
+
+A file field is filled with the file the instance stores, uploaded again, so the new object gets
+a copy of it. One that stores none leaves the field empty. (done)
 
 This does not imply that related objects or object graphs must automatically be serialized in
 1.0.0.
@@ -3726,7 +3733,7 @@ Login page:
   "Currently" and "Clear" parts (done);
 * reading a file field as the file it holds now, a link to it, or `None` (done);
 * filling a file field from a path, and clearing an optional one with an empty value (done);
-* populating a file field from a model instance, whose stored file is uploaded again;
+* populating a file field from a model instance, whose stored file is uploaded again (done);
 * what a rejected form renders back: a browser never keeps a chosen file, so the field reads as
   it did before the submission.
 

@@ -386,7 +386,9 @@ there. A file the test chose reads as its name, without folders, and no link, si
 uploaded yet. It's filled with the file at a path, as text or a `Path`, and a path that is no
 file raises `FileNotFoundError`. `None` or `""` empties it: a chosen file is dropped and "Clear"
 is checked for a stored one, so the field reads as `None`. A required field has no "Clear", so
-emptying one that holds a stored file raises `ValueError`. Image fields work the same way.
+emptying one that holds a stored file raises `ValueError`. A Django `File`, such as
+`manual.file` or a `ContentFile` with a name, uploads its content under its name without folders.
+Image fields work the same way.
 
 ```python
 page = admin_ui.edit(manual)
@@ -436,6 +438,7 @@ worth of data:
 ```python
 page.populate(product)                      # its category picks that option
 page.populate(product, name="Renamed")      # everything it has, with one value replaced
+page.populate(manual)                       # its stored files are uploaded again
 page.populate(SimpleNamespace(name="Widget", price="19.99"))
 ```
 

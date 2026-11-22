@@ -1,5 +1,6 @@
 """The admin's file input: read as the file it holds, stored or chosen, or None, filled with
-the file at a path, and emptied with None or "". An image field has the same input."""
+the file at a path or a Django File, and emptied with None or "". An image field has the same
+input."""
 
 import pytest
 from django.core.files.base import ContentFile
@@ -129,7 +130,7 @@ def test_a_value_that_is_no_path_cannot_fill_a_file_field(admin_ui, superuser):
         page.fields["file"].fill(42)
 
     assert failure.value.args[0] == (
-        "The field 'file' takes a path to a file, or None or '' to empty it, not 42."
+        "The field 'file' takes a path to a file, a Django File, or None or '' to empty it, not 42."
     )
 
 
@@ -210,3 +211,70 @@ def test_an_empty_value_drops_a_file_chosen_on_a_create_page(admin_ui, superuser
     page.fields["file"].fill(empty)
 
     assert page.fields["file"].value is None
+
+
+def test_a_file_filled_from_a_stored_file_reads_as_its_name_without_a_link(
+    admin_ui, superuser, manual
+):
+    admin_ui.login(superuser)
+    page = admin_ui.create(Manual)
+
+    page.fields["file"].fill(manual.file)
+
+    assert page.fields["file"].value == ("assembly.txt", None)
+
+
+def test_a_file_filled_from_a_django_file_uploads_its_content_once_saved(admin_ui, superuser):
+    admin_ui.login(superuser)
+    page = admin_ui.create(Manual)
+    page.fields["title"].fill("Wiring")
+
+    page.fields["file"].fill(ContentFile(WIRING, name="notes/wiring.txt"))
+
+    assert page.fields["file"].value == ("wiring.txt", None)
+    page.save()
+    saved = Manual.objects.get(title="Wiring")
+    assert saved.file.name == "manuals/wiring.txt"
+    with saved.file.open("rb") as stored:
+        assert stored.read() == WIRING
+
+
+def test_a_django_file_without_a_name_cannot_fill_a_file_field(admin_ui, superuser):
+    admin_ui.login(superuser)
+    page = admin_ui.create(Manual)
+
+    with pytest.raises(ValueError) as failure:
+        page.fields["file"].fill(ContentFile(WIRING))
+
+    assert failure.value.args[0] == (
+        "The field 'file' takes a file with a name to upload it under, and the ContentFile "
+        "given has none."
+    )
+
+
+def test_populating_from_an_instance_uploads_its_stored_files_again_once_saved(
+    admin_ui, superuser, covered_manual, diagram
+):
+    admin_ui.login(superuser)
+    page = admin_ui.create(Manual)
+
+    page.populate(covered_manual)
+    page.save()
+
+    copy = Manual.objects.exclude(pk=covered_manual.pk).get()
+    assert copy.file.name != covered_manual.file.name
+    with copy.file.open("rb") as stored:
+        assert stored.read() == ASSEMBLY
+    with copy.cover.open("rb") as stored:
+        assert stored.read() == diagram.read_bytes()
+
+
+def test_populating_from_an_instance_without_a_file_leaves_the_field_empty(
+    admin_ui, superuser, manual
+):
+    admin_ui.login(superuser)
+    page = admin_ui.create(Manual)
+
+    page.populate(manual)
+
+    assert page.fields["cover"].value is None
