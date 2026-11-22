@@ -10,6 +10,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 ### Added
 
 - Read a file field as a `FormFile` with the file's `name` and `href`, or `None`, and fill it from a path, through a built-in `FileWidget`. A file input read as `""` before.
+- Empty a file field with `None` or `""`, which checks "Clear" for a stored file, so the field reads as `None`. A required field holding a stored file raises `ValueError`.
 
 ## [1.2.0] - 2026-11-19
 

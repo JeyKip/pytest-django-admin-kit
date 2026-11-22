@@ -1765,7 +1765,10 @@ A file input reads as a `FormFile`, the file it holds, or `None` when it holds n
 the admin names after "Currently", with the link it draws to it. A file the user chose has the
 name the browser gives it, without its folders, and no `href`, since it is not uploaded yet. A
 file compares equal to a `(name, href)` pair, and is filled from a path, as text or a path
-object; a path that is no file raises `FileNotFoundError`:
+object; a path that is no file raises `FileNotFoundError`. `None` or `""` empties the field: it
+drops a chosen file and checks "Clear" for a stored one, after which the field reads as `None`,
+what the submission sends. The admin draws no "Clear" for a required field, so emptying one that
+holds a stored file raises `ValueError`. An image field has the same input and reads the same:
 
 ```python
 page = admin_ui.edit(manual)
@@ -1773,6 +1776,9 @@ assert page.fields["file"].value == ("manuals/a.pdf", "/media/manuals/a.pdf")   
 
 page.fields["file"].fill("tests/data/b.pdf")                                     # done
 assert page.fields["file"].value == ("b.pdf", None)                              # done
+
+page.fields["cover"].fill(None)                                                  # done
+assert page.fields["cover"].value is None                                        # done
 ```
 
 ---
@@ -3719,7 +3725,7 @@ Login page:
 * the package's own widget class for the admin's file inputs, with and without the
   "Currently" and "Clear" parts (done);
 * reading a file field as the file it holds now, a link to it, or `None` (done);
-* filling a file field from a path, and clearing an optional one with an empty value;
+* filling a file field from a path, and clearing an optional one with an empty value (done);
 * populating a file field from a model instance, whose stored file is uploaded again;
 * what a rejected form renders back: a browser never keeps a chosen file, so the field reads as
   it did before the submission.

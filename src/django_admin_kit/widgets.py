@@ -201,19 +201,23 @@ class SplitDateTimeWidget:
 
 
 class FileWidget:
-    """A file input, read as the ``FormFile`` it holds or ``None`` and filled with the file
-    at a path.
+    """A file input, read as the ``FormFile`` it holds or ``None``, filled with the file at a
+    path, and emptied with ``None`` or ``""``.
 
-    It takes the admin's file input with and without the "Currently" part it draws for a
-    stored file, and a plain file input of a project's own.
+    It takes the admin's file input with and without the "Currently" and "Clear" parts it
+    draws for a stored file, and a plain file input of a project's own.
     """
 
     def marker(self, field: FormField) -> str:
         return f'input[type="file"][name="{field.name}"]'
 
     def read(self, field: FormField) -> FormFile | None:
-        """The file chosen in the input, or else the stored one the admin shows, or else
-        ``None``: what a submission would send."""
+        """What a submission would send: ``None`` while "Clear" is checked, or else the
+        file chosen in the input, or else the stored one the admin shows, or else ``None``.
+        """
+        clear = self._clear(field)
+        if clear.count() and clear.is_checked():
+            return None
         # The browser gives a chosen file's name without its folders, and nothing else of
         # where it came from.
         chosen = self._input(field).evaluate(
@@ -221,26 +225,57 @@ class FileWidget:
         )
         if chosen is not None:
             return FormFile(chosen, None)
-        # The admin names a stored file after "Currently" with a link to it.
-        stored = field.native.locator("p.file-upload > a")
+        stored = self._stored(field)
         if stored.count():
-            return FormFile(text_of(stored.first), stored.first.get_attribute("href") or "")
+            return FormFile(text_of(stored), stored.get_attribute("href") or "")
         return None
 
     def fill(self, field: FormField, value: Any) -> None:
-        """Chooses the file at ``value``, a path as text or a path object."""
+        """Chooses the file at ``value``, a path as text or a path object, or empties the
+        field for ``None`` or ``""``: drops the chosen file and checks "Clear" when the field
+        holds a stored one."""
+        if value is None or value == "":
+            self._empty(field)
+            return
         if not isinstance(value, (str, os.PathLike)):
-            raise TypeError(f"The field {field.name!r} takes a path to a file, not {value!r}.")
+            raise TypeError(
+                f"The field {field.name!r} takes a path to a file, or None or '' to empty it, "
+                f"not {value!r}."
+            )
         path = os.fsdecode(value)
         # Checked here, so the error names the field rather than coming from the browser.
         if not os.path.isfile(path):
             raise FileNotFoundError(
                 f"The field {field.name!r} takes the file at a path, and {path!r} is no file."
             )
+        # Django rejects a form that uploads a file and clears the stored one at once.
+        clear = self._clear(field)
+        if clear.count():
+            clear.uncheck()
         self._input(field).set_input_files(path)
+
+    def _empty(self, field: FormField) -> None:
+        clear = self._clear(field)
+        # The admin draws no "Clear" for a required field, so its stored file stays whatever
+        # the user does.
+        if not clear.count() and self._stored(field).count():
+            raise ValueError(
+                f"The field {field.name!r} offers no Clear for the file it holds, so it cannot "
+                "be emptied. The admin draws none for a required field."
+            )
+        self._input(field).set_input_files([])
+        if clear.count():
+            clear.check()
 
     def _input(self, field: FormField) -> Locator:
         return field.native.locator(f'input[type="file"][name="{field.name}"]')
+
+    def _stored(self, field: FormField) -> Locator:
+        # The admin names a stored file after "Currently" with a link to it.
+        return field.native.locator("p.file-upload > a").first
+
+    def _clear(self, field: FormField) -> Locator:
+        return field.native.locator(f'input[type="checkbox"][name="{field.name}-clear"]')
 
 
 class TextWidget:

@@ -384,7 +384,9 @@ A file input reads as a `FormFile`, from `django_admin_kit.fields`, or as `None`
 no file. A stored file reads as the name the admin shows after "Currently" and the link it draws
 there. A file the test chose reads as its name, without folders, and no link, since it isn't
 uploaded yet. It's filled with the file at a path, as text or a `Path`, and a path that is no
-file raises `FileNotFoundError`.
+file raises `FileNotFoundError`. `None` or `""` empties it: a chosen file is dropped and "Clear"
+is checked for a stored one, so the field reads as `None`. A required field has no "Clear", so
+emptying one that holds a stored file raises `ValueError`. Image fields work the same way.
 
 ```python
 page = admin_ui.edit(manual)
@@ -393,6 +395,9 @@ assert page.fields["file"].value.name == "manuals/a.pdf"
 
 page.fields["file"].fill("tests/data/b.pdf")
 assert page.fields["file"].value == ("b.pdf", None)
+
+page.fields["cover"].fill(None)    # checks "Clear"
+assert page.fields["cover"].value is None
 ```
 
 **Filling a whole form in one call.** A dictionary carries the shared data and keywords carry

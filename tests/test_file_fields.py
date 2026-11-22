@@ -1,8 +1,9 @@
-"""The admin's file input: read as the file it holds, stored or chosen, or None, and filled
-with the file at a path."""
+"""The admin's file input: read as the file it holds, stored or chosen, or None, filled with
+the file at a path, and emptied with None or "". An image field has the same input."""
 
 import pytest
 from django.core.files.base import ContentFile
+from PIL import Image
 
 from project.shop.models import Manual
 
@@ -28,6 +29,24 @@ def wiring(tmp_path):
     path = tmp_path / "wiring.txt"
     path.write_bytes(WIRING)
     return path
+
+
+@pytest.fixture
+def diagram(tmp_path):
+    """An image on disk to choose, outside the media directory."""
+    path = tmp_path / "diagram.png"
+    Image.new("RGB", (1, 1)).save(path)
+    return path
+
+
+@pytest.fixture
+def covered_manual(db, diagram):
+    """A manual whose optional cover is stored, so its edit page offers to clear it."""
+    return Manual.objects.create(
+        title="Assembly",
+        file=ContentFile(ASSEMBLY, name="assembly.txt"),
+        cover=ContentFile(diagram.read_bytes(), name="front.png"),
+    )
 
 
 def test_an_empty_file_field_reads_as_none(admin_ui, superuser):
@@ -109,4 +128,85 @@ def test_a_value_that_is_no_path_cannot_fill_a_file_field(admin_ui, superuser):
     with pytest.raises(TypeError) as failure:
         page.fields["file"].fill(42)
 
-    assert failure.value.args[0] == "The field 'file' takes a path to a file, not 42."
+    assert failure.value.args[0] == (
+        "The field 'file' takes a path to a file, or None or '' to empty it, not 42."
+    )
+
+
+def test_a_stored_image_reads_as_its_name_and_the_link_the_admin_shows(
+    admin_ui, superuser, covered_manual
+):
+    admin_ui.login(superuser)
+
+    page = admin_ui.edit(covered_manual)
+
+    assert page.fields["cover"].value == ("covers/front.png", "/media/covers/front.png")
+
+
+def test_an_image_chosen_from_a_path_reads_as_its_name_without_a_link(admin_ui, superuser, diagram):
+    admin_ui.login(superuser)
+    page = admin_ui.create(Manual)
+
+    page.fields["cover"].fill(diagram)
+
+    assert page.fields["cover"].value == ("diagram.png", None)
+
+
+@pytest.mark.parametrize("empty", [None, ""], ids=["None", "empty text"])
+def test_an_empty_value_clears_the_stored_file_of_an_optional_field_once_saved(
+    admin_ui, superuser, covered_manual, empty
+):
+    admin_ui.login(superuser)
+    page = admin_ui.edit(covered_manual)
+
+    page.fields["cover"].fill(empty)
+
+    assert page.fields["cover"].value is None
+    page.save()
+    covered_manual.refresh_from_db()
+    assert not covered_manual.cover
+
+
+def test_a_file_chosen_after_clearing_replaces_the_stored_one_once_saved(
+    admin_ui, superuser, covered_manual, diagram
+):
+    """Django rejects a form that uploads a file and clears the stored one at once, so
+    choosing the file has to undo the clearing."""
+    admin_ui.login(superuser)
+    page = admin_ui.edit(covered_manual)
+    page.fields["cover"].fill(None)
+
+    page.fields["cover"].fill(diagram)
+
+    assert page.fields["cover"].value == ("diagram.png", None)
+    page.save()
+    covered_manual.refresh_from_db()
+    assert covered_manual.cover.name == "covers/diagram.png"
+
+
+@pytest.mark.parametrize("empty", [None, ""], ids=["None", "empty text"])
+def test_an_empty_value_cannot_empty_a_required_field_that_holds_a_stored_file(
+    admin_ui, superuser, manual, empty
+):
+    admin_ui.login(superuser)
+    page = admin_ui.edit(manual)
+
+    with pytest.raises(ValueError) as failure:
+        page.fields["file"].fill(empty)
+
+    assert failure.value.args[0] == (
+        "The field 'file' offers no Clear for the file it holds, so it cannot be emptied. "
+        "The admin draws none for a required field."
+    )
+    assert page.fields["file"].value == ("manuals/assembly.txt", "/media/manuals/assembly.txt")
+
+
+@pytest.mark.parametrize("empty", [None, ""], ids=["None", "empty text"])
+def test_an_empty_value_drops_a_file_chosen_on_a_create_page(admin_ui, superuser, wiring, empty):
+    admin_ui.login(superuser)
+    page = admin_ui.create(Manual)
+    page.fields["file"].fill(wiring)
+
+    page.fields["file"].fill(empty)
+
+    assert page.fields["file"].value is None

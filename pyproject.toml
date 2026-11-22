@@ -67,6 +67,8 @@ dev = [
     "pytest>=7.0",
     # Parallel runs are a promise the package makes, so the suite runs under -n in CI.
     "pytest-xdist>=3.0",
+    # The test project has an image field, which Django's checks refuse without Pillow.
+    "pillow>=10.0",
     "ruff>=0.14",
     "mypy>=1.11",
     "pre-commit>=3.5",
