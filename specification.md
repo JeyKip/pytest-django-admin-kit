@@ -2431,9 +2431,10 @@ so requiredness, choices, and rendered-only state remain inspectable after a fai
 (done)
 
 A browser never keeps a chosen file, so a file field comes back as the admin renders it: empty
-on a create page, and holding the stored file on an edit page. A "Clear" that was checked comes
-back checked from Django 5.0, so the field still reads as `None`, and unchecked before, so it
-reads as the stored file. (done)
+on a create page, and holding the stored file on an edit page from Django 4.2. Earlier versions
+put what was posted in the stored file's place, so the field shows none and reads as `None`. A
+"Clear" that was checked comes back checked from Django 5.0, so the field still reads as `None`;
+Django 4.2 renders it unchecked, so the field reads as the stored file. (done)
 
 ```python
 page = admin_ui.edit(manual)
@@ -2441,6 +2442,7 @@ page.populate(title="", file="tests/data/b.pdf")
 
 result = page.save()
 
+# Django 4.2 and later
 assert result.page.fields["file"].value == ("manuals/a.pdf", "/media/manuals/a.pdf")    # done
 ```
 

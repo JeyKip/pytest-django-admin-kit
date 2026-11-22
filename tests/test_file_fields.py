@@ -12,8 +12,10 @@ from project.shop.models import Manual
 
 ASSEMBLY = b"Fit the legs, then the top."
 WIRING = b"Brown is live, blue is neutral."
-# Django 5.0 renders a rejected form with "Clear" still checked where it was; earlier versions
-# render it unchecked.
+# Django 4.2 renders a rejected form with the stored file; earlier versions put what was
+# posted in its place, so the form shows no stored file. Django 5.0 also keeps a checked "Clear"
+# checked; 4.2 renders it unchecked.
+SHOWS_STORED = django.VERSION >= (4, 2)
 KEEPS_CLEAR = django.VERSION >= (5, 0)
 
 
@@ -308,10 +310,8 @@ def test_a_file_chosen_on_an_edit_page_reads_as_the_stored_one_once_the_form_is_
     result = page.save()
 
     assert not result.success
-    assert result.page.fields["file"].value == (
-        "manuals/assembly.txt",
-        "/media/manuals/assembly.txt",
-    )
+    stored = ("manuals/assembly.txt", "/media/manuals/assembly.txt")
+    assert result.page.fields["file"].value == (stored if SHOWS_STORED else None)
 
 
 def test_a_cleared_file_reads_as_the_admin_renders_clear_once_the_form_is_rejected(
@@ -325,4 +325,6 @@ def test_a_cleared_file_reads_as_the_admin_renders_clear_once_the_form_is_reject
 
     assert not result.success
     stored = ("covers/front.png", "/media/covers/front.png")
-    assert result.page.fields["cover"].value == (None if KEEPS_CLEAR else stored)
+    assert result.page.fields["cover"].value == (
+        stored if SHOWS_STORED and not KEEPS_CLEAR else None
+    )
