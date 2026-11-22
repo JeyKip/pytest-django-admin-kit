@@ -3743,7 +3743,9 @@ Login page:
 
 ---
 
-## 1.3.0: File and image fields
+## 1.3.0: File and image fields, relational controls
+
+File and image fields:
 
 * the package's own widget class for the admin's file inputs, with and without the
   "Currently" and "Clear" parts (done);
@@ -3752,6 +3754,15 @@ Login page:
 * populating a file field from a model instance, whose stored file is uploaded again (done);
 * what a rejected form renders back: a browser never keeps a chosen file, so the field reads as
   it did before the submission (done).
+
+Relational controls:
+
+* many-to-many fields as horizontal and vertical selectors (`filter_horizontal` and
+  `filter_vertical`);
+* autocomplete fields;
+* raw-ID fields;
+* related-object popups: adding, changing and choosing a related object from the form;
+* related-object automatic population, building related objects from a source.
 
 ---
 
@@ -3782,18 +3793,7 @@ One-to-many relationships are edited through inlines, so this release covers the
 
 ---
 
-## 1.5.0: Relational controls
-
-* many-to-many fields as horizontal and vertical selectors (`filter_horizontal` and
-  `filter_vertical`);
-* autocomplete fields;
-* raw-ID fields;
-* related-object popups: adding, changing and choosing a related object from the form;
-* related-object automatic population, building related objects from a source.
-
----
-
-## 1.6.0: Editable changelists and date hierarchy
+## 1.5.0: Editable changelists and date hierarchy
 
 * `list_editable`: reading and filling the editable cells of a changelist, and saving them,
   with their validation errors;
