@@ -8,13 +8,17 @@ class: ``read`` and ``fill`` get the whole field and find their own elements in 
 from __future__ import annotations
 
 import datetime
+import mimetypes
+import os
 from typing import TYPE_CHECKING, Any, Iterable, Protocol
 
+from django.core.files import File
 from django.db.models import Model
+from django.db.models.fields.files import FieldFile
 from django.utils import timezone
-from playwright.sync_api import Locator
+from playwright.sync_api import FilePayload, Locator
 
-from .fields import FieldChoice
+from .fields import FieldChoice, FormFile
 from .rendered import text_of
 
 if TYPE_CHECKING:
@@ -199,6 +203,112 @@ class SplitDateTimeWidget:
         return field.native.locator(f'input[name="{field.name}_{index}"]')
 
 
+class FileWidget:
+    """A file input, read as the ``FormFile`` it holds or ``None``, filled with the file at a
+    path or with a Django ``File``, and emptied with ``None`` or ``""``.
+
+    It takes the admin's file input with and without the "Currently" and "Clear" parts it
+    draws for a stored file, and a plain file input of a project's own.
+    """
+
+    def marker(self, field: FormField) -> str:
+        return f'input[type="file"][name="{field.name}"]'
+
+    def read(self, field: FormField) -> FormFile | None:
+        """What a submission would send: ``None`` while "Clear" is checked, or else the
+        file chosen in the input, or else the stored one the admin shows, or else ``None``.
+        """
+        clear = self._clear(field)
+        if clear.count() and clear.is_checked():
+            return None
+        # The browser gives a chosen file's name without its folders, and nothing else of
+        # where it came from.
+        chosen = self._input(field).evaluate(
+            "input => input.files.length ? input.files[0].name : null"
+        )
+        if chosen is not None:
+            return FormFile(chosen, None)
+        stored = self._stored(field)
+        if stored.count():
+            return FormFile(text_of(stored), stored.get_attribute("href") or "")
+        return None
+
+    def fill(self, field: FormField, value: Any) -> None:
+        """Chooses the file at ``value``, a path as text or a path object, or uploads the
+        content of a Django ``File``, such as the ``FieldFile`` a model instance holds, under
+        its name without folders. ``None``, ``""`` and a ``FieldFile`` with no file empty the
+        field: they drop the chosen file and check "Clear" when the field holds a stored
+        one."""
+        if value is None or value == "" or (isinstance(value, FieldFile) and not value):
+            self._empty(field)
+            return
+        if isinstance(value, File):
+            self._choose(field, self._payload(field, value))
+            return
+        if not isinstance(value, (str, os.PathLike)):
+            raise TypeError(
+                f"The field {field.name!r} takes a path to a file, a Django File, or None or "
+                f"'' to empty it, not {value!r}."
+            )
+        path = os.fsdecode(value)
+        # Checked here, so the error names the field rather than coming from the browser.
+        if not os.path.isfile(path):
+            raise FileNotFoundError(
+                f"The field {field.name!r} takes the file at a path, and {path!r} is no file."
+            )
+        self._choose(field, path)
+
+    def _choose(self, field: FormField, file: str | FilePayload) -> None:
+        # Django rejects a form that uploads a file and clears the stored one at once.
+        clear = self._clear(field)
+        if clear.count():
+            clear.uncheck()
+        self._input(field).set_input_files(file)
+
+    def _payload(self, field: FormField, file: File) -> FilePayload:
+        """The content of ``file`` to upload, read through the file itself, so a file kept in
+        any storage is uploaded, not only one on the local disk."""
+        if not file.name:
+            raise ValueError(
+                f"The field {field.name!r} takes a file with a name to upload it under, and the "
+                f"{type(file).__name__} given has none."
+            )
+        name = os.path.basename(file.name)
+        # A file the caller has open stays open; one opened here is closed again.
+        closed = file.closed
+        file.open("rb")
+        try:
+            content = file.read()
+        finally:
+            if closed:
+                file.close()
+        mime_type = mimetypes.guess_type(name)[0] or "application/octet-stream"
+        return {"name": name, "mimeType": mime_type, "buffer": content}
+
+    def _empty(self, field: FormField) -> None:
+        clear = self._clear(field)
+        # The admin draws no "Clear" for a required field, so its stored file stays whatever
+        # the user does.
+        if not clear.count() and self._stored(field).count():
+            raise ValueError(
+                f"The field {field.name!r} offers no Clear for the file it holds, so it cannot "
+                "be emptied. The admin draws none for a required field."
+            )
+        self._input(field).set_input_files([])
+        if clear.count():
+            clear.check()
+
+    def _input(self, field: FormField) -> Locator:
+        return field.native.locator(f'input[type="file"][name="{field.name}"]')
+
+    def _stored(self, field: FormField) -> Locator:
+        # The admin names a stored file after "Currently" with a link to it.
+        return field.native.locator("p.file-upload > a").first
+
+    def _clear(self, field: FormField) -> Locator:
+        return field.native.locator(f'input[type="checkbox"][name="{field.name}-clear"]')
+
+
 class TextWidget:
     """Whatever one control carries the field's name, read and filled as text."""
 
@@ -234,6 +344,8 @@ class Widgets:
             SelectMultipleWidget(),
             SelectWidget(),
             SplitDateTimeWidget(),
+            # Before the text control, whose marker matches a file input as well.
+            FileWidget(),
             TextWidget(),
         )
 

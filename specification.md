@@ -1760,6 +1760,31 @@ assert page.fields["published_at"].value == ("2026-01-15", "09:30:00")     # don
 page.fields["published_at"].fill(("2026-11-03", "11:25:48"))               # done
 ```
 
+A file input reads as a `FormFile`, the file it holds, or `None` when it holds none. A
+`FormFile` has the file's `name` and its `href`, split as a link's is. A stored file is the one
+the admin names after "Currently", with the link it draws to it. A file the user chose has the
+name the browser gives it, without its folders, and no `href`, since it is not uploaded yet. A
+file compares equal to a `(name, href)` pair, and is filled from a path, as text or a path
+object; a path that is no file raises `FileNotFoundError`. `None` or `""` empties the field: it
+drops a chosen file and checks "Clear" for a stored one, after which the field reads as `None`,
+what the submission sends. The admin draws no "Clear" for a required field, so emptying one that
+holds a stored file raises `ValueError`. A Django `File`, such as the `FieldFile` a model
+instance holds, fills the field with its content, uploaded under its name without folders and
+read through the file itself, so a file in any storage is uploaded; a `FieldFile` with no file
+empties the field, and a `File` without a name raises `ValueError`. An image field has the same
+input and reads the same:
+
+```python
+page = admin_ui.edit(manual)
+assert page.fields["file"].value == ("manuals/a.pdf", "/media/manuals/a.pdf")    # done
+
+page.fields["file"].fill("tests/data/b.pdf")                                     # done
+assert page.fields["file"].value == ("b.pdf", None)                              # done
+
+page.fields["cover"].fill(None)                                                  # done
+assert page.fields["cover"].value is None                                        # done
+```
+
 ---
 
 ## 13.3 Choices (done)
@@ -2034,6 +2059,9 @@ instance picks that option. (done)
 
 A many-to-many field is filled with the related objects of a saved instance. An unsaved one has
 none yet, so the field is left as rendered. (done)
+
+A file field is filled with the file the instance stores, uploaded again, so the new object gets
+a copy of it. One that stores none leaves the field empty. (done)
 
 This does not imply that related objects or object graphs must automatically be serialized in
 1.0.0.
@@ -2401,6 +2429,22 @@ The re-rendered form is the result's page (section 16.4), the same page object t
 submitted, read as it is now (section 3.9). It exposes the full field API of sections 10 to 13,
 so requiredness, choices, and rendered-only state remain inspectable after a failed submission.
 (done)
+
+A browser never keeps a chosen file, so a file field comes back as the admin renders it: empty
+on a create page, and holding the stored file on an edit page from Django 4.2. Earlier versions
+put what was posted in the stored file's place, so the field shows none and reads as `None`. A
+"Clear" that was checked comes back checked from Django 5.0, so the field still reads as `None`;
+Django 4.2 renders it unchecked, so the field reads as the stored file. (done)
+
+```python
+page = admin_ui.edit(manual)
+page.populate(title="", file="tests/data/b.pdf")
+
+result = page.save()
+
+# Django 4.2 and later
+assert result.page.fields["file"].value == ("manuals/a.pdf", "/media/manuals/a.pdf")    # done
+```
 
 ---
 
@@ -2843,7 +2887,8 @@ AdminSession
 │
 ├── Fieldset
 ├── FormField
-│   └── FieldChoice
+│   ├── FieldChoice
+│   └── FormFile
 ├── actions              (a set of action names, section 16.1)
 ├── Row
 ├── Cell
@@ -2860,8 +2905,8 @@ The exact Python class names are implementation details, but the public concepts
 recognizable and stable.
 
 Every type above that stands for something on the page exposes a native handle, as described
-in section 3.6. `AdminUrls`, `FieldChoice` and `actions` are values with no element behind
-them, so they have none. (done)
+in section 3.6. `AdminUrls`, `FieldChoice`, `FormFile` and `actions` are values with no
+element behind them, so they have none. (done)
 
 A `SubmissionResult` reports on a submission rather than standing for anything on the page, so
 it has none either; the page it carries has one. (done)
@@ -3366,7 +3411,7 @@ which runs for every field the package reads or fills, does not read the page.
 
 The package's own controls are widget classes of the same kind, public so that a project may
 build on one: `CheckboxWidget`, `RadioWidget`, `SelectMultipleWidget`, `SelectWidget`,
-`SplitDateTimeWidget` and `TextWidget`, tried in that order, the last reading and filling any
+`SplitDateTimeWidget`, `FileWidget` and `TextWidget`, tried in that order, the last reading and filling any
 single control that carries the field's name as text. They are importable from
 `django_admin_kit.widgets`.
 
@@ -3701,12 +3746,12 @@ Login page:
 ## 1.3.0: File and image fields
 
 * the package's own widget class for the admin's file inputs, with and without the
-  "Currently" and "Clear" parts;
-* reading a file field as the file it holds now, a link to it, or `None`;
-* filling a file field from a path, and clearing an optional one with an empty value;
-* populating a file field from a model instance, whose stored file is uploaded again;
+  "Currently" and "Clear" parts (done);
+* reading a file field as the file it holds now, a link to it, or `None` (done);
+* filling a file field from a path, and clearing an optional one with an empty value (done);
+* populating a file field from a model instance, whose stored file is uploaded again (done);
 * what a rejected form renders back: a browser never keeps a chosen file, so the field reads as
-  it did before the submission.
+  it did before the submission (done).
 
 ---
 

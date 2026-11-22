@@ -81,3 +81,17 @@ class Category(models.Model):
 
     def __str__(self):
         return self.name
+
+
+class Manual(models.Model):
+    """A model with a file, so the suite reads and fills the admin's file input. The file is
+    required, so an edit page shows the stored one without a way to clear it, and the title
+    is too, so leaving it empty gets a form rejected. The cover is an optional image, so an
+    edit page offers to clear it, and image fields are shown to work like file fields."""
+
+    title = models.CharField(max_length=100)
+    file = models.FileField(upload_to="manuals/")
+    cover = models.ImageField(upload_to="covers/", blank=True)
+
+    def __str__(self):
+        return self.title

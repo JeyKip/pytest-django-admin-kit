@@ -380,6 +380,28 @@ A date-time, which the admin draws as a date input and a time input, reads as th
 a `(date, time)` pair whose halves may also be text or `None`, or from `None`, which empties
 both.
 
+A file input reads as a `FormFile`, from `django_admin_kit.fields`, or as `None` while it holds
+no file. A stored file reads as the name the admin shows after "Currently" and the link it draws
+there. A file the test chose reads as its name, without folders, and no link, since it isn't
+uploaded yet. It's filled with the file at a path, as text or a `Path`, and a path that is no
+file raises `FileNotFoundError`. `None` or `""` empties it: a chosen file is dropped and "Clear"
+is checked for a stored one, so the field reads as `None`. A required field has no "Clear", so
+emptying one that holds a stored file raises `ValueError`. A Django `File`, such as
+`manual.file` or a `ContentFile` with a name, uploads its content under its name without folders.
+Image fields work the same way.
+
+```python
+page = admin_ui.edit(manual)
+assert page.fields["file"].value == ("manuals/a.pdf", "/media/manuals/a.pdf")
+assert page.fields["file"].value.name == "manuals/a.pdf"
+
+page.fields["file"].fill("tests/data/b.pdf")
+assert page.fields["file"].value == ("b.pdf", None)
+
+page.fields["cover"].fill(None)    # checks "Clear"
+assert page.fields["cover"].value is None
+```
+
 **Filling a whole form in one call.** A dictionary carries the shared data and keywords carry
 the values this one test is about. Fields that are named nowhere keep the values the admin
 rendered them with.
@@ -416,6 +438,7 @@ worth of data:
 ```python
 page.populate(product)                      # its category picks that option
 page.populate(product, name="Renamed")      # everything it has, with one value replaced
+page.populate(manual)                       # its stored files are uploaded again
 page.populate(SimpleNamespace(name="Widget", price="19.99"))
 ```
 
@@ -495,8 +518,8 @@ such as `text=`, belongs in `read` and `fill`. To combine conditions, use `:has(
 `':scope:has(input[name="image_cache_key"]) input[type="file"]'`.
 
 Your classes are tried first, in the order you list them, then the package's own:
-`CheckboxWidget`, `RadioWidget`, `SelectMultipleWidget`, `SelectWidget`, `SplitDateTimeWidget` and
-`TextWidget`, from `django_admin_kit.widgets`. Two rules follow from that:
+`CheckboxWidget`, `RadioWidget`, `SelectMultipleWidget`, `SelectWidget`, `SplitDateTimeWidget`,
+`FileWidget` and `TextWidget`, from `django_admin_kit.widgets`. Two rules follow from that:
 
 - A marker matches what is particular to its widget. A class marked by `input[type="file"]`
   would take every file field in the project.
@@ -609,6 +632,12 @@ assert result.page.errors.fields == {
     "released_on": ["This field is required."],
 }
 ```
+
+A rejected form comes back without any file the test chose, as a browser never keeps one, so a
+file field reads as the admin renders it again. On a create page that's `None`. On an edit page
+it's the stored file from Django 4.2, and `None` before, since older versions show no stored file
+on a rejected form. A checked "Clear" stays checked from Django 5.0, so that field still reads as
+`None`; Django 4.2 unchecks it.
 
 A page the admin has not rejected shows no errors, so `assert not page.errors` holds on one
 that was never submitted. The notice's wording depends on how many errors there are, so a test

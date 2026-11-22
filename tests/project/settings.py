@@ -68,6 +68,10 @@ PASSWORD_HASHERS = ["django.contrib.auth.hashers.MD5PasswordHasher"]
 
 STATIC_URL = "/static/"
 
+# Where the admin links a stored file. The tests that upload one point MEDIA_ROOT at a
+# directory of their own.
+MEDIA_URL = "/media/"
+
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 # Set explicitly: the default flipped to True in Django 5.0, and the package's

@@ -41,6 +41,8 @@ package = "wheel"
 # ever added, this would have to go: the tag would become interpreter-specific.
 wheel_build_env = ".pkg"
 deps = [
+    # The test project has an image field, which Django's checks refuse without Pillow.
+    "pillow",
     { replace = "if", condition = "factor.dj32", then = ["django>=3.2,<4.0"], extend = true },
     { replace = "if", condition = "factor.dj40", then = ["django>=4.0,<4.1"], extend = true },
     { replace = "if", condition = "factor.dj41", then = ["django>=4.1,<4.2"], extend = true },
