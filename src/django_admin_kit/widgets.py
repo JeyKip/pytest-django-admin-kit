@@ -8,13 +8,14 @@ class: ``read`` and ``fill`` get the whole field and find their own elements in 
 from __future__ import annotations
 
 import datetime
+import os
 from typing import TYPE_CHECKING, Any, Iterable, Protocol
 
 from django.db.models import Model
 from django.utils import timezone
 from playwright.sync_api import Locator
 
-from .fields import FieldChoice
+from .fields import FieldChoice, FormFile
 from .rendered import text_of
 
 if TYPE_CHECKING:
@@ -199,6 +200,49 @@ class SplitDateTimeWidget:
         return field.native.locator(f'input[name="{field.name}_{index}"]')
 
 
+class FileWidget:
+    """A file input, read as the ``FormFile`` it holds or ``None`` and filled with the file
+    at a path.
+
+    It takes the admin's file input with and without the "Currently" part it draws for a
+    stored file, and a plain file input of a project's own.
+    """
+
+    def marker(self, field: FormField) -> str:
+        return f'input[type="file"][name="{field.name}"]'
+
+    def read(self, field: FormField) -> FormFile | None:
+        """The file chosen in the input, or else the stored one the admin shows, or else
+        ``None``: what a submission would send."""
+        # The browser gives a chosen file's name without its folders, and nothing else of
+        # where it came from.
+        chosen = self._input(field).evaluate(
+            "input => input.files.length ? input.files[0].name : null"
+        )
+        if chosen is not None:
+            return FormFile(chosen, None)
+        # The admin names a stored file after "Currently" with a link to it.
+        stored = field.native.locator("p.file-upload > a")
+        if stored.count():
+            return FormFile(text_of(stored.first), stored.first.get_attribute("href") or "")
+        return None
+
+    def fill(self, field: FormField, value: Any) -> None:
+        """Chooses the file at ``value``, a path as text or a path object."""
+        if not isinstance(value, (str, os.PathLike)):
+            raise TypeError(f"The field {field.name!r} takes a path to a file, not {value!r}.")
+        path = os.fsdecode(value)
+        # Checked here, so the error names the field rather than coming from the browser.
+        if not os.path.isfile(path):
+            raise FileNotFoundError(
+                f"The field {field.name!r} takes the file at a path, and {path!r} is no file."
+            )
+        self._input(field).set_input_files(path)
+
+    def _input(self, field: FormField) -> Locator:
+        return field.native.locator(f'input[type="file"][name="{field.name}"]')
+
+
 class TextWidget:
     """Whatever one control carries the field's name, read and filled as text."""
 
@@ -234,6 +278,8 @@ class Widgets:
             SelectMultipleWidget(),
             SelectWidget(),
             SplitDateTimeWidget(),
+            # Before the text control, whose marker matches a file input as well.
+            FileWidget(),
             TextWidget(),
         )
 

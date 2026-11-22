@@ -8,6 +8,7 @@ every field has whether the user may fill it or only read it.
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, Callable, Dict
+from urllib.parse import SplitResult, urlsplit
 
 from django.contrib.admin import ModelAdmin
 from django.utils import translation
@@ -53,6 +54,49 @@ class FieldChoice:
 
     def __repr__(self) -> str:
         return f"FieldChoice({self._value!r}, {self._label!r})"
+
+
+class FormFile:
+    """The file a file field holds: its ``name``, and its ``href`` when the server stores it.
+
+    A stored file has the name the admin shows after "Currently" and the link it draws to
+    the file there, as a ``SplitResult``, the way ``Link.href`` is. A file the user chose
+    but has not uploaded yet has the name the browser gives it, without its folders, and
+    ``href`` ``None``.
+
+    A file compares equal to another file and to a ``(name, href)`` pair, as a tuple or
+    a list, with ``href`` given as a string, already split, or ``None``. A bare string is
+    only one part, so a test that cares about the name says so:
+    ``field.value.name == "manuals/a.pdf"``.
+    """
+
+    def __init__(self, name: str, href: str | SplitResult | None) -> None:
+        self._name = name
+        self._href = urlsplit(href) if isinstance(href, str) else href
+
+    @property
+    def name(self) -> str:
+        return self._name
+
+    @property
+    def href(self) -> SplitResult | None:
+        return self._href
+
+    def __eq__(self, other: object) -> bool:
+        if isinstance(other, FormFile):
+            return (self._name, self._href) == (other._name, other._href)
+        if isinstance(other, (tuple, list)) and len(other) == 2:
+            name, href = other
+            if isinstance(name, str) and (href is None or isinstance(href, (str, SplitResult))):
+                return self == FormFile(name, href)
+        return NotImplemented
+
+    def __hash__(self) -> int:
+        return hash((self._name, self._href))
+
+    def __repr__(self) -> str:
+        href = None if self._href is None else self._href.geturl()
+        return f"FormFile({self._name!r}, {href!r})"
 
 
 class FormField:
@@ -152,9 +196,10 @@ class FormField:
         """What the field holds right now, as the user reads it.
 
         A control is read by its widget class: a checkbox reads as ``True`` or
-        ``False``, a select as the ``FieldChoice`` chosen, anything else as the text
-        typed into it. A field the user may only read is read as a changelist cell is:
-        its text, or the boolean the admin drew as an icon. A control no widget class
+        ``False``, a select as the ``FieldChoice`` chosen, a file input as the
+        ``FormFile`` it holds or ``None``, anything else as the text typed into it. A
+        field the user may only read is read as a changelist cell is: its text, or the
+        boolean the admin drew as an icon. A control no widget class
         recognizes raises ``LookupError``.
         """
         self._check()
@@ -185,8 +230,9 @@ class FormField:
         """Put ``value`` into the field, the way a user would.
 
         The field's widget class fills it: a checkbox is checked or cleared by the
-        value's truth, a select is given the option that stands for the value, and every
-        other control is filled with the value's text, ``None`` emptying it. A field the
+        value's truth, a select is given the option that stands for the value, a file
+        input is given the file at a path, and every other control is filled with the
+        value's text, ``None`` emptying it. A field the
         user may only read has nothing to fill, and a control no widget class recognizes
         cannot be filled: both raise ``LookupError``. A field in a collapsed fieldset is
         filled once the fieldset is opened, as the user has to open it first.

@@ -7,6 +7,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+### Added
+
+- Read a file field as a `FormFile` with the file's `name` and `href`, or `None`, and fill it from a path, through a built-in `FileWidget`. A file input read as `""` before.
+
 ## [1.2.0] - 2026-11-19
 
 ### Added
