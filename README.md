@@ -633,6 +633,11 @@ assert result.page.errors.fields == {
 }
 ```
 
+A rejected form comes back without any file the test chose, as a browser never keeps one. A file
+field then reads as `None` on a create page and as the stored file on an edit page. A checked
+"Clear" stays checked from Django 5.0, so that field still reads as `None`; earlier versions
+uncheck it.
+
 A page the admin has not rejected shows no errors, so `assert not page.errors` holds on one
 that was never submitted. The notice's wording depends on how many errors there are, so a test
 that only cares that the form was rejected asserts `result.page.errors.banner` is there.

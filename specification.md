@@ -2430,6 +2430,20 @@ submitted, read as it is now (section 3.9). It exposes the full field API of sec
 so requiredness, choices, and rendered-only state remain inspectable after a failed submission.
 (done)
 
+A browser never keeps a chosen file, so a file field comes back as the admin renders it: empty
+on a create page, and holding the stored file on an edit page. A "Clear" that was checked comes
+back checked from Django 5.0, so the field still reads as `None`, and unchecked before, so it
+reads as the stored file. (done)
+
+```python
+page = admin_ui.edit(manual)
+page.populate(title="", file="tests/data/b.pdf")
+
+result = page.save()
+
+assert result.page.fields["file"].value == ("manuals/a.pdf", "/media/manuals/a.pdf")    # done
+```
+
 ---
 
 # 20. Validation Error Model (done)
@@ -3735,7 +3749,7 @@ Login page:
 * filling a file field from a path, and clearing an optional one with an empty value (done);
 * populating a file field from a model instance, whose stored file is uploaded again (done);
 * what a rejected form renders back: a browser never keeps a chosen file, so the field reads as
-  it did before the submission.
+  it did before the submission (done).
 
 ---
 

@@ -12,6 +12,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - Read a file field as a `FormFile` with the file's `name` and `href`, or `None`, and fill it from a path, through a built-in `FileWidget`. A file input read as `""` before.
 - Empty a file field with `None` or `""`, which checks "Clear" for a stored file, so the field reads as `None`. A required field holding a stored file raises `ValueError`.
 - Fill a file field from a Django `File`, which uploads its content, so `populate(instance)` uploads the instance's stored files again.
+- Document how a file field reads after the admin rejects its form: without the chosen file, as the admin renders it again.
 
 ## [1.2.0] - 2026-11-19
 

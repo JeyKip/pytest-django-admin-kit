@@ -1,7 +1,9 @@
 """The admin's file input: read as the file it holds, stored or chosen, or None, filled with
 the file at a path or a Django File, and emptied with None or "". An image field has the same
-input."""
+input. A form the admin rejects comes back without the chosen file, as a browser never keeps
+one."""
 
+import django
 import pytest
 from django.core.files.base import ContentFile
 from PIL import Image
@@ -10,6 +12,9 @@ from project.shop.models import Manual
 
 ASSEMBLY = b"Fit the legs, then the top."
 WIRING = b"Brown is live, blue is neutral."
+# Django 5.0 renders a rejected form with "Clear" still checked where it was; earlier versions
+# render it unchecked.
+KEEPS_CLEAR = django.VERSION >= (5, 0)
 
 
 @pytest.fixture(autouse=True)
@@ -278,3 +283,46 @@ def test_populating_from_an_instance_without_a_file_leaves_the_field_empty(
     page.populate(manual)
 
     assert page.fields["cover"].value is None
+
+
+def test_a_file_chosen_on_a_create_page_reads_as_none_once_the_form_is_rejected(
+    admin_ui, superuser, wiring
+):
+    admin_ui.login(superuser)
+    page = admin_ui.create(Manual)
+    page.fields["file"].fill(wiring)
+
+    result = page.save()
+
+    assert not result.success
+    assert result.page.fields["file"].value is None
+
+
+def test_a_file_chosen_on_an_edit_page_reads_as_the_stored_one_once_the_form_is_rejected(
+    admin_ui, superuser, manual, wiring
+):
+    admin_ui.login(superuser)
+    page = admin_ui.edit(manual)
+    page.populate(title="", file=wiring)
+
+    result = page.save()
+
+    assert not result.success
+    assert result.page.fields["file"].value == (
+        "manuals/assembly.txt",
+        "/media/manuals/assembly.txt",
+    )
+
+
+def test_a_cleared_file_reads_as_the_admin_renders_clear_once_the_form_is_rejected(
+    admin_ui, superuser, covered_manual
+):
+    admin_ui.login(superuser)
+    page = admin_ui.edit(covered_manual)
+    page.populate(title="", cover=None)
+
+    result = page.save()
+
+    assert not result.success
+    stored = ("covers/front.png", "/media/covers/front.png")
+    assert result.page.fields["cover"].value == (None if KEEPS_CLEAR else stored)
