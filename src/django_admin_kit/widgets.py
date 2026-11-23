@@ -31,6 +31,47 @@ if TYPE_CHECKING:
 # `FilteredSelectMultipleWidget` takes it, and the multiple select never does.
 _FILTER_WIDGET = ".filtered, .selectfilter, .selectfilterstacked"
 
+# Every option the admin's autocomplete view offers a box for an empty search, as
+# `[value, label]` pairs, page by page. Asked from inside the page, so it carries the session.
+_AUTOCOMPLETE_OPTIONS = """async select => {
+    const options = [];
+    for (let page = 1; ; page++) {
+        const query = new URLSearchParams({
+            term: "",
+            app_label: select.dataset.appLabel,
+            model_name: select.dataset.modelName,
+            field_name: select.dataset.fieldName,
+            page,
+        });
+        const response = await fetch(`${select.getAttribute("data-ajax--url")}?${query}`);
+        if (!response.ok) {
+            throw new Error(`The admin's autocomplete view answered ${response.status}.`);
+        }
+        const answer = await response.json();
+        options.push(...answer.results.map(result => [result.id, result.text]));
+        if (!answer.pagination.more) {
+            return options;
+        }
+    }
+}"""
+
+# Leaves exactly the `[value, label]` pairs given chosen in an autocomplete box, in that order,
+# as select2 documents it: an option per value, then `change`. The blank option Django draws
+# in an optional box stays, so the box can be emptied again.
+_CHOOSE_AUTOCOMPLETE_OPTIONS = """(select, chosen) => {
+    const blank = [...select.options].filter(option => option.value === "");
+    select.replaceChildren(...blank);
+    blank.forEach(option => (option.selected = false));
+    for (const [value, label] of chosen) {
+        if (value === "") {
+            blank[0].selected = true;
+        } else {
+            select.append(new Option(label, value, true, true));
+        }
+    }
+    django.jQuery(select).trigger("change");
+}"""
+
 
 class Widget(Protocol):
     """What the package asks of a widget class. ``choices(field)`` is optional."""
@@ -56,6 +97,62 @@ class CheckboxWidget:
 
     def _control(self, field: FormField) -> Locator:
         return field.native.locator(f'input[type="checkbox"][name="{field.name}"]')
+
+
+class AutocompleteWidget:
+    """The box the admin draws for a field named in ``autocomplete_fields``, read and filled
+    as a select is: as the ``FieldChoice`` chosen, or as the list of them for a many-to-many
+    field.
+
+    The box holds only the options chosen. The others come from the admin's autocomplete
+    view as the user types, so ``choices`` asks that view for every option it offers, and
+    ``fill`` puts the options wanted in the box the way select2, the script behind it,
+    documents.
+    """
+
+    def marker(self, field: FormField) -> str:
+        return f'select.admin-autocomplete[name="{field.name}"]'
+
+    def read(self, field: FormField) -> FieldChoice | list[FieldChoice] | None:
+        chosen = [
+            _choice(option) for option in self._control(field).locator("option:checked").all()
+        ]
+        if self._multiple(field):
+            return chosen
+        # Django draws no option at all in a required box with nothing chosen, so it reads as
+        # radio buttons with none checked do.
+        return chosen[0] if chosen else None
+
+    def fill(self, field: FormField, value: Any) -> None:
+        """Chooses the option for ``value``, written as for a select, or for a many-to-many
+        field exactly the options for a list of values, in the order given. ``None`` empties
+        the box: it picks the blank option of an optional one, and clears a many-to-many one.
+        """
+        choices = self.choices(field)
+        if self._multiple(field):
+            # A value given twice is chosen once, as a multiple select chooses it.
+            wanted = list(
+                dict.fromkeys(_option_for(field, choices, item) for item in _values(field, value))
+            )
+        else:
+            wanted = [_option_for(field, choices, value)]
+        self._control(field).evaluate(
+            _CHOOSE_AUTOCOMPLETE_OPTIONS, [[option.value, option.label] for option in wanted]
+        )
+
+    def choices(self, field: FormField) -> list[FieldChoice]:
+        """Every option the admin's autocomplete view offers for an empty search, in its
+        order, after the blank option Django draws in an optional box."""
+        control = self._control(field)
+        blank = [_choice(option) for option in control.locator('option[value=""]').all()]
+        offered = control.evaluate(_AUTOCOMPLETE_OPTIONS)
+        return [*blank, *(FieldChoice(value, label) for value, label in offered)]
+
+    def _multiple(self, field: FormField) -> bool:
+        return bool(self._control(field).evaluate("select => select.multiple"))
+
+    def _control(self, field: FormField) -> Locator:
+        return field.native.locator(f'select.admin-autocomplete[name="{field.name}"]')
 
 
 class SelectWidget:
@@ -393,6 +490,8 @@ class Widgets:
             RadioWidget(),
             # Before the multiple select, which never takes these lists anyway.
             FilteredSelectMultipleWidget(),
+            # Before the selects, whose markers match an autocomplete box as well.
+            AutocompleteWidget(),
             # Before the select, whose marker matches a multiple select as well.
             SelectMultipleWidget(),
             SelectWidget(),

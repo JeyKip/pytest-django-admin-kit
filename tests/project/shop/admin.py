@@ -348,8 +348,10 @@ admin.site.register(Manual)
 
 
 # Many-to-many fields drawn as the two lists the admin's script builds: side by side for the
-# categories, stacked for the sections.
+# categories, stacked for the sections. The lead and the add-ons are searched for, one product
+# and several, which the product admin's search fields allow.
 @admin.register(Bundle)
 class BundleAdmin(admin.ModelAdmin):
     filter_horizontal = ("categories",)
     filter_vertical = ("sections",)
+    autocomplete_fields = ("lead", "add_ons")

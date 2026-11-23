@@ -1854,6 +1854,23 @@ assert field.value == [("3", "Toys"), ("1", "Garden")]                   # done
 assert field.choices == [("2", "Tools"), ("3", "Toys"), ("1", "Garden")]  # done
 ```
 
+The box the admin draws for a field named in `autocomplete_fields` is read and filled as a
+select is, or as a multiple select for a many-to-many field. It holds only the options chosen,
+and the others come from the admin's autocomplete view as the user types, so `choices` are every
+option that view offers for an empty search, page by page, after the blank option of an optional
+box, whose label is empty where a select's reads `---------`. `fill` takes any of those choices,
+whether the box held an option for it or not, and a many-to-many box reads the values in the
+order given:
+
+```python
+field = page.fields["lead"]
+
+assert field.value == ("", "")                                   # done
+assert field.choices == [("", ""), ("1", "Bolt"), ("2", "Nut")]  # done
+field.fill(nut)
+assert field.value == ("2", "Nut")                               # done
+```
+
 Radio buttons, which the admin draws for a field named in `radio_fields`, are read, filled and
 listed as a select is. Their value is `None` while none is checked, and `None` fills the blank
 option where the admin draws one, labeled "None":
@@ -3427,11 +3444,11 @@ whatever value suits it, and the package passes it on untouched. It never uses `
 `choices` of the field it is given, which would ask the widget classes again; and `marker`,
 which runs for every field the package reads or fills, does not read the page.
 
-The package's own controls are widget classes of the same kind, public so that a project may
-build on one: `CheckboxWidget`, `RadioWidget`, `FilteredSelectMultipleWidget`,
-`SelectMultipleWidget`, `SelectWidget`, `SplitDateTimeWidget`, `FileWidget` and `TextWidget`,
-tried in that order, the last reading and filling any single control that carries the field's
-name as text. They are importable from `django_admin_kit.widgets`.
+The package's own controls are widget classes of the same kind, public so that a project may build
+on one: `CheckboxWidget`, `RadioWidget`, `FilteredSelectMultipleWidget`, `AutocompleteWidget`,
+`SelectMultipleWidget`, `SelectWidget`, `SplitDateTimeWidget`, `FileWidget` and `TextWidget`, tried
+in that order, the last reading and filling any single control that carries the field's name as
+text. They are importable from `django_admin_kit.widgets`.
 
 A widget of several components is one field and one widget class. The admin renders a whole
 widget inside its field's box, and fields are found by their box, never by their inputs, so a

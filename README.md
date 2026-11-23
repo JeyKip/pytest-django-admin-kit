@@ -381,6 +381,11 @@ given there, in the order given. `choices` are the available options, then the c
 admin moves an option to the end of the other list and sorts neither, so the order of `choices`
 changes as options move; compare `set(field.choices)` when the order doesn't matter.
 
+An autocomplete box, as the admin draws a field named in `autocomplete_fields`, reads and fills
+like a select, or like a multiple select for a many-to-many field. The box holds only the options
+chosen, but its `choices` are everything the admin's autocomplete view offers, after a blank
+option labeled `""` in an optional box, and `fill` takes any of them.
+
 A date-time, which the admin draws as a date input and a time input, reads as the two texts,
 `("2026-01-15", "09:30:00")`. It's filled from a `datetime`, typed in the current time zone, from
 a `(date, time)` pair whose halves may also be text or `None`, or from `None`, which empties
@@ -524,8 +529,8 @@ such as `text=`, belongs in `read` and `fill`. To combine conditions, use `:has(
 `':scope:has(input[name="image_cache_key"]) input[type="file"]'`.
 
 Your classes are tried first, in the order you list them, then the package's own:
-`CheckboxWidget`, `RadioWidget`, `FilteredSelectMultipleWidget`, `SelectMultipleWidget`,
-`SelectWidget`, `SplitDateTimeWidget`, `FileWidget` and `TextWidget`, from
+`CheckboxWidget`, `RadioWidget`, `FilteredSelectMultipleWidget`, `AutocompleteWidget`,
+`SelectMultipleWidget`, `SelectWidget`, `SplitDateTimeWidget`, `FileWidget` and `TextWidget`, from
 `django_admin_kit.widgets`. Two rules follow from that:
 
 - A marker matches what is particular to its widget. A class marked by `input[type="file"]`
