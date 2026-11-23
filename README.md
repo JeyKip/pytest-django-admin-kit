@@ -386,6 +386,12 @@ like a select, or like a multiple select for a many-to-many field. The box holds
 chosen, but its `choices` are everything the admin's autocomplete view offers, after a blank
 option labeled `""` in an optional box, and `fill` takes any of them.
 
+An input the admin draws for a field named in `raw_id_fields` reads as the ids typed in it, `"7"`
+or `"1,2"`. It's filled with an id as text or an `int`, a model instance, which is written as its
+pk, or a `FieldChoice`; the input for a many-to-many field also takes a list, joined with `,`.
+`None` and `""` empty it. The name the admin prints next to the input isn't part of the value,
+since it describes what is stored until the form is sent.
+
 A date-time, which the admin draws as a date input and a time input, reads as the two texts,
 `("2026-01-15", "09:30:00")`. It's filled from a `datetime`, typed in the current time zone, from
 a `(date, time)` pair whose halves may also be text or `None`, or from `None`, which empties
@@ -530,8 +536,8 @@ such as `text=`, belongs in `read` and `fill`. To combine conditions, use `:has(
 
 Your classes are tried first, in the order you list them, then the package's own:
 `CheckboxWidget`, `RadioWidget`, `FilteredSelectMultipleWidget`, `AutocompleteWidget`,
-`SelectMultipleWidget`, `SelectWidget`, `SplitDateTimeWidget`, `FileWidget` and `TextWidget`, from
-`django_admin_kit.widgets`. Two rules follow from that:
+`SelectMultipleWidget`, `SelectWidget`, `SplitDateTimeWidget`, `FileWidget`, `RawIdWidget` and
+`TextWidget`, from `django_admin_kit.widgets`. Two rules follow from that:
 
 - A marker matches what is particular to its widget. A class marked by `input[type="file"]`
   would take every file field in the project.

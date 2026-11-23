@@ -1785,6 +1785,23 @@ page.fields["cover"].fill(None)                                                 
 assert page.fields["cover"].value is None                                        # done
 ```
 
+The input the admin draws for a field named in `raw_id_fields` reads as the text it holds, the
+ids the form posts, such as `"7"`, or `"1,2"` for a many-to-many field, and `""` while empty. It
+is filled with an id: text as is, an `int`, a model instance written as its pk, or a
+`FieldChoice` as its value. `None` and `""` empty it. The input for a many-to-many field also
+takes a list of those, joined with `,` as the admin joins them, and the one for a foreign key
+refuses a list with `TypeError`. The name the admin shows next to the input comes from the
+server and describes the stored value until the form is sent again, so it is not part of the
+value:
+
+```python
+page.fields["replacement"].fill(bolt)                    # done
+assert page.fields["replacement"].value == "7"           # done
+
+page.fields["spares"].fill([bolt, nut])                  # done
+assert page.fields["spares"].value == "7,8"              # done
+```
+
 ---
 
 ## 13.3 Choices (done)
@@ -3446,9 +3463,9 @@ which runs for every field the package reads or fills, does not read the page.
 
 The package's own controls are widget classes of the same kind, public so that a project may build
 on one: `CheckboxWidget`, `RadioWidget`, `FilteredSelectMultipleWidget`, `AutocompleteWidget`,
-`SelectMultipleWidget`, `SelectWidget`, `SplitDateTimeWidget`, `FileWidget` and `TextWidget`, tried
-in that order, the last reading and filling any single control that carries the field's name as
-text. They are importable from `django_admin_kit.widgets`.
+`SelectMultipleWidget`, `SelectWidget`, `SplitDateTimeWidget`, `FileWidget`, `RawIdWidget` and
+`TextWidget`, tried in that order, the last reading and filling any single control that carries the
+field's name as text. They are importable from `django_admin_kit.widgets`.
 
 A widget of several components is one field and one widget class. The admin renders a whole
 widget inside its field's box, and fields are found by their box, never by their inputs, so a

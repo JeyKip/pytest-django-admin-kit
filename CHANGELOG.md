@@ -15,6 +15,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - Document how a file field reads after the admin rejects its form: without the chosen file, as the admin renders it again.
 - Read, list and fill the two lists the admin draws for `filter_horizontal` and `filter_vertical` through a built-in `FilteredSelectMultipleWidget`, which raised `LookupError` before.
 - Fill an autocomplete box with any option the admin's autocomplete view offers, and list them all in `choices`, through a built-in `AutocompleteWidget`. `choices` held only the options chosen before.
+- Fill a raw-ID input with a model instance as its pk, or a many-to-many one with a list of ids joined with `,`, through a built-in `RawIdWidget`. An instance was typed as its name before.
 
 ## [1.2.0] - 2026-11-19
 

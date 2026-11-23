@@ -457,6 +457,54 @@ class FileWidget:
         return field.native.locator(f'input[type="checkbox"][name="{field.name}-clear"]')
 
 
+class RawIdWidget:
+    """The input the admin draws for a field named in ``raw_id_fields``, read as the text it
+    holds, the ids it posts, and filled with ids: text as is, an ``int``, a model instance as
+    its pk, or a ``FieldChoice`` as its value. ``None`` empties it. The input for a
+    many-to-many field also takes a list of them, joined with ``,`` as the admin joins them.
+
+    The name the admin shows next to the input comes from the server, so it describes the
+    stored value until the form is sent again, and it is not part of the value.
+    """
+
+    def marker(self, field: FormField) -> str:
+        return ", ".join(
+            f'input.{kind}[name="{field.name}"]'
+            for kind in ("vForeignKeyRawIdAdminField", "vManyToManyRawIdAdminField")
+        )
+
+    def read(self, field: FormField) -> str:
+        return self._control(field).input_value()
+
+    def fill(self, field: FormField, value: Any) -> None:
+        if isinstance(value, Iterable) and not isinstance(value, (str, bytes)):
+            if not self._many(field):
+                raise TypeError(
+                    f"The field {field.name!r} takes one id or None, not the list {value!r}."
+                )
+            text = ",".join(self._id(item) for item in value)
+        else:
+            text = "" if value is None else self._id(value)
+        self._control(field).fill(text)
+
+    def _id(self, value: Any) -> str:
+        if isinstance(value, FieldChoice):
+            return value.value
+        if isinstance(value, Model):
+            return str(value.pk)
+        return str(value)
+
+    def _many(self, field: FormField) -> bool:
+        return bool(
+            self._control(field).evaluate(
+                "input => input.classList.contains('vManyToManyRawIdAdminField')"
+            )
+        )
+
+    def _control(self, field: FormField) -> Locator:
+        return field.native.locator(f'input[name="{field.name}"]')
+
+
 class TextWidget:
     """Whatever one control carries the field's name, read and filled as text."""
 
@@ -496,8 +544,10 @@ class Widgets:
             SelectMultipleWidget(),
             SelectWidget(),
             SplitDateTimeWidget(),
-            # Before the text control, whose marker matches a file input as well.
+            # Before the text control, whose marker matches a file input and a raw-ID input as
+            # well.
             FileWidget(),
+            RawIdWidget(),
             TextWidget(),
         )
 
