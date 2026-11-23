@@ -375,6 +375,12 @@ draws a field named in `radio_fields`, are read and filled the same way, and rea
 none is checked. A multiple select reads as the list of choices made, and is filled with a list
 of values, each written as for a select: `fill([tools, toys])`, and `fill([])` clears it.
 
+The two lists the admin draws for `filter_horizontal` and `filter_vertical` read and fill like a
+multiple select. The value is the chosen list as shown, and `fill` leaves exactly the values
+given there, in the order given. `choices` are the available options, then the chosen ones. The
+admin moves an option to the end of the other list and sorts neither, so the order of `choices`
+changes as options move; compare `set(field.choices)` when the order doesn't matter.
+
 A date-time, which the admin draws as a date input and a time input, reads as the two texts,
 `("2026-01-15", "09:30:00")`. It's filled from a `datetime`, typed in the current time zone, from
 a `(date, time)` pair whose halves may also be text or `None`, or from `None`, which empties
@@ -518,8 +524,9 @@ such as `text=`, belongs in `read` and `fill`. To combine conditions, use `:has(
 `':scope:has(input[name="image_cache_key"]) input[type="file"]'`.
 
 Your classes are tried first, in the order you list them, then the package's own:
-`CheckboxWidget`, `RadioWidget`, `SelectMultipleWidget`, `SelectWidget`, `SplitDateTimeWidget`,
-`FileWidget` and `TextWidget`, from `django_admin_kit.widgets`. Two rules follow from that:
+`CheckboxWidget`, `RadioWidget`, `FilteredSelectMultipleWidget`, `SelectMultipleWidget`,
+`SelectWidget`, `SplitDateTimeWidget`, `FileWidget` and `TextWidget`, from
+`django_admin_kit.widgets`. Two rules follow from that:
 
 - A marker matches what is particular to its widget. A class marked by `input[type="file"]`
   would take every file field in the project.

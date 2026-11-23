@@ -9,7 +9,7 @@ from django.urls import reverse
 from django.utils.html import format_html
 from django.utils.safestring import mark_safe
 
-from .models import Category, Feed, Manual, Product
+from .models import Bundle, Category, Feed, Manual, Product
 from .widgets import Shelf, SwatchPicker
 
 # A message level between Django's warning (30) and error (40), with no tag of its own.
@@ -345,3 +345,11 @@ class CategoryAdmin(admin.ModelAdmin):
 
 
 admin.site.register(Manual)
+
+
+# Many-to-many fields drawn as the two lists the admin's script builds: side by side for the
+# categories, stacked for the sections.
+@admin.register(Bundle)
+class BundleAdmin(admin.ModelAdmin):
+    filter_horizontal = ("categories",)
+    filter_vertical = ("sections",)

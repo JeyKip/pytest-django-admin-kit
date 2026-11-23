@@ -13,6 +13,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - Empty a file field with `None` or `""`, which checks "Clear" for a stored file, so the field reads as `None`. A required field holding a stored file raises `ValueError`.
 - Fill a file field from a Django `File`, which uploads its content, so `populate(instance)` uploads the instance's stored files again.
 - Document how a file field reads after the admin rejects its form: without the chosen file, as the admin renders it again.
+- Read, list and fill the two lists the admin draws for `filter_horizontal` and `filter_vertical` through a built-in `FilteredSelectMultipleWidget`, which raised `LookupError` before.
 
 ## [1.2.0] - 2026-11-19
 

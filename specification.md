@@ -1836,6 +1836,24 @@ field.fill([])
 assert field.value == []                                 # done
 ```
 
+The two lists the admin's script draws for a field named in `filter_horizontal` or
+`filter_vertical`, the options available and the ones chosen, are read and filled as a multiple
+select is, with the value read from the chosen list, as it shows them. `fill` moves every chosen
+option out and then each value given in, so the field reads the values in the order given; a
+value given twice is chosen once, and nothing moves when the chosen list already holds the
+values in that order. `choices` are the available options, then the chosen ones, as shown. The
+admin sorts neither list, and a moved option goes to the end of the other one, so the order of
+`choices` follows the moves while the options stay the same, and a test that doesn't care
+about the order compares `set(field.choices)`:
+
+```python
+field = page.fields["categories"]
+
+field.fill([toys, garden])
+assert field.value == [("3", "Toys"), ("1", "Garden")]                   # done
+assert field.choices == [("2", "Tools"), ("3", "Toys"), ("1", "Garden")]  # done
+```
+
 Radio buttons, which the admin draws for a field named in `radio_fields`, are read, filled and
 listed as a select is. Their value is `None` while none is checked, and `None` fills the blank
 option where the admin draws one, labeled "None":
@@ -3410,15 +3428,10 @@ whatever value suits it, and the package passes it on untouched. It never uses `
 which runs for every field the package reads or fills, does not read the page.
 
 The package's own controls are widget classes of the same kind, public so that a project may
-build on one: `CheckboxWidget`, `RadioWidget`, `SelectMultipleWidget`, `SelectWidget`,
-`SplitDateTimeWidget`, `FileWidget` and `TextWidget`, tried in that order, the last reading and filling any
-single control that carries the field's name as text. They are importable from
-`django_admin_kit.widgets`.
-
-None of them takes the two lists the admin's script draws for `filter_horizontal` and
-`filter_vertical`. The list that carries the field's name holds the chosen options without
-selecting them, so a select's reading would say nothing is chosen. Reading or filling such a
-field raises `LookupError` until a project lists a class of its own for it.
+build on one: `CheckboxWidget`, `RadioWidget`, `FilteredSelectMultipleWidget`,
+`SelectMultipleWidget`, `SelectWidget`, `SplitDateTimeWidget`, `FileWidget` and `TextWidget`,
+tried in that order, the last reading and filling any single control that carries the field's
+name as text. They are importable from `django_admin_kit.widgets`.
 
 A widget of several components is one field and one widget class. The admin renders a whole
 widget inside its field's box, and fields are found by their box, never by their inputs, so a

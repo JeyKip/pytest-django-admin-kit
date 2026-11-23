@@ -95,3 +95,16 @@ class Manual(models.Model):
 
     def __str__(self):
         return self.title
+
+
+class Bundle(models.Model):
+    """A model with the admin's relational controls. Its categories are drawn as two lists
+    side by side and its sections as two lists stacked, both by the admin's script. Its
+    relations are hidden on the other side, so the models they point at stay as they were."""
+
+    name = models.CharField(max_length=100)
+    categories = models.ManyToManyField(Category, blank=True, related_name="+")
+    sections = models.ManyToManyField(Category, blank=True, related_name="+")
+
+    def __str__(self):
+        return self.name

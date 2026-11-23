@@ -27,8 +27,8 @@ if TYPE_CHECKING:
 # The multiple select the admin draws for `filter_horizontal` and `filter_vertical`: classed
 # `selectfilter` or `selectfilterstacked` as rendered, and `filtered` once its script has
 # turned it into two lists. The list that then carries the field's name holds the chosen
-# options without selecting them, so it reads as nothing chosen. No built-in class takes it,
-# so it fails clearly and a project's own class can.
+# options without selecting them, so a multiple select would read it as nothing chosen.
+# `FilteredSelectMultipleWidget` takes it, and the multiple select never does.
 _FILTER_WIDGET = ".filtered, .selectfilter, .selectfilterstacked"
 
 
@@ -98,35 +98,86 @@ class SelectMultipleWidget:
         return f'select[multiple][name="{field.name}"]:not({_FILTER_WIDGET})'
 
     def read(self, field: FormField) -> list[FieldChoice]:
-        return [self._choice(option) for option in self._options(field, ":checked")]
+        return [_choice(option) for option in self._options(field, ":checked")]
 
     def fill(self, field: FormField, value: Any) -> None:
         """Chooses exactly the options for ``value``, a list or another iterable of values,
         and clears the choice for ``None``."""
-        # A text is iterable, but it is one value, never a list of its characters.
-        if value is not None and (
-            isinstance(value, (str, bytes, Model)) or not isinstance(value, Iterable)
-        ):
-            raise TypeError(
-                f"The field {field.name!r} takes a list of values or None, not {value!r}. "
-                f"A single value is written as [value]."
-            )
         choices = self.choices(field)
-        options = [_option_for(field, choices, item) for item in value or []]
+        options = [_option_for(field, choices, item) for item in _values(field, value)]
         self._control(field).select_option(value=[option.value for option in options])
 
     def choices(self, field: FormField) -> list[FieldChoice]:
         """The options the select offers, in order."""
-        return [self._choice(option) for option in self._options(field)]
-
-    def _choice(self, option: Locator) -> FieldChoice:
-        return FieldChoice(option.get_attribute("value") or "", text_of(option))
+        return [_choice(option) for option in self._options(field)]
 
     def _options(self, field: FormField, state: str = "") -> list[Locator]:
         return self._control(field).locator(f"option{state}").all()
 
     def _control(self, field: FormField) -> Locator:
         return field.native.locator(f'select[multiple][name="{field.name}"]')
+
+
+class FilteredSelectMultipleWidget:
+    """The two lists the admin's script draws for ``filter_horizontal`` and
+    ``filter_vertical``, read as the ``FieldChoice``s in the chosen list, as shown, and filled
+    by moving options between the lists, as a user does.
+
+    The script keeps the original select as the list of available options, renamed with
+    ``_old``, and draws the chosen list under the field's name. It selects the chosen options
+    only when the form is sent, so they are read from the list they are in. Neither list is
+    sorted: a moved option goes to the end of the other one, so the order the lists started
+    in is kept nowhere on the page.
+    """
+
+    def marker(self, field: FormField) -> str:
+        # `filtered` once the script has drawn the lists; the other two as rendered.
+        return ", ".join(
+            f'select.{kind}[name="{field.name}"]'
+            for kind in ("filtered", "selectfilter", "selectfilterstacked")
+        )
+
+    def read(self, field: FormField) -> list[FieldChoice]:
+        return [_choice(option) for option in self._chosen(field).all()]
+
+    def fill(self, field: FormField, value: Any) -> None:
+        """Chooses exactly the options for ``value``, a list or another iterable of values,
+        in the order given, and clears the choice for ``None``.
+
+        Every chosen option is removed at once, then each one wanted is moved in, so the chosen
+        list reads them in the order given. Nothing moves when the chosen list already holds
+        them in that order, or when a value has no option.
+        """
+        choices = self.choices(field)
+        # A value given twice is chosen once, as a multiple select chooses it. A dict drops the
+        # repeats and keeps the order given, which a set would lose.
+        wanted = list(
+            dict.fromkeys(_option_for(field, choices, item) for item in _values(field, value))
+        )
+        if self.read(field) == wanted:
+            return
+        if self._chosen(field).count():
+            # The control is disabled, or does nothing, while the chosen list is empty.
+            selector = field.native.locator(f'select.filtered[name="{field.name}"]').locator(
+                "xpath=ancestor::div[contains(concat(' ', @class, ' '), ' selector ')][1]"
+            )
+            selector.locator(".selector-clearall").click()
+        for option in wanted:
+            _move(self._available(field, f"[value={_css_string(option.value)}]"))
+
+    def choices(self, field: FormField) -> list[FieldChoice]:
+        """The options of both lists: the available ones, then the chosen ones, as shown."""
+        return [
+            _choice(option)
+            for options in (self._available(field), self._chosen(field))
+            for option in options.all()
+        ]
+
+    def _available(self, field: FormField, which: str = "") -> Locator:
+        return field.native.locator(f'select.filtered[name="{field.name}_old"] option{which}')
+
+    def _chosen(self, field: FormField) -> Locator:
+        return field.native.locator(f'select.filtered[name="{field.name}"] option')
 
 
 class RadioWidget:
@@ -340,6 +391,8 @@ class Widgets:
             *custom,
             CheckboxWidget(),
             RadioWidget(),
+            # Before the multiple select, which never takes these lists anyway.
+            FilteredSelectMultipleWidget(),
             # Before the select, whose marker matches a multiple select as well.
             SelectMultipleWidget(),
             SelectWidget(),
@@ -409,6 +462,42 @@ def _option_spellings(value: Any) -> list[str]:
     if value is None:
         return ["", "unknown"]
     return [str(value)]
+
+
+def _move(option: Locator) -> None:
+    """Move an option of the admin's two lists to the other list by double-clicking it.
+
+    The lists' buttons changed their markup across Django versions, and the double-click
+    didn't. Focusing a list scrolls all of it into view, which would move the option away
+    between the clicks, and Django 3.2 moves only an option the double-click landed on. So
+    the whole list is brought into view first.
+    """
+    option.locator("xpath=ancestor::select").scroll_into_view_if_needed()
+    option.dblclick()
+
+
+def _values(field: FormField, value: Any) -> list[Any]:
+    """The values a control of several choices is filled with: those of a list or another
+    iterable, none for ``None``. A lone value is refused, so it is written as ``[value]``."""
+    # A text is iterable, but it is one value, never a list of its characters.
+    if value is not None and (
+        isinstance(value, (str, bytes, Model)) or not isinstance(value, Iterable)
+    ):
+        raise TypeError(
+            f"The field {field.name!r} takes a list of values or None, not {value!r}. "
+            f"A single value is written as [value]."
+        )
+    return list(value or [])
+
+
+def _choice(option: Locator) -> FieldChoice:
+    """The ``FieldChoice`` an ``<option>`` stands for."""
+    return FieldChoice(option.get_attribute("value") or "", text_of(option))
+
+
+def _css_string(text: str) -> str:
+    """``text`` as a quoted CSS string, for an attribute selector."""
+    return '"' + text.replace("\\", "\\\\").replace('"', '\\"') + '"'
 
 
 def _can_fill(value: Any, kind: type) -> bool:
