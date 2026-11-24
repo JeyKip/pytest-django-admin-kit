@@ -1,19 +1,21 @@
-"""The popups the admin opens from a field to add or change a related object: pages read,
-filled and saved as any other, which close once saved and leave the object in the field."""
+"""The popups the admin opens from a field to add, change or choose a related object: pages
+read and filled as any other, which close once saved, or once a row is chosen, and leave the
+object in the field."""
 
 import datetime
 
 import pytest
+from django.contrib.auth.models import Permission, User
 
-from project.shop.admin import BundleAdmin
+from project.shop.admin import BundleAdmin, ProductAdmin
 from project.shop.models import Bundle, Category, Product
 
 CLOSED = (
     "The popup is closed, so there is nothing to read from it. Read the page it was opened from."
 )
 
-# The admin draws icons next to the autocomplete box `lead`, and none next to the raw-ID
-# input `replacement`.
+# The admin draws a "+" and a pencil next to the autocomplete box `lead`, and only a magnifying
+# glass next to the raw-ID input `replacement`.
 COLLAPSED_PRODUCTS = (
     (None, {"fields": ("name",)}),
     ("Products", {"classes": ("collapse",), "fields": ("lead", "replacement")}),
@@ -31,6 +33,14 @@ PRODUCT = {
     "price": "10.00",
     "released_on": datetime.date(2026, 1, 15),
 }
+
+
+@pytest.fixture
+def bundler(db):
+    """May add bundles, and look at none of the products they are made of."""
+    user = User.objects.create_user(username="bruce", is_staff=True)
+    user.user_permissions.add(Permission.objects.get(codename="add_bundle"))
+    return user
 
 
 def choice(instance):
@@ -251,14 +261,31 @@ def test_change_related_opens_a_collapsed_fieldset(admin_ui, superuser, product,
     assert not page.fieldsets[1].collapsed
 
 
+def test_choose_related_opens_a_collapsed_fieldset(admin_ui, superuser, monkeypatch):
+    monkeypatch.setattr(BundleAdmin, "fieldsets", COLLAPSED_PRODUCTS)
+    admin_ui.login(superuser)
+    page = admin_ui.create(Bundle)
+
+    popup = page.fields["replacement"].choose_related()
+
+    assert popup.works
+    assert not page.fieldsets[1].collapsed
+
+
 @pytest.mark.parametrize(
     "fail",
     [
         lambda page: page.fields["replacement"].add_related(),
         lambda page: page.fields["replacement"].change_related(),
         lambda page: page.fields["lead"].change_related(),
+        lambda page: page.fields["lead"].choose_related(),
     ],
-    ids=["nothing to add with", "nothing to change with", "nothing chosen"],
+    ids=[
+        "nothing to add with",
+        "nothing to change with",
+        "nothing chosen",
+        "nothing to look up with",
+    ],
 )
 def test_a_popup_that_cannot_open_leaves_a_fieldset_collapsed(
     admin_ui, superuser, monkeypatch, fail
@@ -325,3 +352,199 @@ def test_two_lists_offer_no_related_object_to_change(admin_ui, superuser):
     assert str(failure.value) == (
         "The field 'categories' offers no way to change a related object."
     )
+
+
+def test_choose_related_opens_the_changelist_of_the_related_model(admin_ui, superuser, products):
+    admin_ui.login(superuser)
+    page = admin_ui.create(Bundle)
+
+    popup = page.fields["replacement"].choose_related()
+
+    assert popup.works
+    assert popup.status_code == 200
+    assert popup.destination == admin_ui.url.list(Product)
+    assert [row["name"].value for row in popup.rows] == ["Bolt", "Nut", "Washer"]
+    assert popup.native is not page.native
+
+
+def test_a_row_chosen_closes_the_popup_and_fills_the_input(admin_ui, superuser, products):
+    _, nut, _ = products
+    admin_ui.login(superuser)
+    page = admin_ui.create(Bundle)
+    popup = page.fields["replacement"].choose_related()
+
+    popup.rows[1].choose()
+
+    assert popup.native.is_closed()
+    assert page.fields["replacement"].value == str(nut.pk)
+
+
+def test_a_row_chosen_replaces_the_object_in_a_foreign_key_input(admin_ui, superuser, products):
+    bolt, _, washer = products
+    admin_ui.login(superuser)
+    page = admin_ui.create(Bundle)
+    page.fields["replacement"].fill(bolt)
+
+    page.fields["replacement"].choose_related().rows[2].choose()
+
+    assert page.fields["replacement"].value == str(washer.pk)
+
+
+def test_rows_chosen_are_added_to_a_many_to_many_input(admin_ui, superuser, products):
+    bolt, nut, _ = products
+    admin_ui.login(superuser)
+    page = admin_ui.create(Bundle)
+
+    page.fields["spares"].choose_related().rows[1].choose()
+    page.fields["spares"].choose_related().rows[0].choose()
+
+    assert page.fields["spares"].value == f"{nut.pk},{bolt.pk}"
+
+
+def test_the_objects_chosen_are_stored_with_the_form(admin_ui, superuser, products):
+    bolt, _, washer = products
+    admin_ui.login(superuser)
+    page = admin_ui.create(Bundle)
+    page.populate(name="Starter kit")
+    page.fields["replacement"].choose_related().rows[0].choose()
+    page.fields["spares"].choose_related().rows[2].choose()
+
+    assert page.save().success
+
+    bundle = Bundle.objects.get()
+    assert bundle.replacement == bolt
+    assert list(bundle.spares.all()) == [washer]
+
+
+def test_a_row_found_by_a_search_is_chosen(admin_ui, superuser, products):
+    _, _, washer = products
+    admin_ui.login(superuser)
+    page = admin_ui.create(Bundle)
+    popup = page.fields["replacement"].choose_related()
+
+    popup.search("wash")
+
+    assert popup.count == 1
+    popup.rows[0].choose()
+    assert page.fields["replacement"].value == str(washer.pk)
+
+
+def test_a_row_found_by_a_filter_is_chosen(admin_ui, superuser, products):
+    _, nut, _ = products
+    Product.objects.exclude(pk=nut.pk).update(is_active=False)
+    admin_ui.login(superuser)
+    page = admin_ui.create(Bundle)
+    popup = page.fields["replacement"].choose_related()
+
+    popup.filters["is_active"].apply("Yes")
+
+    assert popup.count == 1
+    popup.rows[0].choose()
+    assert page.fields["replacement"].value == str(nut.pk)
+
+
+def test_a_row_found_by_a_sort_is_chosen(admin_ui, superuser, products):
+    _, _, washer = products
+    admin_ui.login(superuser)
+    page = admin_ui.create(Bundle)
+    popup = page.fields["replacement"].choose_related()
+
+    popup.sort("-name")
+
+    popup.rows[0].choose()
+    assert page.fields["replacement"].value == str(washer.pk)
+
+
+def test_a_row_on_another_page_is_chosen(admin_ui, superuser, products, monkeypatch):
+    monkeypatch.setattr(ProductAdmin, "list_per_page", 2)
+    _, _, washer = products
+    admin_ui.login(superuser)
+    page = admin_ui.create(Bundle)
+    popup = page.fields["replacement"].choose_related()
+
+    popup.go_to_page(2)
+
+    popup.rows[0].choose()
+    assert page.fields["replacement"].value == str(washer.pk)
+
+
+def test_a_row_chosen_waits_for_a_popup_that_closes_late(admin_ui, superuser, products):
+    _, nut, _ = products
+    admin_ui.native.add_init_script(CLOSE_LATE)
+    admin_ui.login(superuser)
+    page = admin_ui.create(Bundle)
+    popup = page.fields["replacement"].choose_related()
+
+    popup.rows[1].choose()
+
+    assert popup.native.is_closed()
+    assert page.fields["replacement"].value == str(nut.pk)
+
+
+@pytest.mark.parametrize(
+    "read",
+    [
+        lambda popup, row: popup.rows,
+        lambda popup, row: popup.count,
+        lambda popup, row: row["name"],
+        lambda popup, row: row.choose(),
+    ],
+    ids=["rows", "count", "a row's cell", "choose"],
+)
+def test_a_changelist_closed_by_its_choice_fails_at_once(admin_ui, superuser, products, read):
+    admin_ui.login(superuser)
+    popup = admin_ui.create(Bundle).fields["replacement"].choose_related()
+    row = popup.rows[0]
+    row.choose()
+
+    with pytest.raises(LookupError) as failure:
+        read(popup, row)
+
+    assert str(failure.value) == CLOSED
+
+
+def test_a_changelist_the_admin_refuses_says_so(admin_ui, bundler):
+    """The admin draws the magnifying glass for a user who may not look at the products."""
+    admin_ui.login(bundler)
+    page = admin_ui.create(Bundle)
+
+    popup = page.fields["replacement"].choose_related()
+
+    assert popup.denied
+    assert popup.status_code == 403
+
+
+def test_a_select_offers_no_lookup(admin_ui, superuser):
+    admin_ui.login(superuser)
+    page = admin_ui.create(Product)
+
+    with pytest.raises(LookupError) as failure:
+        page.fields["category"].choose_related()
+
+    assert str(failure.value) == "The field 'category' offers no way to look up a related object."
+
+
+def test_a_row_of_a_changelist_no_field_opened_cannot_be_chosen(admin_ui, superuser, products):
+    admin_ui.login(superuser)
+    page = admin_ui.list(Product)
+
+    with pytest.raises(LookupError) as failure:
+        page.rows[0].choose()
+
+    assert str(failure.value) == (
+        "The changelist was not opened from a field, so its rows can't be chosen."
+    )
+
+
+def test_a_row_without_a_link_cannot_be_chosen(admin_ui, superuser, products, monkeypatch):
+    monkeypatch.setattr(ProductAdmin, "list_display_links", None)
+    admin_ui.login(superuser)
+    page = admin_ui.create(Bundle)
+    popup = page.fields["replacement"].choose_related()
+
+    with pytest.raises(LookupError) as failure:
+        popup.rows[0].choose()
+
+    assert str(failure.value) == "The row has no link, so it can't be chosen."
+    assert not popup.native.is_closed()
+    assert page.fields["replacement"].value == ""

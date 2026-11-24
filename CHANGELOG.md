@@ -17,6 +17,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - Fill an autocomplete box with any option the admin's autocomplete view offers, and list them all in `choices`, through a built-in `AutocompleteWidget`. `choices` held only the options chosen before.
 - Fill a raw-ID input with a model instance as its pk, or a many-to-many one with a list of ids joined with `,`, through a built-in `RawIdWidget`. An instance was typed as its name before.
 - Add and change a related object through the admin's popups with `field.add_related()` and `field.change_related()`, which return the page the popup shows.
+- Choose a related object through a raw-ID field's lookup popup with `field.choose_related()`, which returns the popup's changelist, and `row.choose()`.
 
 ## [1.2.0] - 2026-11-19
 

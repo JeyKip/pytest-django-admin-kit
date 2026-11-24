@@ -40,7 +40,7 @@ from .rows import NO_ACTIONS, Row
 from .tools import PageTools
 from .urls import model_admin
 
-_F = TypeVar("_F", bound="FormPage")
+_M = TypeVar("_M", bound="ModelPage")
 
 # What the admin answers a popup's save with: a page whose script updates the page the popup
 # was opened from and closes the popup.
@@ -397,7 +397,10 @@ class LoginPage(AdminPage):
 
 
 class ModelPage(AdminPage):
-    """An admin page about one model, which it keeps for what reads it."""
+    """An admin page about one model, which it keeps for what reads it.
+
+    ``opener`` is the form page this one was opened from, for a page in a popup.
+    """
 
     def __init__(
         self,
@@ -406,9 +409,19 @@ class ModelPage(AdminPage):
         requested: str,
         tools: PageTools,
         model: type[Model],
+        opener: FormPage | None = None,
     ) -> None:
         super().__init__(page, status_code, requested, tools)
         self._model = model
+        self._opener = opener
+
+    def _check(self) -> None:
+        if self._opener is not None and self._page.is_closed():
+            raise LookupError(
+                "The popup is closed, so there is nothing to read from it. "
+                "Read the page it was opened from."
+            )
+        super()._check()
 
 
 class ChangelistPage(ModelPage):
@@ -559,6 +572,7 @@ class ChangelistPage(ModelPage):
                 urls=self._tools.urls,
                 check=self._check,
                 normalizers=self._tools.normalizers,
+                popup=None if self._opener is None else self._page,
             )
             for index, element in enumerate(elements)
         ]
@@ -906,24 +920,9 @@ class ChangelistPage(ModelPage):
 
 
 class FormPage(ModelPage):
-    """An admin page with the model's form on it: which fields the form shows.
-
-    ``opener`` is the form page this one was opened from, for a page in a popup.
-    """
+    """An admin page with the model's form on it: which fields the form shows."""
 
     _kind = "change-form"
-
-    def __init__(
-        self,
-        page: Page,
-        status_code: int,
-        requested: str,
-        tools: PageTools,
-        model: type[Model],
-        opener: FormPage | None = None,
-    ) -> None:
-        super().__init__(page, status_code, requested, tools, model)
-        self._opener = opener
 
     @property
     def fields(self) -> Fields:
@@ -1121,16 +1120,8 @@ class FormPage(ModelPage):
             return SubmissionResult(self._opener, False, self._tools.urls, success=True)
         return self._submitted(response)
 
-    def _check(self) -> None:
-        if self._opener is not None and self._page.is_closed():
-            raise LookupError(
-                "The popup is closed, so there is nothing to read from it. "
-                "Read the page it was opened from."
-            )
-        super()._check()
-
-    def _open_popup(self, link: Locator, page_class: type[_F]) -> _F:
-        """Click ``link``, which opens a form in a popup, and return the popup's page.
+    def _open_popup(self, link: Locator, page_class: type[_M]) -> _M:
+        """Click ``link``, which opens a page in a popup, and return the popup's page.
 
         It comes back as opening it directly would give it, so it can say how it was
         refused.

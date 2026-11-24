@@ -2058,6 +2058,22 @@ change the related objects, or when the field has several objects, which the adm
 for. So does `change_related()` while the field has nothing chosen. A page the admin refuses to
 open in the popup comes back as a page opened directly does, to say how it was refused. (done)
 
+The magnifying glass the admin draws next to a raw-ID input opens the related model's changelist in
+a popup. `field.choose_related()` clicks it and returns that changelist, which is read, searched,
+filtered and sorted like any other. `choose()` on one of its rows clicks the row's link. The admin
+then closes the popup and puts the object's id in the input: in place of the one a foreign key
+holds, and after those a many-to-many field holds. (done)
+
+```python
+popup = page.fields["replacement"].choose_related()
+popup.search("bolt")
+popup.rows[0].choose()
+assert page.fields["replacement"].value == str(bolt.pk)   # done
+```
+
+A field without a magnifying glass raises `LookupError`. So does `choose()` on a row without a link,
+and on a row of a changelist that wasn't opened from a field. (done)
+
 ---
 
 # 14. Form Population (done)

@@ -436,6 +436,23 @@ assert page.fields["category"].value.label == "Toys"
 A field without the icon, such as one whose related objects the user may not add, raises
 `LookupError`, and so does `change_related()` with nothing chosen.
 
+**Choosing a related object for a raw-ID field.** `choose_related()` clicks the magnifying glass
+next to the input and returns the changelist the admin opens in a popup. You can search, filter and
+sort it like any other. `choose()` on a row closes the popup and puts the object's id in the input,
+or adds it after a comma on a many-to-many field.
+
+```python
+page = admin_ui.create(Bundle)
+
+popup = page.fields["replacement"].choose_related()
+popup.search("bolt")
+popup.rows[0].choose()
+assert page.fields["replacement"].value == str(bolt.pk)
+```
+
+A field without a magnifying glass raises `LookupError`, and so does `choose()` on a changelist that
+wasn't opened from a field.
+
 **Filling a whole form in one call.** A dictionary carries the shared data and keywords carry
 the values this one test is about. Fields that are named nowhere keep the values the admin
 rendered them with.

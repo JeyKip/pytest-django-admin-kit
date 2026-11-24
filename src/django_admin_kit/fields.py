@@ -18,7 +18,7 @@ from .normalize import Normalizers
 from .rendered import Link, RenderedValue, text_of
 
 if TYPE_CHECKING:
-    from .pages import CreatePage, EditPage, FormPage
+    from .pages import ChangelistPage, CreatePage, EditPage, FormPage
     from .widgets import Widget, Widgets
 
 
@@ -300,6 +300,25 @@ class FormField:
             raise LookupError(f"The field {self._name!r} has no related object chosen to change.")
         self._open_collapsed_fieldset()
         return self._page._open_popup(link, EditPage)
+
+    def choose_related(self) -> ChangelistPage:
+        """Click the magnifying glass the admin draws next to a raw-ID input, and return the
+        changelist it opens in a popup, to choose a related object from.
+
+        It is read, searched and filtered as any changelist. ``choose()`` on one of its rows
+        closes the popup and puts the row's object in the field. A field without a magnifying
+        glass raises ``LookupError``.
+        """
+        from .pages import ChangelistPage
+
+        self._check()
+        link = self._element.locator("a.related-lookup")
+        if self._page is None or not link.count():
+            raise LookupError(
+                f"The field {self._name!r} offers no way to look up a related object."
+            )
+        self._open_collapsed_fieldset()
+        return self._page._open_popup(link, ChangelistPage)
 
     def _open_collapsed_fieldset(self) -> None:
         """Open the field's fieldset when it is collapsed. The admin hides the fields of one,
