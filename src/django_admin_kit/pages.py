@@ -15,13 +15,14 @@ from __future__ import annotations
 import re
 from collections.abc import Mapping
 from enum import Enum
-from typing import Any, Dict
+from typing import Any, Dict, TypeVar
 from urllib.parse import parse_qsl, urlencode, urljoin, urlsplit, urlunsplit
 
 from django.apps import apps
 from django.contrib.admin.views.main import ALL_VAR, PAGE_VAR
 from django.db.models import Model
 from django.urls import Resolver404, resolve
+from playwright.sync_api import Error as BrowserError
 from playwright.sync_api import Locator, Page, Response
 
 from . import matching
@@ -38,6 +39,12 @@ from .results import SubmissionResult
 from .rows import NO_ACTIONS, Row
 from .tools import PageTools
 from .urls import model_admin
+
+_F = TypeVar("_F", bound="FormPage")
+
+# What the admin answers a popup's save with: a page whose script updates the page the popup
+# was opened from and closes the popup.
+_POPUP_RESPONSE = "#django-admin-popup-response-constants"
 
 _NOTHING = object()
 """What a source has for a field it says nothing about, which `None` cannot stand for."""
@@ -899,9 +906,24 @@ class ChangelistPage(ModelPage):
 
 
 class FormPage(ModelPage):
-    """An admin page with the model's form on it: which fields the form shows."""
+    """An admin page with the model's form on it: which fields the form shows.
+
+    ``opener`` is the form page this one was opened from, for a page in a popup.
+    """
 
     _kind = "change-form"
+
+    def __init__(
+        self,
+        page: Page,
+        status_code: int,
+        requested: str,
+        tools: PageTools,
+        model: type[Model],
+        opener: FormPage | None = None,
+    ) -> None:
+        super().__init__(page, status_code, requested, tools, model)
+        self._opener = opener
 
     @property
     def fields(self) -> Fields:
@@ -936,6 +958,7 @@ class FormPage(ModelPage):
                 normalizers=self._tools.normalizers,
                 model_admin=admin,
                 widgets=self._tools.widgets,
+                page=self,
             )
             for element in page.locator("form > div > fieldset.module").all()
         ]
@@ -1061,7 +1084,8 @@ class FormPage(ModelPage):
         button, nothing is clicked and ``LookupError`` lists the actions it has.
 
         The result's page is this same object if the browser stayed on this page, for
-        example when the admin rejects the form and shows it again.
+        example when the admin rejects the form and shows it again. In a popup the admin
+        closes after a save, it is the page the popup was opened from.
         """
         # Use the plain name, so an error shows "_save" rather than the enum member.
         name = action.value if isinstance(action, FormAction) else action
@@ -1072,9 +1096,69 @@ class FormPage(ModelPage):
                 f"The page offers no action {name!r}. Actions: "
                 f"{', '.join(repr(each) for each in sorted(offered)) or 'none'}."
             )
-        with self._page.expect_navigation() as navigation:
-            self._submit_row.locator(f'[name="{name}"]').first.click()
-        return self._submitted(navigation.value)
+        button = self._submit_row.locator(f'[name="{name}"]').first
+        response = None
+        try:
+            with self._page.expect_navigation() as navigation:
+                button.click()
+            response = navigation.value
+            # After a successful save, a new small page loads in the popup window. Its
+            # script closes the popup. If the new page has loaded and the popup is still
+            # open, wait until the popup closes. The page that opened the popup does not
+            # reload.
+            if (
+                self._opener is not None
+                and self._page.locator(_POPUP_RESPONSE).count()
+                and not self._page.is_closed()
+            ):
+                self._page.wait_for_event("close")
+        except BrowserError:
+            # Usually the popup closes before the new page in it has loaded. Playwright then
+            # raises an error, but the save was successful. Any other error is a real one.
+            if self._opener is None or not self._page.is_closed():
+                raise
+        if self._opener is not None and self._page.is_closed():
+            return SubmissionResult(self._opener, False, self._tools.urls, success=True)
+        return self._submitted(response)
+
+    def _check(self) -> None:
+        if self._opener is not None and self._page.is_closed():
+            raise LookupError(
+                "The popup is closed, so there is nothing to read from it. "
+                "Read the page it was opened from."
+            )
+        super()._check()
+
+    def _open_popup(self, link: Locator, page_class: type[_F]) -> _F:
+        """Click ``link``, which opens a form in a popup, and return the popup's page.
+
+        It comes back as opening it directly would give it, so it can say how it was
+        refused.
+        """
+        # The link carries the popup's parameters in its query; the page is its path.
+        path = urlsplit(link.get_attribute("href") or "").path
+        found = _model_view(resolve(path).url_name or "", self._tools)
+        # The admin draws these links to the pages of registered models only.
+        assert found is not None
+        model, _ = found
+        # The popup's own events start after its page was answered, so its response is
+        # heard from the browsing context.
+        responses: list[Response] = []
+
+        def note(response: Response) -> None:
+            responses.append(response)
+
+        context = self._page.context
+        context.on("response", note)
+        try:
+            with self._page.expect_popup() as popup:
+                link.click()
+            window = popup.value
+            window.wait_for_load_state()
+        finally:
+            context.remove_listener("response", note)
+        status_code = next(each.status for each in responses if each.url == window.url)
+        return page_class(window, status_code, path, self._tools, model, opener=self)
 
     def save(self) -> SubmissionResult:
         return self.submit(FormAction.SAVE)
@@ -1266,17 +1350,30 @@ def _page_at(page: Page, status_code: int, tools: PageTools) -> AdminPage:
         return IndexPage(page, status_code, path, tools)
     if url_name == "login" and _is_kind(page, LoginPage._kind):
         return LoginPage(page, status_code, path, tools)
+    found = _model_view(url_name, tools)
+    if found is not None:
+        model, view = found
+        for page_class in _MODEL_PAGES[view]:
+            if _is_kind(page, page_class._kind):
+                return page_class(page, status_code, path, tools, model)
+    return AdminPage(page, status_code, path, tools)
+
+
+def _model_view(url_name: str, tools: PageTools) -> tuple[type[Model], str] | None:
+    """The registered model and the view of it, a key of ``_MODEL_PAGES``, that the admin
+    URL named ``url_name`` leads to, or ``None`` when it leads to no such view."""
     # Find the model by the full prefix of its URL names, such as "shop_product_",
     # because an app label may itself contain underscores.
     for model in apps.get_models():
-        if not tools.urls.site.is_registered(model):
-            continue
         prefix = f"{model._meta.app_label}_{model._meta.model_name}_"
-        if url_name.startswith(prefix):
-            for page_class in _MODEL_PAGES.get(url_name[len(prefix) :], ()):
-                if _is_kind(page, page_class._kind):
-                    return page_class(page, status_code, path, tools, model)
-    return AdminPage(page, status_code, path, tools)
+        view = url_name[len(prefix) :]
+        if (
+            url_name.startswith(prefix)
+            and view in _MODEL_PAGES
+            and tools.urls.site.is_registered(model)
+        ):
+            return model, view
+    return None
 
 
 def _is_kind(page: Page, kind: str | None) -> bool:

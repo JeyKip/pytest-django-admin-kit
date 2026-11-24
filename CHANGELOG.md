@@ -16,6 +16,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - Read, list and fill the two lists the admin draws for `filter_horizontal` and `filter_vertical` through a built-in `FilteredSelectMultipleWidget`, which raised `LookupError` before.
 - Fill an autocomplete box with any option the admin's autocomplete view offers, and list them all in `choices`, through a built-in `AutocompleteWidget`. `choices` held only the options chosen before.
 - Fill a raw-ID input with a model instance as its pk, or a many-to-many one with a list of ids joined with `,`, through a built-in `RawIdWidget`. An instance was typed as its name before.
+- Add and change a related object through the admin's popups with `field.add_related()` and `field.change_related()`, which return the page the popup shows.
 
 ## [1.2.0] - 2026-11-19
 

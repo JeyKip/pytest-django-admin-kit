@@ -2026,6 +2026,40 @@ assert schedule.collapsed                           # done
 
 ---
 
+## 13.8 Related objects
+
+The "+" the admin draws next to a field of related objects opens the page that adds one in a
+popup, and the pencil opens the page that changes the one chosen. `field.add_related()` and
+`field.change_related()` click them and return that page, a create page and an edit page like any
+other, whose `native` is the popup window. (done)
+
+Once the admin accepts a popup's save it closes the popup and updates the field, so the result is
+a success, and its page is the one the popup was opened from. A rejected form stays in the popup,
+and the result's page is the popup's. Reading a popup's page once the popup is closed raises
+`LookupError`. (done)
+
+```python
+popup = page.fields["category"].add_related()
+popup.populate(name="Toys")
+
+result = popup.save()
+assert result.success                                     # done
+assert result.page is page                                # done
+assert page.fields["category"].value.label == "Toys"      # done
+
+popup = page.fields["category"].change_related()
+popup.fields["name"].fill("Games")
+assert popup.save().success                               # done
+assert page.fields["category"].value.label == "Games"     # done
+```
+
+A field without the icon asked for raises `LookupError`, such as when the user may not add or
+change the related objects, or when the field has several objects, which the admin draws no pencil
+for. So does `change_related()` while the field has nothing chosen. A page the admin refuses to
+open in the popup comes back as a page opened directly does, to say how it was refused. (done)
+
+---
+
 # 14. Form Population (done)
 
 The package must support automatic form population.

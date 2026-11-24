@@ -419,6 +419,23 @@ page.fields["cover"].fill(None)    # checks "Clear"
 assert page.fields["cover"].value is None
 ```
 
+**Adding and changing a related object.** `add_related()` clicks the "+" next to a field and
+`change_related()` the pencil. Each returns the page the admin opens in a popup, which reads and
+fills like any other. Once saved, the popup closes, the field holds the object, and the result's
+page is the form you came from. A form the admin rejects stays in the popup with its errors.
+
+```python
+page = admin_ui.create(Product)
+
+popup = page.fields["category"].add_related()
+popup.populate(name="Toys")
+assert popup.save().success
+assert page.fields["category"].value.label == "Toys"
+```
+
+A field without the icon, such as one whose related objects the user may not add, raises
+`LookupError`, and so does `change_related()` with nothing chosen.
+
 **Filling a whole form in one call.** A dictionary carries the shared data and keywords carry
 the values this one test is about. Fields that are named nowhere keep the values the admin
 rendered them with.

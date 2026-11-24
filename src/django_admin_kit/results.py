@@ -15,19 +15,30 @@ if TYPE_CHECKING:
 
 
 class SubmissionResult:
-    """The outcome of one form submission."""
+    """The outcome of one form submission.
 
-    def __init__(self, page: AdminPage, redirected: bool, urls: AdminUrls) -> None:
+    ``success`` is given for a submission whose outcome shows in something other than a
+    redirect, such as a popup's, which the admin closes.
+    """
+
+    def __init__(
+        self,
+        page: AdminPage,
+        redirected: bool,
+        urls: AdminUrls,
+        success: bool | None = None,
+    ) -> None:
         self._page = page
         self._redirected = redirected
         self._urls = urls
+        self._success = redirected if success is None else success
 
     @property
     def page(self) -> AdminPage:
         """The page the browser shows after the submission.
 
-        It is the submitted page object itself if the browser stayed on that page, and a
-        new page object otherwise.
+        It is the submitted page object itself if the browser stayed on that page, the page
+        a popup was opened from if the popup closed, and a new page object otherwise.
         """
         return self._page
 
@@ -36,9 +47,10 @@ class SubmissionResult:
         """Whether the admin accepted the submission.
 
         Django redirects after a successful save and shows the form again when it rejects
-        one, so this is whether a redirect happened.
+        one, so this is whether a redirect happened. In a popup it is whether the popup
+        closed, which is what the admin does there instead of redirecting.
         """
-        return self._redirected
+        return self._success
 
     def redirected_to(self, url: str) -> bool:
         """Whether the admin redirected the browser to ``url``, a path such as
