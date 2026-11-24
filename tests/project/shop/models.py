@@ -95,3 +95,26 @@ class Manual(models.Model):
 
     def __str__(self):
         return self.title
+
+
+class Bundle(models.Model):
+    """A model with the admin's relational controls. Its categories are drawn as two lists
+    side by side and its sections as two lists stacked, both by the admin's script. Its lead
+    and add-ons are searched for in autocomplete boxes, and its replacement and spares are
+    typed in as ids. Its relations are hidden on the other side, so the models they point at
+    stay as they were."""
+
+    name = models.CharField(max_length=100)
+    categories = models.ManyToManyField(Category, blank=True, related_name="+")
+    sections = models.ManyToManyField(Category, blank=True, related_name="+")
+    lead = models.ForeignKey(
+        Product, null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
+    )
+    add_ons = models.ManyToManyField(Product, blank=True, related_name="+")
+    replacement = models.ForeignKey(
+        Product, null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
+    )
+    spares = models.ManyToManyField(Product, blank=True, related_name="+")
+
+    def __str__(self):
+        return self.name

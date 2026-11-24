@@ -1,5 +1,6 @@
-"""The two lists the admin's script draws for `filter_horizontal` and `filter_vertical`,
-which no built-in widget class reads or fills, so a project teaches them with its own."""
+"""The two lists the admin's script draws for a form field of the project's own, as
+`filter_horizontal` draws them: read and filled by the built-in widget class, unless a project
+lists a class of its own for them, which goes first."""
 
 import pytest
 
@@ -30,37 +31,38 @@ class ChosenListWidget:
         ]
 
 
-def test_a_filter_widget_is_read_by_no_built_in_class(admin_ui, superuser, category):
-    admin_ui.login(superuser)
-    page = admin_ui.create(Category)
-
-    with pytest.raises(LookupError) as failure:
-        _ = page.fields["see_also"].value
-
-    assert str(failure.value) == (
-        "No widget class can read the field 'see_also'. Add one for it to "
-        "DJANGO_ADMIN_KIT['widgets']."
-    )
-
-
-def test_a_filter_widget_is_filled_by_no_built_in_class(admin_ui, superuser, category):
-    admin_ui.login(superuser)
-    page = admin_ui.create(Category)
-
-    with pytest.raises(LookupError) as failure:
-        page.fields["see_also"].fill([category])
-
-    assert str(failure.value) == (
-        "No widget class can fill the field 'see_also'. Add one for it to "
-        "DJANGO_ADMIN_KIT['widgets']."
-    )
-
-
-@pytest.mark.parametrize("admin_ui_widgets", [Widgets([ChosenListWidget()])])
-def test_a_project_class_reads_a_filter_widget(admin_ui, superuser, category):
+def test_a_filter_widget_on_a_form_field_is_read_by_the_built_in_class(
+    admin_ui, superuser, category
+):
     admin_ui.login(superuser)
 
     page = admin_ui.create(Category)
 
     assert page.fields["see_also"].value == []
     assert page.fields["see_also"].choices == [(str(category.pk), "Tools")]
+
+
+def test_a_filter_widget_on_a_form_field_is_filled_by_the_built_in_class(
+    admin_ui, superuser, category
+):
+    admin_ui.login(superuser)
+    page = admin_ui.create(Category)
+
+    page.fields["see_also"].fill([category])
+
+    assert page.fields["see_also"].value == [(str(category.pk), "Tools")]
+
+
+@pytest.mark.parametrize("admin_ui_widgets", [Widgets([ChosenListWidget()])])
+def test_a_project_class_reads_a_filter_widget_before_the_built_in_one(
+    admin_ui, superuser, category
+):
+    """It reads the labels chosen, where the built-in class reads choices."""
+    admin_ui.login(superuser)
+    page = admin_ui.create(Category)
+
+    page.fields["see_also"].native.locator('select[name="see_also_old"] option').dblclick()
+
+    assert page.fields["see_also"].value == ["Tools"]
+    assert page.fields["see_also"].choices == []
+    assert page.fields["shelf"].choices == []

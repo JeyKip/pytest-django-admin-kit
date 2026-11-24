@@ -18,6 +18,7 @@ from .normalize import Normalizers
 from .rendered import Link, RenderedValue, text_of
 
 if TYPE_CHECKING:
+    from .pages import ChangelistPage, CreatePage, EditPage, FormPage
     from .widgets import Widget, Widgets
 
 
@@ -107,7 +108,8 @@ class FormField:
     longer shows the page the field is on. ``normalizers`` read the value of a field the
     user may only read, by what stands behind it on the page ``model_admin`` draws, and
     ``widgets`` read and fill the field's control. ``fieldset`` is the one the field is
-    drawn in, opened before the field is filled when it is collapsed.
+    drawn in, opened before the field is filled when it is collapsed. ``page`` is the form
+    page the field is on, which opens the popups of its related objects.
     """
 
     def __init__(
@@ -121,6 +123,7 @@ class FormField:
         model_admin: ModelAdmin,
         widgets: Widgets,
         fieldset: Fieldset | None = None,
+        page: FormPage | None = None,
     ) -> None:
         self._element = element
         self._name = name
@@ -130,6 +133,7 @@ class FormField:
         self._model_admin = model_admin
         self._widgets = widgets
         self._fieldset = fieldset
+        self._page = page
 
     @property
     def name(self) -> str:
@@ -243,10 +247,7 @@ class FormField:
                 f"The field {self._name!r} is rendered only, so there is nothing to fill."
             )
         widget = self._widget("fill")
-        # The admin hides the fields of a collapsed fieldset, and the browser does not
-        # fill a control the user cannot see.
-        if self._fieldset is not None and self._fieldset.collapsed:
-            self._fieldset.open()
+        self._open_collapsed_fieldset()
         widget.fill(self, value)
 
     @property
@@ -261,6 +262,70 @@ class FormField:
             return []
         choices = getattr(self._widgets.widget_for(self), "choices", None)
         return [] if choices is None else choices(self)
+
+    def add_related(self) -> CreatePage:
+        """Click the "+" the admin draws next to the field, and return the page it opens in
+        a popup, which adds a related object.
+
+        It is filled and saved as any create page. Once the admin accepts it, the popup
+        closes and the field holds the new object. Radio buttons are the exception, since the
+        admin's script does not add the new object to them. A field without a "+", such as one
+        whose related objects the user may not add, raises ``LookupError``.
+        """
+        # Imported here, since the pages module imports this one.
+        from .pages import CreatePage
+
+        self._check()
+        link = self._element.locator("a.add-related")
+        if self._page is None or not link.count():
+            raise LookupError(f"The field {self._name!r} offers no way to add a related object.")
+        self._open_collapsed_fieldset()
+        return self._page._open_popup(link, CreatePage)
+
+    def change_related(self) -> EditPage:
+        """Click the pencil the admin draws next to the field, and return the page it opens
+        in a popup, which changes the related object chosen.
+
+        It is filled and saved as any edit page. Once the admin accepts it, the popup closes
+        and the field shows the object's new label. A field without a pencil, and one with
+        nothing chosen, raise ``LookupError``.
+        """
+        from .pages import EditPage
+
+        self._check()
+        link = self._element.locator("a.change-related")
+        if self._page is None or not link.count():
+            raise LookupError(f"The field {self._name!r} offers no way to change a related object.")
+        # The admin's script gives the pencil a link only while an object is chosen.
+        if link.get_attribute("href") is None:
+            raise LookupError(f"The field {self._name!r} has no related object chosen to change.")
+        self._open_collapsed_fieldset()
+        return self._page._open_popup(link, EditPage)
+
+    def choose_related(self) -> ChangelistPage:
+        """Click the magnifying glass the admin draws next to a raw-ID input, and return the
+        changelist it opens in a popup, to choose a related object from.
+
+        It is read, searched and filtered as any changelist. ``choose()`` on one of its rows
+        closes the popup and puts the row's object in the field. A field without a magnifying
+        glass raises ``LookupError``.
+        """
+        from .pages import ChangelistPage
+
+        self._check()
+        link = self._element.locator("a.related-lookup")
+        if self._page is None or not link.count():
+            raise LookupError(
+                f"The field {self._name!r} offers no way to look up a related object."
+            )
+        self._open_collapsed_fieldset()
+        return self._page._open_popup(link, ChangelistPage)
+
+    def _open_collapsed_fieldset(self) -> None:
+        """Open the field's fieldset when it is collapsed. The admin hides the fields of one,
+        and the browser neither fills nor clicks what the user cannot see."""
+        if self._fieldset is not None and self._fieldset.collapsed:
+            self._fieldset.open()
 
     def _widget(self, verb: str) -> Widget:
         """The widget class that reads and fills the field. A field none of them
@@ -339,6 +404,7 @@ class Fieldset:
         normalizers: Normalizers,
         model_admin: ModelAdmin,
         widgets: Widgets,
+        page: FormPage | None = None,
     ) -> None:
         self._element = element
         self._language = language
@@ -346,6 +412,7 @@ class Fieldset:
         self._normalizers = normalizers
         self._model_admin = model_admin
         self._widgets = widgets
+        self._page = page
 
     @property
     def native(self) -> Locator:
@@ -411,6 +478,7 @@ class Fieldset:
                         model_admin=self._model_admin,
                         widgets=self._widgets,
                         fieldset=self,
+                        page=self._page,
                     )
         return fields
 

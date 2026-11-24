@@ -13,7 +13,8 @@ from django.contrib.admin import ModelAdmin
 from django.contrib.admin.utils import unquote
 from django.db.models import Model
 from django.urls import Resolver404, resolve
-from playwright.sync_api import Locator
+from playwright.sync_api import Error as BrowserError
+from playwright.sync_api import Locator, Page
 
 from .normalize import Normalizers
 from .rendered import RenderedValue, display_text
@@ -70,6 +71,7 @@ class Row:
 
     The columns are the ones the changelist had when the row was read. A project whose
     ``list_display`` changes with the query string reads its rows again after filtering.
+    ``popup`` is the popup the changelist is in, when a field opened it to choose a row from.
     """
 
     def __init__(
@@ -82,6 +84,7 @@ class Row:
         urls: AdminUrls,
         check: Callable[[], None],
         normalizers: Normalizers,
+        popup: Page | None = None,
     ) -> None:
         self._element = element
         self._index = index
@@ -90,6 +93,7 @@ class Row:
         self._urls = urls
         self._check = check
         self._normalizers = normalizers
+        self._popup = popup
 
     @property
     def index(self) -> int:
@@ -150,6 +154,30 @@ class Row:
         checkbox, so this raises ``LookupError``.
         """
         self._offered_box().uncheck()
+
+    def choose(self) -> None:
+        """Click the row's link in the popup ``choose_related()`` opened, which closes the popup
+        and puts the row's object in the field the popup was opened from.
+
+        A row of any other changelist, and one without a link, raise ``LookupError``.
+        """
+        self._check()
+        if self._popup is None:
+            raise LookupError(
+                "The changelist was not opened from a field, so its rows can't be chosen."
+            )
+        # Each column that links to the object has such a link.
+        link = self._element.locator("a[data-popup-opener]").first
+        if not link.count():
+            raise LookupError("The row has no link, so it can't be chosen.")
+        try:
+            with self._popup.expect_event("close"):
+                link.click()
+        except BrowserError:
+            # Sometimes the popup closes before the click ends. Playwright then raises an error,
+            # but the row was chosen. Any other error is a real one.
+            if not self._popup.is_closed():
+                raise
 
     def __len__(self) -> int:
         return len(self._cells)

@@ -1785,6 +1785,23 @@ page.fields["cover"].fill(None)                                                 
 assert page.fields["cover"].value is None                                        # done
 ```
 
+The input the admin draws for a field named in `raw_id_fields` reads as the text it holds, the
+ids the form posts, such as `"7"`, or `"1,2"` for a many-to-many field, and `""` while empty. It
+is filled with an id: text as is, an `int`, a model instance written as its pk, or a
+`FieldChoice` as its value. `None` and `""` empty it. The input for a many-to-many field also
+takes a list of those, joined with `,` as the admin joins them, and the one for a foreign key
+refuses a list with `TypeError`. The name the admin shows next to the input comes from the
+server and describes the stored value until the form is sent again, so it is not part of the
+value:
+
+```python
+page.fields["replacement"].fill(bolt)                    # done
+assert page.fields["replacement"].value == "7"           # done
+
+page.fields["spares"].fill([bolt, nut])                  # done
+assert page.fields["spares"].value == "7,8"              # done
+```
+
 ---
 
 ## 13.3 Choices (done)
@@ -1834,6 +1851,41 @@ field.fill([toys, tools])
 assert field.value == [("1", "Tools"), ("2", "Toys")]    # done
 field.fill([])
 assert field.value == []                                 # done
+```
+
+The two lists the admin's script draws for a field named in `filter_horizontal` or
+`filter_vertical`, the options available and the ones chosen, are read and filled as a multiple
+select is, with the value read from the chosen list, as it shows them. `fill` moves every chosen
+option out and then each value given in, so the field reads the values in the order given; a
+value given twice is chosen once, and nothing moves when the chosen list already holds the
+values in that order. `choices` are the available options, then the chosen ones, as shown. The
+admin sorts neither list, and a moved option goes to the end of the other one, so the order of
+`choices` follows the moves while the options stay the same, and a test that doesn't care
+about the order compares `set(field.choices)`:
+
+```python
+field = page.fields["categories"]
+
+field.fill([toys, garden])
+assert field.value == [("3", "Toys"), ("1", "Garden")]                   # done
+assert field.choices == [("2", "Tools"), ("3", "Toys"), ("1", "Garden")]  # done
+```
+
+The box the admin draws for a field named in `autocomplete_fields` is read and filled as a
+select is, or as a multiple select for a many-to-many field. It holds only the options chosen,
+and the others come from the admin's autocomplete view as the user types, so `choices` are every
+option that view offers for an empty search, page by page, after the blank option of an optional
+box, whose label is empty where a select's reads `---------`. `fill` takes any of those choices,
+whether the box held an option for it or not, and a many-to-many box reads the values in the
+order given:
+
+```python
+field = page.fields["lead"]
+
+assert field.value == ("", "")                                   # done
+assert field.choices == [("", ""), ("1", "Bolt"), ("2", "Nut")]  # done
+field.fill(nut)
+assert field.value == ("2", "Nut")                               # done
 ```
 
 Radio buttons, which the admin draws for a field named in `radio_fields`, are read, filled and
@@ -1971,6 +2023,57 @@ assert not schedule.collapsed                       # done
 schedule.close()                                    # done
 assert schedule.collapsed                           # done
 ```
+
+---
+
+## 13.8 Related objects
+
+The "+" the admin draws next to a field of related objects opens the page that adds one in a
+popup, and the pencil opens the page that changes the one chosen. `field.add_related()` and
+`field.change_related()` click them and return that page, a create page and an edit page like any
+other, whose `native` is the popup window. (done)
+
+Once the admin accepts a popup's save it closes the popup and updates the field, so the result is
+a success, and its page is the one the popup was opened from. Radio buttons are not updated: the
+admin draws a "+" next to them, but its script does not add the new object to them. A rejected form
+stays in the popup, and the result's page is the popup's. Reading a popup's page once the popup is
+closed raises `LookupError`. (done)
+
+```python
+popup = page.fields["category"].add_related()
+popup.populate(name="Toys")
+
+result = popup.save()
+assert result.success                                     # done
+assert result.page is page                                # done
+assert page.fields["category"].value.label == "Toys"      # done
+
+popup = page.fields["category"].change_related()
+popup.fields["name"].fill("Games")
+assert popup.save().success                               # done
+assert page.fields["category"].value.label == "Games"     # done
+```
+
+A field without the icon asked for raises `LookupError`, such as when the user may not add or
+change the related objects, or when the field has several objects, which the admin draws no pencil
+for. So does `change_related()` while the field has nothing chosen. A page the admin refuses to
+open in the popup comes back as a page opened directly does, to say how it was refused. (done)
+
+The magnifying glass the admin draws next to a raw-ID input opens the related model's changelist in
+a popup. `field.choose_related()` clicks it and returns that changelist, which is read, searched,
+filtered and sorted like any other. `choose()` on one of its rows clicks the row's link. The admin
+then closes the popup and puts the object's id in the input: in place of the one a foreign key
+holds, and after those a many-to-many field holds. (done)
+
+```python
+popup = page.fields["replacement"].choose_related()
+popup.search("bolt")
+popup.rows[0].choose()
+assert page.fields["replacement"].value == str(bolt.pk)   # done
+```
+
+A field without a magnifying glass raises `LookupError`. So does `choose()` on a row without a link,
+and on a row of a changelist that wasn't opened from a field. (done)
 
 ---
 
@@ -3409,16 +3512,11 @@ whatever value suits it, and the package passes it on untouched. It never uses `
 `choices` of the field it is given, which would ask the widget classes again; and `marker`,
 which runs for every field the package reads or fills, does not read the page.
 
-The package's own controls are widget classes of the same kind, public so that a project may
-build on one: `CheckboxWidget`, `RadioWidget`, `SelectMultipleWidget`, `SelectWidget`,
-`SplitDateTimeWidget`, `FileWidget` and `TextWidget`, tried in that order, the last reading and filling any
-single control that carries the field's name as text. They are importable from
-`django_admin_kit.widgets`.
-
-None of them takes the two lists the admin's script draws for `filter_horizontal` and
-`filter_vertical`. The list that carries the field's name holds the chosen options without
-selecting them, so a select's reading would say nothing is chosen. Reading or filling such a
-field raises `LookupError` until a project lists a class of its own for it.
+The package's own controls are widget classes of the same kind, public so that a project may build
+on one: `CheckboxWidget`, `RadioWidget`, `FilteredSelectMultipleWidget`, `AutocompleteWidget`,
+`SelectMultipleWidget`, `SelectWidget`, `SplitDateTimeWidget`, `FileWidget`, `RawIdWidget` and
+`TextWidget`, tried in that order, the last reading and filling any single control that carries the
+field's name as text. They are importable from `django_admin_kit.widgets`.
 
 A widget of several components is one field and one widget class. The admin renders a whole
 widget inside its field's box, and fields are found by their box, never by their inputs, so a
@@ -3743,7 +3841,9 @@ Login page:
 
 ---
 
-## 1.3.0: File and image fields
+## 1.3.0: File and image fields, relational controls
+
+File and image fields:
 
 * the package's own widget class for the admin's file inputs, with and without the
   "Currently" and "Clear" parts (done);
@@ -3752,6 +3852,14 @@ Login page:
 * populating a file field from a model instance, whose stored file is uploaded again (done);
 * what a rejected form renders back: a browser never keeps a chosen file, so the field reads as
   it did before the submission (done).
+
+Relational controls:
+
+* many-to-many fields as horizontal and vertical selectors (`filter_horizontal` and
+  `filter_vertical`) (done);
+* autocomplete fields (done);
+* raw-ID fields (done);
+* related-object popups: adding, changing and choosing a related object from the form (done).
 
 ---
 
@@ -3782,18 +3890,7 @@ One-to-many relationships are edited through inlines, so this release covers the
 
 ---
 
-## 1.5.0: Relational controls
-
-* many-to-many fields as horizontal and vertical selectors (`filter_horizontal` and
-  `filter_vertical`);
-* autocomplete fields;
-* raw-ID fields;
-* related-object popups: adding, changing and choosing a related object from the form;
-* related-object automatic population, building related objects from a source.
-
----
-
-## 1.6.0: Editable changelists and date hierarchy
+## 1.5.0: Editable changelists and date hierarchy
 
 * `list_editable`: reading and filling the editable cells of a changelist, and saving them,
   with their validation errors;

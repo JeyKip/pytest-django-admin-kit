@@ -375,6 +375,23 @@ draws a field named in `radio_fields`, are read and filled the same way, and rea
 none is checked. A multiple select reads as the list of choices made, and is filled with a list
 of values, each written as for a select: `fill([tools, toys])`, and `fill([])` clears it.
 
+The two lists the admin draws for `filter_horizontal` and `filter_vertical` read and fill like a
+multiple select. The value is the chosen list as shown, and `fill` leaves exactly the values
+given there, in the order given. `choices` are the available options, then the chosen ones. The
+admin moves an option to the end of the other list and sorts neither, so the order of `choices`
+changes as options move; compare `set(field.choices)` when the order doesn't matter.
+
+An autocomplete box, as the admin draws a field named in `autocomplete_fields`, reads and fills
+like a select, or like a multiple select for a many-to-many field. The box holds only the options
+chosen, but its `choices` are everything the admin's autocomplete view offers, after a blank
+option labeled `""` in an optional box, and `fill` takes any of them.
+
+An input the admin draws for a field named in `raw_id_fields` reads as the ids typed in it, `"7"`
+or `"1,2"`. It's filled with an id as text or an `int`, a model instance, which is written as its
+pk, or a `FieldChoice`; the input for a many-to-many field also takes a list, joined with `,`.
+`None` and `""` empty it. The name the admin prints next to the input isn't part of the value,
+since it describes what is stored until the form is sent.
+
 A date-time, which the admin draws as a date input and a time input, reads as the two texts,
 `("2026-01-15", "09:30:00")`. It's filled from a `datetime`, typed in the current time zone, from
 a `(date, time)` pair whose halves may also be text or `None`, or from `None`, which empties
@@ -401,6 +418,40 @@ assert page.fields["file"].value == ("b.pdf", None)
 page.fields["cover"].fill(None)    # checks "Clear"
 assert page.fields["cover"].value is None
 ```
+
+**Adding and changing a related object.** `add_related()` clicks the "+" next to a field and
+`change_related()` the pencil. Each returns the page the admin opens in a popup, which reads and
+fills like any other. Once saved, the popup closes, the field holds the object, and the result's
+page is the form you came from. A form the admin rejects stays in the popup with its errors.
+
+```python
+page = admin_ui.create(Product)
+
+popup = page.fields["category"].add_related()
+popup.populate(name="Toys")
+assert popup.save().success
+assert page.fields["category"].value.label == "Toys"
+```
+
+A field without the icon, such as one whose related objects the user may not add, raises
+`LookupError`, and so does `change_related()` with nothing chosen.
+
+**Choosing a related object for a raw-ID field.** `choose_related()` clicks the magnifying glass
+next to the input and returns the changelist the admin opens in a popup. You can search, filter and
+sort it like any other. `choose()` on a row closes the popup and puts the object's id in the input,
+or adds it after a comma on a many-to-many field.
+
+```python
+page = admin_ui.create(Bundle)
+
+popup = page.fields["replacement"].choose_related()
+popup.search("bolt")
+popup.rows[0].choose()
+assert page.fields["replacement"].value == str(bolt.pk)
+```
+
+A field without a magnifying glass raises `LookupError`, and so does `choose()` on a changelist that
+wasn't opened from a field.
 
 **Filling a whole form in one call.** A dictionary carries the shared data and keywords carry
 the values this one test is about. Fields that are named nowhere keep the values the admin
@@ -518,8 +569,9 @@ such as `text=`, belongs in `read` and `fill`. To combine conditions, use `:has(
 `':scope:has(input[name="image_cache_key"]) input[type="file"]'`.
 
 Your classes are tried first, in the order you list them, then the package's own:
-`CheckboxWidget`, `RadioWidget`, `SelectMultipleWidget`, `SelectWidget`, `SplitDateTimeWidget`,
-`FileWidget` and `TextWidget`, from `django_admin_kit.widgets`. Two rules follow from that:
+`CheckboxWidget`, `RadioWidget`, `FilteredSelectMultipleWidget`, `AutocompleteWidget`,
+`SelectMultipleWidget`, `SelectWidget`, `SplitDateTimeWidget`, `FileWidget`, `RawIdWidget` and
+`TextWidget`, from `django_admin_kit.widgets`. Two rules follow from that:
 
 - A marker matches what is particular to its widget. A class marked by `input[type="file"]`
   would take every file field in the project.

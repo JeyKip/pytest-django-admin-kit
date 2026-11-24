@@ -27,9 +27,50 @@ if TYPE_CHECKING:
 # The multiple select the admin draws for `filter_horizontal` and `filter_vertical`: classed
 # `selectfilter` or `selectfilterstacked` as rendered, and `filtered` once its script has
 # turned it into two lists. The list that then carries the field's name holds the chosen
-# options without selecting them, so it reads as nothing chosen. No built-in class takes it,
-# so it fails clearly and a project's own class can.
+# options without selecting them, so a multiple select would read it as nothing chosen.
+# `FilteredSelectMultipleWidget` takes it, and the multiple select never does.
 _FILTER_WIDGET = ".filtered, .selectfilter, .selectfilterstacked"
+
+# Every option the admin's autocomplete view offers a box for an empty search, as
+# `[value, label]` pairs, page by page. Asked from inside the page, so it carries the session.
+_AUTOCOMPLETE_OPTIONS = """async select => {
+    const options = [];
+    for (let page = 1; ; page++) {
+        const query = new URLSearchParams({
+            term: "",
+            app_label: select.dataset.appLabel,
+            model_name: select.dataset.modelName,
+            field_name: select.dataset.fieldName,
+            page,
+        });
+        const response = await fetch(`${select.getAttribute("data-ajax--url")}?${query}`);
+        if (!response.ok) {
+            throw new Error(`The admin's autocomplete view answered ${response.status}.`);
+        }
+        const answer = await response.json();
+        options.push(...answer.results.map(result => [result.id, result.text]));
+        if (!answer.pagination.more) {
+            return options;
+        }
+    }
+}"""
+
+# Leaves exactly the `[value, label]` pairs given chosen in an autocomplete box, in that order,
+# as select2 documents it: an option per value, then `change`. The blank option Django draws
+# in an optional box stays, so the box can be emptied again.
+_CHOOSE_AUTOCOMPLETE_OPTIONS = """(select, chosen) => {
+    const blank = [...select.options].filter(option => option.value === "");
+    select.replaceChildren(...blank);
+    blank.forEach(option => (option.selected = false));
+    for (const [value, label] of chosen) {
+        if (value === "") {
+            blank[0].selected = true;
+        } else {
+            select.append(new Option(label, value, true, true));
+        }
+    }
+    django.jQuery(select).trigger("change");
+}"""
 
 
 class Widget(Protocol):
@@ -56,6 +97,62 @@ class CheckboxWidget:
 
     def _control(self, field: FormField) -> Locator:
         return field.native.locator(f'input[type="checkbox"][name="{field.name}"]')
+
+
+class AutocompleteWidget:
+    """The box the admin draws for a field named in ``autocomplete_fields``, read and filled
+    as a select is: as the ``FieldChoice`` chosen, or as the list of them for a many-to-many
+    field.
+
+    The box holds only the options chosen. The others come from the admin's autocomplete
+    view as the user types, so ``choices`` asks that view for every option it offers, and
+    ``fill`` puts the options wanted in the box the way select2, the script behind it,
+    documents.
+    """
+
+    def marker(self, field: FormField) -> str:
+        return f'select.admin-autocomplete[name="{field.name}"]'
+
+    def read(self, field: FormField) -> FieldChoice | list[FieldChoice] | None:
+        chosen = [
+            _choice(option) for option in self._control(field).locator("option:checked").all()
+        ]
+        if self._multiple(field):
+            return chosen
+        # Django draws no option at all in a required box with nothing chosen, so it reads as
+        # radio buttons with none checked do.
+        return chosen[0] if chosen else None
+
+    def fill(self, field: FormField, value: Any) -> None:
+        """Chooses the option for ``value``, written as for a select, or for a many-to-many
+        field exactly the options for a list of values, in the order given. ``None`` empties
+        the box: it picks the blank option of an optional one, and clears a many-to-many one.
+        """
+        choices = self.choices(field)
+        if self._multiple(field):
+            # A value given twice is chosen once, as a multiple select chooses it.
+            wanted = list(
+                dict.fromkeys(_option_for(field, choices, item) for item in _values(field, value))
+            )
+        else:
+            wanted = [_option_for(field, choices, value)]
+        self._control(field).evaluate(
+            _CHOOSE_AUTOCOMPLETE_OPTIONS, [[option.value, option.label] for option in wanted]
+        )
+
+    def choices(self, field: FormField) -> list[FieldChoice]:
+        """Every option the admin's autocomplete view offers for an empty search, in its
+        order, after the blank option Django draws in an optional box."""
+        control = self._control(field)
+        blank = [_choice(option) for option in control.locator('option[value=""]').all()]
+        offered = control.evaluate(_AUTOCOMPLETE_OPTIONS)
+        return [*blank, *(FieldChoice(value, label) for value, label in offered)]
+
+    def _multiple(self, field: FormField) -> bool:
+        return bool(self._control(field).evaluate("select => select.multiple"))
+
+    def _control(self, field: FormField) -> Locator:
+        return field.native.locator(f'select.admin-autocomplete[name="{field.name}"]')
 
 
 class SelectWidget:
@@ -98,35 +195,86 @@ class SelectMultipleWidget:
         return f'select[multiple][name="{field.name}"]:not({_FILTER_WIDGET})'
 
     def read(self, field: FormField) -> list[FieldChoice]:
-        return [self._choice(option) for option in self._options(field, ":checked")]
+        return [_choice(option) for option in self._options(field, ":checked")]
 
     def fill(self, field: FormField, value: Any) -> None:
         """Chooses exactly the options for ``value``, a list or another iterable of values,
         and clears the choice for ``None``."""
-        # A text is iterable, but it is one value, never a list of its characters.
-        if value is not None and (
-            isinstance(value, (str, bytes, Model)) or not isinstance(value, Iterable)
-        ):
-            raise TypeError(
-                f"The field {field.name!r} takes a list of values or None, not {value!r}. "
-                f"A single value is written as [value]."
-            )
         choices = self.choices(field)
-        options = [_option_for(field, choices, item) for item in value or []]
+        options = [_option_for(field, choices, item) for item in _values(field, value)]
         self._control(field).select_option(value=[option.value for option in options])
 
     def choices(self, field: FormField) -> list[FieldChoice]:
         """The options the select offers, in order."""
-        return [self._choice(option) for option in self._options(field)]
-
-    def _choice(self, option: Locator) -> FieldChoice:
-        return FieldChoice(option.get_attribute("value") or "", text_of(option))
+        return [_choice(option) for option in self._options(field)]
 
     def _options(self, field: FormField, state: str = "") -> list[Locator]:
         return self._control(field).locator(f"option{state}").all()
 
     def _control(self, field: FormField) -> Locator:
         return field.native.locator(f'select[multiple][name="{field.name}"]')
+
+
+class FilteredSelectMultipleWidget:
+    """The two lists the admin's script draws for ``filter_horizontal`` and
+    ``filter_vertical``, read as the ``FieldChoice``s in the chosen list, as shown, and filled
+    by moving options between the lists, as a user does.
+
+    The script keeps the original select as the list of available options, renamed with
+    ``_old``, and draws the chosen list under the field's name. It selects the chosen options
+    only when the form is sent, so they are read from the list they are in. Neither list is
+    sorted: a moved option goes to the end of the other one, so the order the lists started
+    in is kept nowhere on the page.
+    """
+
+    def marker(self, field: FormField) -> str:
+        # `filtered` once the script has drawn the lists; the other two as rendered.
+        return ", ".join(
+            f'select.{kind}[name="{field.name}"]'
+            for kind in ("filtered", "selectfilter", "selectfilterstacked")
+        )
+
+    def read(self, field: FormField) -> list[FieldChoice]:
+        return [_choice(option) for option in self._chosen(field).all()]
+
+    def fill(self, field: FormField, value: Any) -> None:
+        """Chooses exactly the options for ``value``, a list or another iterable of values,
+        in the order given, and clears the choice for ``None``.
+
+        Every chosen option is removed at once, then each one wanted is moved in, so the chosen
+        list reads them in the order given. Nothing moves when the chosen list already holds
+        them in that order, or when a value has no option.
+        """
+        choices = self.choices(field)
+        # A value given twice is chosen once, as a multiple select chooses it. A dict drops the
+        # repeats and keeps the order given, which a set would lose.
+        wanted = list(
+            dict.fromkeys(_option_for(field, choices, item) for item in _values(field, value))
+        )
+        if self.read(field) == wanted:
+            return
+        if self._chosen(field).count():
+            # The control is disabled, or does nothing, while the chosen list is empty.
+            selector = field.native.locator(f'select.filtered[name="{field.name}"]').locator(
+                "xpath=ancestor::div[contains(concat(' ', @class, ' '), ' selector ')][1]"
+            )
+            selector.locator(".selector-clearall").click()
+        for option in wanted:
+            _move(self._available(field, f"[value={_css_string(option.value)}]"))
+
+    def choices(self, field: FormField) -> list[FieldChoice]:
+        """The options of both lists: the available ones, then the chosen ones, as shown."""
+        return [
+            _choice(option)
+            for options in (self._available(field), self._chosen(field))
+            for option in options.all()
+        ]
+
+    def _available(self, field: FormField, which: str = "") -> Locator:
+        return field.native.locator(f'select.filtered[name="{field.name}_old"] option{which}')
+
+    def _chosen(self, field: FormField) -> Locator:
+        return field.native.locator(f'select.filtered[name="{field.name}"] option')
 
 
 class RadioWidget:
@@ -309,6 +457,54 @@ class FileWidget:
         return field.native.locator(f'input[type="checkbox"][name="{field.name}-clear"]')
 
 
+class RawIdWidget:
+    """The input the admin draws for a field named in ``raw_id_fields``, read as the text it
+    holds, the ids it posts, and filled with ids: text as is, an ``int``, a model instance as
+    its pk, or a ``FieldChoice`` as its value. ``None`` empties it. The input for a
+    many-to-many field also takes a list of them, joined with ``,`` as the admin joins them.
+
+    The name the admin shows next to the input comes from the server, so it describes the
+    stored value until the form is sent again, and it is not part of the value.
+    """
+
+    def marker(self, field: FormField) -> str:
+        return ", ".join(
+            f'input.{kind}[name="{field.name}"]'
+            for kind in ("vForeignKeyRawIdAdminField", "vManyToManyRawIdAdminField")
+        )
+
+    def read(self, field: FormField) -> str:
+        return self._control(field).input_value()
+
+    def fill(self, field: FormField, value: Any) -> None:
+        if isinstance(value, Iterable) and not isinstance(value, (str, bytes)):
+            if not self._many(field):
+                raise TypeError(
+                    f"The field {field.name!r} takes one id or None, not the list {value!r}."
+                )
+            text = ",".join(self._id(item) for item in value)
+        else:
+            text = "" if value is None else self._id(value)
+        self._control(field).fill(text)
+
+    def _id(self, value: Any) -> str:
+        if isinstance(value, FieldChoice):
+            return value.value
+        if isinstance(value, Model):
+            return str(value.pk)
+        return str(value)
+
+    def _many(self, field: FormField) -> bool:
+        return bool(
+            self._control(field).evaluate(
+                "input => input.classList.contains('vManyToManyRawIdAdminField')"
+            )
+        )
+
+    def _control(self, field: FormField) -> Locator:
+        return field.native.locator(f'input[name="{field.name}"]')
+
+
 class TextWidget:
     """Whatever one control carries the field's name, read and filled as text."""
 
@@ -340,12 +536,18 @@ class Widgets:
             *custom,
             CheckboxWidget(),
             RadioWidget(),
+            # Before the multiple select, which never takes these lists anyway.
+            FilteredSelectMultipleWidget(),
+            # Before the selects, whose markers match an autocomplete box as well.
+            AutocompleteWidget(),
             # Before the select, whose marker matches a multiple select as well.
             SelectMultipleWidget(),
             SelectWidget(),
             SplitDateTimeWidget(),
-            # Before the text control, whose marker matches a file input as well.
+            # Before the text control, whose marker matches a file input and a raw-ID input as
+            # well.
             FileWidget(),
+            RawIdWidget(),
             TextWidget(),
         )
 
@@ -409,6 +611,42 @@ def _option_spellings(value: Any) -> list[str]:
     if value is None:
         return ["", "unknown"]
     return [str(value)]
+
+
+def _move(option: Locator) -> None:
+    """Move an option of the admin's two lists to the other list by double-clicking it.
+
+    The lists' buttons changed their markup across Django versions, and the double-click
+    didn't. Focusing a list scrolls all of it into view, which would move the option away
+    between the clicks, and Django 3.2 moves only an option the double-click landed on. So
+    the whole list is brought into view first.
+    """
+    option.locator("xpath=ancestor::select").scroll_into_view_if_needed()
+    option.dblclick()
+
+
+def _values(field: FormField, value: Any) -> list[Any]:
+    """The values a control of several choices is filled with: those of a list or another
+    iterable, none for ``None``. A lone value is refused, so it is written as ``[value]``."""
+    # A text is iterable, but it is one value, never a list of its characters.
+    if value is not None and (
+        isinstance(value, (str, bytes, Model)) or not isinstance(value, Iterable)
+    ):
+        raise TypeError(
+            f"The field {field.name!r} takes a list of values or None, not {value!r}. "
+            f"A single value is written as [value]."
+        )
+    return list(value or [])
+
+
+def _choice(option: Locator) -> FieldChoice:
+    """The ``FieldChoice`` an ``<option>`` stands for."""
+    return FieldChoice(option.get_attribute("value") or "", text_of(option))
+
+
+def _css_string(text: str) -> str:
+    """``text`` as a quoted CSS string, for an attribute selector."""
+    return '"' + text.replace("\\", "\\\\").replace('"', '\\"') + '"'
 
 
 def _can_fill(value: Any, kind: type) -> bool:
