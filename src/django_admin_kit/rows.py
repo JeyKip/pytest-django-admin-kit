@@ -13,6 +13,7 @@ from django.contrib.admin import ModelAdmin
 from django.contrib.admin.utils import unquote
 from django.db.models import Model
 from django.urls import Resolver404, resolve
+from playwright.sync_api import Error as BrowserError
 from playwright.sync_api import Locator, Page
 
 from .normalize import Normalizers
@@ -169,8 +170,14 @@ class Row:
         link = self._element.locator("a[data-popup-opener]").first
         if not link.count():
             raise LookupError("The row has no link, so it can't be chosen.")
-        with self._popup.expect_event("close"):
-            link.click()
+        try:
+            with self._popup.expect_event("close"):
+                link.click()
+        except BrowserError:
+            # Sometimes the popup closes before the click ends. Playwright then raises an error,
+            # but the row was chosen. Any other error is a real one.
+            if not self._popup.is_closed():
+                raise
 
     def __len__(self) -> int:
         return len(self._cells)

@@ -6,6 +6,8 @@ import datetime
 
 import pytest
 from django.contrib.auth.models import Permission, User
+from playwright.sync_api import Error as BrowserError
+from playwright.sync_api import Locator
 
 from project.shop.admin import BundleAdmin, ProductAdmin
 from project.shop.models import Bundle, Category, Product
@@ -479,6 +481,46 @@ def test_a_row_chosen_waits_for_a_popup_that_closes_late(admin_ui, superuser, pr
 
     assert popup.native.is_closed()
     assert page.fields["replacement"].value == str(nut.pk)
+
+
+def test_a_popup_may_close_before_the_click_on_its_row_ends(
+    admin_ui, superuser, products, monkeypatch
+):
+    _, nut, _ = products
+    admin_ui.login(superuser)
+    page = admin_ui.create(Bundle)
+    popup = page.fields["replacement"].choose_related()
+    row = popup.rows[1]
+    click = Locator.click
+
+    def closed_by_click(link):
+        click(link)
+        if not popup.native.is_closed():
+            popup.native.wait_for_event("close")
+        raise BrowserError("Target page, context or browser has been closed")
+
+    monkeypatch.setattr(Locator, "click", closed_by_click)
+    row.choose()
+
+    assert page.fields["replacement"].value == str(nut.pk)
+
+
+def test_a_click_that_fails_in_an_open_popup_raises(admin_ui, superuser, products, monkeypatch):
+    admin_ui.login(superuser)
+    page = admin_ui.create(Bundle)
+    popup = page.fields["replacement"].choose_related()
+    row = popup.rows[1]
+
+    def blocked(link):
+        raise BrowserError("The link is covered")
+
+    monkeypatch.setattr(Locator, "click", blocked)
+
+    with pytest.raises(BrowserError, match="The link is covered"):
+        row.choose()
+
+    assert not popup.native.is_closed()
+    assert page.fields["replacement"].value == ""
 
 
 @pytest.mark.parametrize(
