@@ -2034,9 +2034,10 @@ popup, and the pencil opens the page that changes the one chosen. `field.add_rel
 other, whose `native` is the popup window. (done)
 
 Once the admin accepts a popup's save it closes the popup and updates the field, so the result is
-a success, and its page is the one the popup was opened from. A rejected form stays in the popup,
-and the result's page is the popup's. Reading a popup's page once the popup is closed raises
-`LookupError`. (done)
+a success, and its page is the one the popup was opened from. Radio buttons are not updated: the
+admin draws a "+" next to them, but its script does not add the new object to them. A rejected form
+stays in the popup, and the result's page is the popup's. Reading a popup's page once the popup is
+closed raises `LookupError`. (done)
 
 ```python
 popup = page.fields["category"].add_related()
@@ -3855,11 +3856,10 @@ File and image fields:
 Relational controls:
 
 * many-to-many fields as horizontal and vertical selectors (`filter_horizontal` and
-  `filter_vertical`);
-* autocomplete fields;
-* raw-ID fields;
-* related-object popups: adding, changing and choosing a related object from the form;
-* related-object automatic population, building related objects from a source.
+  `filter_vertical`) (done);
+* autocomplete fields (done);
+* raw-ID fields (done);
+* related-object popups: adding, changing and choosing a related object from the form (done).
 
 ---
 

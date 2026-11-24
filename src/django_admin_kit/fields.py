@@ -268,8 +268,9 @@ class FormField:
         a popup, which adds a related object.
 
         It is filled and saved as any create page. Once the admin accepts it, the popup
-        closes and the field holds the new object. A field without a "+", such as one whose
-        related objects the user may not add, raises ``LookupError``.
+        closes and the field holds the new object. Radio buttons are the exception, since the
+        admin's script does not add the new object to them. A field without a "+", such as one
+        whose related objects the user may not add, raises ``LookupError``.
         """
         # Imported here, since the pages module imports this one.
         from .pages import CreatePage
