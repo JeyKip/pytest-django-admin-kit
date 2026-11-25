@@ -41,10 +41,15 @@ jobs:
         with:
           enable-cache: true
       # Read from tox.toml rather than repeated here, so CI cannot drift from
-      # what `tox` runs locally.
+      # what `tox` runs locally. A pull request runs the default eighteen cells. A push
+      # to main runs all of them (the `full` label), so a problem shows before a release
+      # is tagged.
       - id: list
+        env:
+          SELECTION: ${{ github.event_name == 'push' && '-m full' || '-d' }}
         run: |
-          cells=$(uvx --from 'tox>=4.61' --with tox-uv tox list -d --no-desc -q \
+          # SELECTION is unquoted on purpose: `-m full` is two arguments.
+          cells=$(uvx --from 'tox>=4.61' --with tox-uv tox list $SELECTION --no-desc -q \
             | jq -R -s -c 'split("\n") | map(select(. != ""))')
           echo "cells=$cells" >> "$GITHUB_OUTPUT"
           echo "$cells"
@@ -52,7 +57,8 @@ jobs:
   matrix:
     name: ${{ matrix.cell }}
     needs: cells
-    runs-on: ubuntu-latest
+    # Python 3.9 stops at Playwright 1.60, which has no Chromium for Ubuntu 26.04.
+    runs-on: ${{ startsWith(matrix.cell, '3.9-') && 'ubuntu-24.04' || 'ubuntu-latest' }}
     strategy:
       # One Django version breaking must not hide the state of the other eight.
       fail-fast: false
