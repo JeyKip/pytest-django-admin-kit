@@ -20,7 +20,8 @@ skip_missing_interpreters = false
 
 # The full cartesian: every Django minor against every interpreter it supports at or
 # above the floor. Thirty-three cells, too slow to sit in front of every pull request,
-# so it gates releases instead. Run it with `tox -m full`.
+# so CI runs it on every push to main, and again before a release is published. Run it
+# locally with `tox -m full`.
 [labels]
 full = [
     "3.8-dj32", "3.9-dj32", "3.10-dj32",

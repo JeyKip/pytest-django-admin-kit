@@ -15,7 +15,8 @@ The workflow does not create a GitHub Release page; step 8 below does.
 ## Each release
 
 1. On a release branch, set `version` in `pyproject.toml` to `X.Y.Z` and add a
-   `## [X.Y.Z] - <date>` section to `CHANGELOG.md`. Merge it into `main` with CI green.
+   `## [X.Y.Z] - <date>` section to `CHANGELOG.md`. Merge it into `main` with CI green, then wait
+   for CI on `main`, which runs every cell.
 2. Update your local `main`:
    ```bash
    git checkout main

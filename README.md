@@ -1079,8 +1079,9 @@ the 3.8 floor and on its newest.
 
 ```bash
 uv run tox                        # every cell
-uv run tox -p 6                   # every cell, six at a time
+uv run tox -p 4 -e 3.8-dj32,3.12-dj52,3.12-dj60,3.12-dj61  # the four to run locally
 uv run tox -e 3.8-dj32            # one cell
+uv run tox -p 6                   # the 18 cells, six at a time
 uv run tox list -d                # what the cells are called
 ```
 
@@ -1092,9 +1093,7 @@ uv run tox -e 3.10-dj52 -- -x -vv                     # stop at the first failur
 uv run tox -e 3.10-dj52 -- tests/test_project.py      # just one file
 ```
 
-The whole sweep takes well under a minute on a warm cache, so there's no reason to leave it to
-CI. On a cold one, budget for downloading five interpreters and a copy of Django and playwright
-per cell.
+Four cells are enough locally. CI runs the rest, and does it much faster.
 
 tox-uv means uv builds those environments, which matters most at the floor: `python3.8 -m venv`
 fails with `ensurepip` errors on a lot of systems, and uv fetches its own 3.8 instead.
@@ -1106,10 +1105,10 @@ against: code has to work on playwright 1.48.
 
 There is a second, larger matrix behind the `full` label: the whole cartesian, every Django minor
 against every interpreter it supports, 33 cells. It's too slow to sit in front of every pull
-request, so it gates releases instead. Run it before tagging one:
+request, so CI runs it on every push to `main`, which shows a problem before a release is tagged,
+and again before a release is published. To see its cells:
 
 ```bash
-uv run tox -m full -p 8
 uv run tox list -m full          # the 33 cell names
 ```
 
@@ -1117,11 +1116,12 @@ uv run tox list -m full          # the 33 cell names
 
 Two workflows, both in `.github/workflows/`.
 
-`ci.yml` runs on pull requests and pushes to `main`. It lints, type-checks, runs the 18 cells,
-runs one extra job that exercises firefox and webkit, and one that runs the whole suite under
-`pytest-xdist` with four workers, because parallel safety is something the package promises. `release.yml` runs on a `v*` tag: it
-runs all 33 cells, then builds, then publishes to PyPI, each job gated on the one before it, so
-a matrix failure stops the release rather than merely being recorded next to it.
+`ci.yml` runs on pull requests and pushes to `main`. It lints, type-checks, runs the 18 cells on a
+pull request and all 33 on a push to `main`, runs one extra job that exercises firefox and webkit,
+and one that runs the whole suite under `pytest-xdist` with four workers, because parallel safety
+is something the package promises. `release.yml` runs on a `v*` tag: it runs all 33 cells, then
+builds, then publishes to PyPI, each job gated on the one before it, so a matrix failure stops the
+release rather than merely being recorded next to it.
 
 Browsers are not a Django-compatibility dimension, so they don't multiply the matrix. Each cell
 installs chromium — the binary is keyed to that cell's playwright version, which is why tox does
@@ -1130,8 +1130,8 @@ it rather than the workflow — and the separate job covers the other two once.
 Neither workflow lists its cells. Both ask tox for them:
 
 ```bash
-uvx --from 'tox>=4.61' --with tox-uv tox list -d --no-desc -q      # what ci.yml runs
-uvx --from 'tox>=4.61' --with tox-uv tox list -m full --no-desc -q # what release.yml runs
+uvx --from 'tox>=4.61' --with tox-uv tox list -d --no-desc -q      # a pull request
+uvx --from 'tox>=4.61' --with tox-uv tox list -m full --no-desc -q # a push to main, a release
 ```
 
 So editing `tox.toml` changes CI, and the two cannot disagree.
